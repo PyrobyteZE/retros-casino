@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Retro's Casino</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Top Bar -->
+    <header id="top-bar">
+      <button id="back-btn" class="hidden" onclick="App.goBack()">&larr;</button>
+      <h1 id="page-title" onclick="Admin.tapTitle()">Retro's Casino</h1>
+      <div id="admin-indicator" class="hidden">ADM</div>
+      <div id="profile-display" class="profile-display"></div>
+      <div id="vip-level" class="hidden">VIP 0</div>
+      <div id="debt-badge" class="hidden">-$0</div>
+      <div id="balance-display">$<span id="balance">0</span></div>
+      <button id="settings-btn" onclick="App.showScreen('settings')" title="Settings">&#x2699;&#xFE0F;</button>
+    </header>
+
+    <!-- Win Streak Banner -->
+    <div id="streak-banner" class="hidden">
+      <span id="streak-icon"></span>
+      <span id="streak-text"></span>
+    </div>
+
+    <!-- Screens -->
+    <main id="screens">
+      <!-- Home / Clicker Screen -->
+      <section id="screen-home" class="screen active">
+        <div id="clicker-area">
+          <!-- Rebirth Info -->
+          <div id="rebirth-info" class="rebirth-info hidden">
+            <div class="rebirth-stats">
+              <div class="rebirth-stat"><span class="stat-label">Rebirths</span><span id="rebirth-count">0</span></div>
+              <div class="rebirth-stat"><span class="stat-label">Multiplier</span><span id="rebirth-mult">1.00x</span></div>
+              <div class="rebirth-stat"><span class="stat-label">Discount</span><span id="rebirth-discount">0%</span></div>
+            </div>
+            <button id="rebirth-btn" class="rebirth-btn hidden" onclick="Clicker.doRebirth()">REBIRTH</button>
+          </div>
+
+          <div id="click-stats">
+            <div class="stat"><span class="stat-label">$/click</span><span id="stat-vpc">$0.01</span></div>
+            <div class="stat"><span class="stat-label">$/sec</span><span id="stat-cps">$0</span></div>
+            <div class="stat"><span class="stat-label">Total Earned</span><span id="stat-earned">$0</span></div>
+            <div class="stat"><span class="stat-label">Total Clicks</span><span id="stat-clicks">0</span></div>
+          </div>
+          <button id="click-btn" onclick="Clicker.click(event)">CLICK<br><span id="click-value">$1</span></button>
+          <div id="upgrades">
+            <h3>Upgrades</h3>
+            <div id="upgrade-list"></div>
+          </div>
+        </div>
+        <!-- Loan Shark -->
+        <div id="loan-panel" class="loan-panel">
+          <div class="loan-header" onclick="document.getElementById('loan-body').classList.toggle('hidden')">
+            <span class="loan-title">&#x1F988; Loan Shark</span>
+            <span class="loan-toggle">&#x25BC;</span>
+          </div>
+          <div id="loan-body" class="loan-body">
+            <div class="loan-status">
+              <div class="loan-stat">
+                <span class="stat-label">Debt</span>
+                <span id="loan-debt-amount" class="loan-debt-value">$0</span>
+              </div>
+              <div class="loan-stat">
+                <span class="stat-label">Interest</span>
+                <span id="loan-interest-rate">0%</span>
+              </div>
+            </div>
+            <div id="loan-warning" class="loan-warning"></div>
+            <div id="loan-options" class="loan-options"></div>
+            <div id="loan-pay-section" class="loan-pay-section hidden">
+              <div class="loan-pay-row">
+                <button class="loan-pay-btn" onclick="Loans.payBack(Loans.debt * 0.1)">Pay 10%</button>
+                <button class="loan-pay-btn" onclick="Loans.payBack(Loans.debt * 0.5)">Pay 50%</button>
+                <button class="loan-pay-btn loan-pay-all" onclick="Loans.payAll()">Pay All</button>
+              </div>
+              <button id="shark-duel-btn" class="loan-duel-btn hidden" onclick="Loans.startDuel()">&#x1F3B2; Challenge Shark</button>
+            </div>
+          </div>
+        </div>
+
+        <button class="nav-casino-btn" onclick="App.showScreen('casino')">Casino Games &rarr;</button>
+      </section>
+
+      <!-- Casino Menu -->
+      <section id="screen-casino" class="screen">
+        <div id="casino-grid">
+          <div class="casino-card" onclick="App.showScreen('coinflip')">
+            <div class="casino-icon">&#x1FA99;</div>
+            <div class="casino-name">Coin Flip</div>
+          </div>
+          <div class="casino-card" onclick="App.showScreen('slots')">
+            <div class="casino-icon">&#x1F3B0;</div>
+            <div class="casino-name">Slots</div>
+          </div>
+          <div class="casino-card" onclick="App.showScreen('crash')">
+            <div class="casino-icon">&#x1F680;</div>
+            <div class="casino-name">Crash</div>
+          </div>
+          <div class="casino-card" onclick="App.showScreen('blackjack')">
+            <div class="casino-icon">&#x1F0CF;</div>
+            <div class="casino-name">Blackjack</div>
+          </div>
+          <div class="casino-card" onclick="App.showScreen('plinko')">
+            <div class="casino-icon">&#x26AA;</div>
+            <div class="casino-name">Plinko</div>
+          </div>
+          <div class="casino-card" onclick="App.showScreen('roulette')">
+            <div class="casino-icon">&#x1F3AF;</div>
+            <div class="casino-name">Roulette</div>
+          </div>
+          <div class="casino-card" onclick="App.showScreen('horses')">
+            <div class="casino-icon">&#x1F3C7;</div>
+            <div class="casino-name">Horse Racing</div>
+          </div>
+          <div class="casino-card" onclick="App.showScreen('lottery')">
+            <div class="casino-icon">&#x1F3AB;</div>
+            <div class="casino-name">Lottery</div>
+          </div>
+          <div class="casino-card" onclick="App.showScreen('properties')">
+            <div class="casino-icon">&#x1F3E2;</div>
+            <div class="casino-name">Properties</div>
+          </div>
+          <div class="casino-card" onclick="App.showScreen('crime')">
+            <div class="casino-icon">&#x1F6A8;</div>
+            <div class="casino-name">Crime</div>
+          </div>
+          <div class="casino-card" onclick="App.showScreen('settings')">
+            <div class="casino-icon">&#x2699;&#xFE0F;</div>
+            <div class="casino-name">Settings</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Coin Flip -->
+      <section id="screen-coinflip" class="screen">
+        <div class="game-container">
+          <div class="game-hud">
+            <div class="hud-item"><span class="hud-label">House Edge</span><span id="cf-house-edge">0%</span></div>
+            <div class="hud-item"><span class="hud-label">W/L</span><span id="cf-record">0/0</span></div>
+            <div class="hud-item"><span class="hud-label">Profit</span><span id="cf-profit">$0</span></div>
+          </div>
+          <div id="cf-history" class="cf-history"></div>
+          <div id="cf-result" class="game-result"></div>
+          <div id="cf-coin" class="coin">?</div>
+          <!-- Lucky Coin Upgrade -->
+          <div class="cf-luck-panel">
+            <div id="cf-luck-locked" class="cf-luck-locked">Requires VIP 5</div>
+            <div class="cf-luck-info">
+              <span class="cf-luck-label" id="cf-luck-name">Fair Coin</span>
+              <span class="cf-luck-stat">Win: <strong id="cf-luck-chance">50%</strong></span>
+              <span class="cf-luck-stat">Pay: <strong id="cf-luck-payout">2.0x</strong></span>
+            </div>
+            <button class="cf-luck-btn" id="cf-luck-btn" onclick="CoinFlip.buyLuck()">Upgrade: $500</button>
+          </div>
+          <div class="bet-controls">
+            <label>Bet: $<input type="number" id="cf-bet" value="10" min="0.01" step="0.01"></label>
+            <div class="bet-buttons">
+              <button onclick="CoinFlip.halfBet()">1/2</button>
+              <button onclick="CoinFlip.doubleBet()">2x</button>
+              <button onclick="CoinFlip.maxBet()">Max</button>
+            </div>
+          </div>
+          <div class="game-actions">
+            <button class="game-btn heads" onclick="CoinFlip.flip('heads')">Heads</button>
+            <button class="game-btn tails" onclick="CoinFlip.flip('tails')">Tails</button>
+          </div>
+          <!-- Per-game admin rig -->
+          <div class="game-admin hidden" id="cf-admin">
+            <div class="game-admin-header" onclick="Admin.toggleGamePanel('cf-admin')">
+              <span>Admin Controls</span><span class="game-admin-arrow">&#x25BC;</span>
+            </div>
+            <div class="game-admin-body">
+              <div class="admin-row">
+                <label>Force Result:</label>
+                <button class="rig-btn win" onclick="Rig.games.coinflip.forceResult='heads';Admin.refreshGameRig()">Heads</button>
+                <button class="rig-btn lose" onclick="Rig.games.coinflip.forceResult='tails';Admin.refreshGameRig()">Tails</button>
+                <button class="rig-btn" onclick="Rig.games.coinflip.forceResult=null;Admin.refreshGameRig()">Off</button>
+              </div>
+              <div class="admin-row">
+                <label>Win Streak:</label>
+                <input type="number" id="cf-rig-streak" min="0" value="0" onchange="Rig.games.coinflip.winStreak=+this.value">
+                <span class="rig-hint">Next N auto-win</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Slots -->
+      <section id="screen-slots" class="screen">
+        <div class="game-container">
+          <div class="game-hud">
+            <div class="hud-item"><span class="hud-label">House Edge</span><span id="slots-house-edge">~5%</span></div>
+            <div class="hud-item"><span class="hud-label">W/L</span><span id="slots-record">0/0</span></div>
+            <div class="hud-item"><span class="hud-label">Profit</span><span id="slots-profit">$0</span></div>
+          </div>
+          <div id="slots-result" class="game-result"></div>
+          <div id="slots-machine">
+            <div id="slots-reels"></div>
+          </div>
+          <div id="slots-paylines">
+            <label>Paylines: <select id="slots-lines" onchange="Slots.updatePaylines()">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+            </select></label>
+          </div>
+          <div class="bet-controls">
+            <label>Bet: $<input type="number" id="slots-bet" value="10" min="0.01" step="0.01" oninput="Slots.updateTotalBet()"></label>
+            <div class="bet-buttons">
+              <button onclick="Slots.halfBet();Slots.updateTotalBet()">1/2</button>
+              <button onclick="Slots.doubleBet();Slots.updateTotalBet()">2x</button>
+              <button onclick="Slots.maxBet();Slots.updateTotalBet()">Max</button>
+            </div>
+          </div>
+          <div id="slots-total-bet" class="slots-total-bet"></div>
+          <div class="game-actions">
+            <button class="game-btn spin" id="slots-spin-btn" onclick="Slots.spin()">SPIN</button>
+          </div>
+          <div class="slots-auto-row">
+            <label>Auto Spin:</label>
+            <input type="number" id="slots-auto-count" min="1" max="500" value="10">
+            <button class="game-btn slots-auto-btn" id="slots-auto-btn" onclick="Slots.toggleAutoSpin()">Auto: OFF</button>
+          </div>
+          <div id="slots-auto-status" class="slots-auto-status"></div>
+          <div class="game-admin hidden" id="slots-admin">
+            <div class="game-admin-header" onclick="Admin.toggleGamePanel('slots-admin')">
+              <span>Admin Controls</span><span class="game-admin-arrow">&#x25BC;</span>
+            </div>
+            <div class="game-admin-body">
+              <div class="admin-row">
+                <label>Force Jackpot:</label>
+                <button class="rig-btn win" onclick="Rig.games.slots.forceJackpot=true;Admin.refreshGameRig()">3x Diamond</button>
+                <button class="rig-btn" onclick="Rig.games.slots.forceJackpot=false;Admin.refreshGameRig()">Off</button>
+              </div>
+              <div class="admin-row">
+                <label>Force Symbol:</label>
+                <select id="slots-rig-symbol" onchange="Rig.games.slots.forceSymbol=+this.value">
+                  <option value="-1">None</option>
+                  <option value="0">Cherry</option>
+                  <option value="1">Lemon</option>
+                  <option value="2">Bar</option>
+                  <option value="3">Seven</option>
+                  <option value="4">Diamond</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Crash -->
+      <section id="screen-crash" class="screen">
+        <div class="game-container">
+          <div class="game-hud">
+            <div class="hud-item"><span class="hud-label">House Edge</span><span id="crash-house-edge">1%</span></div>
+            <div class="hud-item"><span class="hud-label">W/L</span><span id="crash-record">0/0</span></div>
+            <div class="hud-item"><span class="hud-label">Profit</span><span id="crash-profit">$0</span></div>
+          </div>
+          <div id="crash-history" class="crash-history"></div>
+          <div id="crash-display">
+            <canvas id="crash-canvas" width="350" height="220"></canvas>
+            <div id="crash-multiplier">1.00x</div>
+          </div>
+          <div id="crash-result" class="game-result"></div>
+          <div class="bet-controls">
+            <label>Bet: $<input type="number" id="crash-bet" value="10" min="0.01" step="0.01"></label>
+            <div class="bet-buttons">
+              <button onclick="Crash.halfBet()">1/2</button>
+              <button onclick="Crash.doubleBet()">2x</button>
+              <button onclick="Crash.maxBet()">Max</button>
+            </div>
+          </div>
+          <div class="crash-auto-row">
+            <label>Auto Cashout:</label>
+            <input type="number" id="crash-auto" min="0" step="0.1" value="0" placeholder="0 = off">
+            <span class="rig-hint">0 = manual</span>
+          </div>
+          <div class="game-actions">
+            <button class="game-btn" id="crash-btn" onclick="Crash.toggle()">Start</button>
+          </div>
+          <div class="game-admin hidden" id="crash-admin">
+            <div class="game-admin-header" onclick="Admin.toggleGamePanel('crash-admin')">
+              <span>Admin Controls</span><span class="game-admin-arrow">&#x25BC;</span>
+            </div>
+            <div class="game-admin-body">
+              <div class="admin-row">
+                <label>Set Crash At:</label>
+                <input type="number" id="crash-rig-point" min="1" step="0.1" value="0" placeholder="0 = random">
+                <button class="rig-btn win" onclick="Rig.games.crash.forceCrashAt=+document.getElementById('crash-rig-point').value||0">Set</button>
+              </div>
+              <div class="admin-row">
+                <label>Min Multiplier:</label>
+                <input type="number" id="crash-rig-min" min="1" step="0.5" value="1" onchange="Rig.games.crash.minMultiplier=+this.value||1">
+              </div>
+              <div class="admin-row">
+                <label>Never Crash:</label>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="crash-rig-never" onchange="Rig.games.crash.neverCrash=this.checked">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Blackjack -->
+      <section id="screen-blackjack" class="screen">
+        <div class="game-container">
+          <div class="game-hud">
+            <div class="hud-item"><span class="hud-label">House Edge</span><span id="bj-house-edge">~2%</span></div>
+            <div class="hud-item"><span class="hud-label">W/L</span><span id="bj-record">0/0</span></div>
+            <div class="hud-item"><span class="hud-label">Profit</span><span id="bj-profit">$0</span></div>
+          </div>
+          <div id="bj-result" class="game-result"></div>
+          <div id="bj-table">
+            <div id="bj-dealer">
+              <h3>Dealer <span id="bj-dealer-score"></span></h3>
+              <div id="bj-dealer-cards" class="card-hand"></div>
+            </div>
+            <div id="bj-player">
+              <h3>You <span id="bj-player-score"></span></h3>
+              <div id="bj-player-cards" class="card-hand"></div>
+            </div>
+          </div>
+          <div class="bet-controls">
+            <label>Bet: $<input type="number" id="bj-bet" value="10" min="0.01" step="0.01"></label>
+            <div class="bet-buttons">
+              <button onclick="Blackjack.halfBet()">1/2</button>
+              <button onclick="Blackjack.doubleBet()">2x</button>
+              <button onclick="Blackjack.maxBet()">Max</button>
+            </div>
+          </div>
+          <div class="game-actions" id="bj-actions">
+            <button class="game-btn" id="bj-deal-btn" onclick="Blackjack.deal()">Deal</button>
+            <button class="game-btn hidden" id="bj-hit-btn" onclick="Blackjack.hit()">Hit</button>
+            <button class="game-btn hidden" id="bj-stand-btn" onclick="Blackjack.stand()">Stand</button>
+          </div>
+          <div class="game-admin hidden" id="bj-admin">
+            <div class="game-admin-header" onclick="Admin.toggleGamePanel('bj-admin')">
+              <span>Admin Controls</span><span class="game-admin-arrow">&#x25BC;</span>
+            </div>
+            <div class="game-admin-body">
+              <div class="admin-row">
+                <label>Force Blackjack:</label>
+                <button class="rig-btn win" onclick="Rig.games.blackjack.forceBlackjack=true;Admin.refreshGameRig()">Next Hand</button>
+                <button class="rig-btn" onclick="Rig.games.blackjack.forceBlackjack=false;Admin.refreshGameRig()">Off</button>
+              </div>
+              <div class="admin-row">
+                <label>Never Bust:</label>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="bj-rig-nobust" onchange="Rig.games.blackjack.neverBust=this.checked">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="admin-row">
+                <label>Peek Dealer:</label>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="bj-rig-peek" onchange="Rig.games.blackjack.peekDealer=this.checked">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Plinko -->
+      <section id="screen-plinko" class="screen">
+        <div class="game-container">
+          <div class="game-hud">
+            <div class="hud-item"><span class="hud-label">House Edge</span><span id="plinko-house-edge">~3%</span></div>
+            <div class="hud-item"><span class="hud-label">W/L</span><span id="plinko-record">0/0</span></div>
+            <div class="hud-item"><span class="hud-label">Profit</span><span id="plinko-profit">$0</span></div>
+          </div>
+          <div id="plinko-result" class="game-result"></div>
+          <canvas id="plinko-canvas" width="350" height="400"></canvas>
+          <div id="plinko-options">
+            <label>Rows: <select id="plinko-rows" onchange="Plinko.onSettingsChange()">
+              <option value="8">8</option>
+              <option value="10" selected>10</option>
+              <option value="12">12</option>
+              <option value="14">14</option>
+              <option value="16">16</option>
+            </select></label>
+            <label>Risk: <select id="plinko-risk" onchange="Plinko.onSettingsChange()">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+            </select></label>
+          </div>
+          <div class="bet-controls">
+            <label>Bet: $<input type="number" id="plinko-bet" value="10" min="0.01" step="0.01"></label>
+            <div class="bet-buttons">
+              <button onclick="Plinko.halfBet()">1/2</button>
+              <button onclick="Plinko.doubleBet()">2x</button>
+              <button onclick="Plinko.maxBet()">Max</button>
+            </div>
+          </div>
+          <div class="game-actions">
+            <button class="game-btn" id="plinko-drop-btn" onclick="Plinko.drop()">Drop Ball</button>
+          </div>
+          <div class="plinko-auto-row">
+            <label>Auto Drop:</label>
+            <input type="number" id="plinko-auto-count" min="1" max="500" value="10" placeholder="# balls">
+            <button class="game-btn plinko-auto-btn" id="plinko-auto-btn" onclick="Plinko.toggleAuto()">Auto: OFF</button>
+          </div>
+          <div id="plinko-auto-status" class="plinko-auto-status"></div>
+          <div class="game-admin hidden" id="plinko-admin">
+            <div class="game-admin-header" onclick="Admin.toggleGamePanel('plinko-admin')">
+              <span>Admin Controls</span><span class="game-admin-arrow">&#x25BC;</span>
+            </div>
+            <div class="game-admin-body">
+              <div class="admin-row">
+                <label>Force Bucket:</label>
+                <select id="plinko-rig-bucket" onchange="Rig.games.plinko.forceBucket=+this.value">
+                  <option value="-1">Random</option>
+                </select>
+              </div>
+              <div class="admin-row">
+                <label>Always Edge:</label>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="plinko-rig-edge" onchange="Rig.games.plinko.alwaysEdge=this.checked">
+                  <span class="toggle-slider"></span>
+                </label>
+                <span class="rig-hint">Land on highest multiplier</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Roulette -->
+      <section id="screen-roulette" class="screen">
+        <div class="game-container">
+          <div class="game-hud">
+            <div class="hud-item"><span class="hud-label">House Edge</span><span id="rl-house-edge">5.26%</span></div>
+            <div class="hud-item"><span class="hud-label">W/L</span><span id="rl-record">0/0</span></div>
+            <div class="hud-item"><span class="hud-label">Profit</span><span id="rl-profit">$0</span></div>
+          </div>
+          <div id="rl-history" class="rl-history"></div>
+          <div id="rl-result" class="game-result"></div>
+          <div class="rl-wheel-wrap">
+            <canvas id="rl-wheel" width="300" height="300"></canvas>
+          </div>
+          <div id="rl-current-bets" class="rl-current-bets">No bets placed</div>
+          <div id="rl-board" class="rl-board"></div>
+          <div class="bet-controls">
+            <label>Chip: $<input type="number" id="rl-bet" value="10" min="0.01" step="0.01"></label>
+            <div class="bet-buttons">
+              <button onclick="Roulette.halfBet()">1/2</button>
+              <button onclick="Roulette.doubleBet()">2x</button>
+              <button onclick="Roulette.maxBet()">Max</button>
+            </div>
+          </div>
+          <div id="rl-auto-timer" class="rl-auto-timer"></div>
+          <div class="game-actions">
+            <button class="game-btn" onclick="Roulette.spin()">SPIN</button>
+            <button class="game-btn" id="rl-auto-btn" style="background:var(--bg3);color:var(--text)" onclick="Roulette.toggleAutoSpin()">Auto: OFF</button>
+            <button class="game-btn" style="background:var(--bg3);color:var(--text)" onclick="Roulette.clearBets()">Clear</button>
+          </div>
+          <div class="game-admin hidden" id="rl-admin">
+            <div class="game-admin-header" onclick="Admin.toggleGamePanel('rl-admin')">
+              <span>Admin Controls</span><span class="game-admin-arrow">&#x25BC;</span>
+            </div>
+            <div class="game-admin-body">
+              <div class="admin-row">
+                <label>Force Number:</label>
+                <select id="rl-rig-num" onchange="Rig.games.roulette.forceNumber=this.value==='none'?-1:(this.value==='00'?'00':+this.value)" style="flex:1">
+                  <option value="none">Random</option>
+                  <option value="0">0 (Green)</option>
+                  <option value="00">00 (Green)</option>
+                  <option value="1">1 (Red)</option>
+                  <option value="2">2 (Black)</option>
+                  <option value="7">7 (Red)</option>
+                  <option value="13">13 (Black)</option>
+                  <option value="17">17 (Black)</option>
+                  <option value="32">32 (Red)</option>
+                  <option value="36">36 (Red)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Horse Racing -->
+      <section id="screen-horses" class="screen">
+        <div class="game-container">
+          <div class="game-hud">
+            <div class="hud-item"><span class="hud-label">House Edge</span><span id="horses-house-edge">~8%</span></div>
+            <div class="hud-item"><span class="hud-label">W/L</span><span id="horses-record">0/0</span></div>
+            <div class="hud-item"><span class="hud-label">Profit</span><span id="horses-profit">$0</span></div>
+          </div>
+          <div id="horses-result" class="game-result"></div>
+          <canvas id="horses-canvas" width="350" height="240" style="width:100%;max-width:350px;height:240px;background:var(--bg2);border-radius:var(--radius);display:block"></canvas>
+          <div id="horses-grid" class="horses-grid"></div>
+          <div class="bet-controls">
+            <label>Bet: $<input type="number" id="horses-bet" value="10" min="0.01" step="0.01"></label>
+            <div class="bet-buttons">
+              <button onclick="Horses.halfBet()">1/2</button>
+              <button onclick="Horses.doubleBet()">2x</button>
+              <button onclick="Horses.maxBet()">Max</button>
+            </div>
+          </div>
+          <div class="game-actions">
+            <button class="game-btn" id="horses-race-btn" onclick="Horses.race()">RACE!</button>
+          </div>
+          <div class="game-admin hidden" id="horses-admin">
+            <div class="game-admin-header" onclick="Admin.toggleGamePanel('horses-admin')">
+              <span>Admin Controls</span><span class="game-admin-arrow">&#x25BC;</span>
+            </div>
+            <div class="game-admin-body">
+              <div class="admin-row">
+                <label>Force Winner:</label>
+                <select id="horses-rig-winner" onchange="Rig.games.horses.forceWinner=+this.value">
+                  <option value="-1">Random</option>
+                  <option value="0">Thunder (2x)</option>
+                  <option value="1">Shadow (3x)</option>
+                  <option value="2">Blaze (4x)</option>
+                  <option value="3">Storm (6x)</option>
+                  <option value="4">Lucky (10x)</option>
+                  <option value="5">Phantom (15x)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Lottery / Scratch Cards -->
+      <section id="screen-lottery" class="screen">
+        <div class="game-container">
+          <div class="game-hud">
+            <div class="hud-item"><span class="hud-label">House Edge</span><span id="lottery-house-edge">~30%</span></div>
+            <div class="hud-item"><span class="hud-label">W/L</span><span id="lottery-record">0/0</span></div>
+            <div class="hud-item"><span class="hud-label">Profit</span><span id="lottery-profit">$0</span></div>
+          </div>
+          <div id="lottery-result" class="game-result"></div>
+          <div class="lottery-controls">
+            <label>Tier: <select id="lottery-tier" onchange="Lottery.setTier()"></select></label>
+            <span>Cost: <strong id="lottery-cost">$5</strong></span>
+          </div>
+          <div id="lottery-card" class="lottery-card">
+            <div class="lottery-empty">Buy a card to play!</div>
+          </div>
+          <div class="game-actions">
+            <button class="game-btn" onclick="Lottery.buyCard()">Buy Card</button>
+            <button class="game-btn" style="background:var(--gold);color:#000" onclick="Lottery.revealAll()">Reveal All</button>
+          </div>
+          <div class="game-admin hidden" id="lottery-admin">
+            <div class="game-admin-header" onclick="Admin.toggleGamePanel('lottery-admin')">
+              <span>Admin Controls</span><span class="game-admin-arrow">&#x25BC;</span>
+            </div>
+            <div class="game-admin-body">
+              <div class="admin-row">
+                <label>Force Jackpot:</label>
+                <button class="rig-btn win" onclick="Rig.games.lottery.forceJackpot=true">Next Card</button>
+                <button class="rig-btn" onclick="Rig.games.lottery.forceJackpot=false">Off</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Properties / Tycoon -->
+      <section id="screen-properties" class="screen">
+        <div class="game-container">
+          <div id="prop-event-banner" class="prop-event hidden"></div>
+          <div class="prop-header">
+            <div class="prop-income-display">
+              <span class="stat-label">Passive Income</span>
+              <span id="prop-total-income">$0/s</span>
+            </div>
+          </div>
+          <div id="prop-grid" class="prop-grid"></div>
+        </div>
+      </section>
+
+      <!-- Crime Empire -->
+      <section id="screen-crime" class="screen">
+        <div class="game-container">
+          <div id="crime-lock-overlay" class="crime-lock-overlay hidden">
+            <div class="crime-lock-content">
+              <div class="crime-lock-icon">&#x1F512;</div>
+              <div class="crime-lock-text">VIP 1 Required</div>
+              <div class="crime-lock-hint">Rebirth to unlock the Crime Empire</div>
+            </div>
+          </div>
+          <div class="prop-header">
+            <div class="prop-income-display crime-income-display">
+              <span class="stat-label">Criminal Income</span>
+              <span id="crime-total-income">$0/s</span>
+            </div>
+          </div>
+          <div id="crime-grid" class="prop-grid"></div>
+        </div>
+      </section>
+
+      <!-- Settings -->
+      <section id="screen-settings" class="screen">
+        <div class="settings-panel">
+          <h2 class="settings-title">Settings</h2>
+          <div id="settings-content"></div>
+        </div>
+      </section>
+
+      <!-- Admin Menu -->
+      <section id="screen-admin" class="screen">
+        <div class="admin-panel">
+          <h2 class="admin-title">Admin Panel</h2>
+
+          <!-- God Mode & Speed -->
+          <div class="admin-section">
+            <h3>Cheats</h3>
+            <div class="admin-row">
+              <label>God Mode:</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="admin-godmode" onchange="Admin.toggleGodMode()">
+                <span class="toggle-slider"></span>
+              </label>
+              <span class="rig-hint">Bets cost $0</span>
+            </div>
+            <div class="admin-row">
+              <label>Speed Multi:</label>
+              <select id="admin-speed" onchange="Admin.setSpeed()">
+                <option value="1">1x</option>
+                <option value="2">2x</option>
+                <option value="5">5x</option>
+                <option value="10">10x</option>
+                <option value="50">50x</option>
+              </select>
+              <span class="rig-hint">Auto-clicker speed</span>
+            </div>
+            <div class="admin-actions" style="margin-top:8px">
+              <button class="admin-btn win-btn" onclick="Admin.unlockAll()">Max Upgrades</button>
+              <button class="admin-btn win-btn" onclick="Admin.setStartBal()">Set Start $</button>
+              <input type="number" id="admin-start-bal" value="0.02" style="width:80px">
+            </div>
+          </div>
+
+          <!-- Loan/Debt -->
+          <div class="admin-section">
+            <h3>Loan Shark</h3>
+            <div class="admin-row">
+              <label>Current Debt:</label>
+              <input type="number" id="admin-debt" min="0" value="0">
+              <button onclick="Loans.debt=+document.getElementById('admin-debt').value||0;Loans.updateUI();Loans.updateDebtDisplay()">Set</button>
+            </div>
+            <div class="admin-actions" style="margin-top:8px">
+              <button class="admin-btn win-btn" onclick="Loans.debt=0;Loans.loanTime=0;Loans.stopInterest();Loans.updateUI();Loans.updateDebtDisplay()">Clear All Debt</button>
+            </div>
+          </div>
+
+          <!-- Global Rig -->
+          <div class="admin-section rig-section">
+            <h3>Global Rig</h3>
+            <div id="rig-status" class="rig-status">Disabled</div>
+            <div class="admin-row">
+              <label>Enable Rig:</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="rig-toggle" onchange="Admin.toggleRig()">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="admin-row">
+              <label>Win Rate:</label>
+              <input type="range" id="rig-winrate" min="0" max="100" value="50" oninput="Admin.setWinRate()">
+              <span id="rig-winrate-display" class="rig-pct">50%</span>
+            </div>
+            <div class="admin-quick-money">
+              <button onclick="Admin.forceNextWin()" style="border-color:#00e676;color:#00e676">Force Next Win</button>
+              <button onclick="Admin.forceNextLose()" style="border-color:#ff5252;color:#ff5252">Force Next Lose</button>
+            </div>
+          </div>
+
+          <!-- Balance -->
+          <div class="admin-section">
+            <h3>Balance</h3>
+            <div class="admin-row">
+              <input type="number" id="admin-balance" placeholder="Amount">
+              <button onclick="Admin.setBalance()">Set</button>
+              <button onclick="Admin.addMoney()">Add</button>
+            </div>
+            <div class="admin-quick-money">
+              <button onclick="Admin.quickAdd(1000)">+$1K</button>
+              <button onclick="Admin.quickAdd(10000)">+$10K</button>
+              <button onclick="Admin.quickAdd(100000)">+$100K</button>
+              <button onclick="Admin.quickAdd(1000000)">+$1M</button>
+              <button onclick="Admin.quickAdd(1000000000)">+$1B</button>
+            </div>
+          </div>
+
+          <!-- Rebirth & Upgrades -->
+          <div class="admin-section">
+            <h3>Rebirth & Upgrades</h3>
+            <div class="admin-row">
+              <label>Rebirth Level:</label>
+              <input type="number" id="admin-rebirth" min="0" value="0">
+              <button onclick="Admin.setRebirth()">Set</button>
+            </div>
+            <div class="admin-row">
+              <label>Click Value Lv:</label>
+              <input type="number" id="admin-click-level" min="0" value="0">
+              <button onclick="Admin.setClickLevel()">Set</button>
+            </div>
+            <div class="admin-row">
+              <label>Auto Clicker Lv:</label>
+              <input type="number" id="admin-auto-level" min="0" value="0">
+              <button onclick="Admin.setAutoLevel()">Set</button>
+            </div>
+          </div>
+
+          <!-- Stats -->
+          <div class="admin-section">
+            <h3>Stats</h3>
+            <div class="admin-row">
+              <label>Total Earned:</label>
+              <input type="number" id="admin-earned" min="0">
+              <button onclick="Admin.setEarned()">Set</button>
+            </div>
+            <div class="admin-row">
+              <label>Total Clicks:</label>
+              <input type="number" id="admin-clicks" min="0">
+              <button onclick="Admin.setClicks()">Set</button>
+            </div>
+          </div>
+
+          <!-- Properties -->
+          <div class="admin-section">
+            <h3>Properties</h3>
+            <div class="admin-actions">
+              <button class="admin-btn win-btn" onclick="Properties.maxAll()">Max All Properties</button>
+              <button class="admin-btn danger" onclick="Properties.resetAll()">Reset Properties</button>
+            </div>
+          </div>
+
+          <!-- Game History -->
+          <div class="admin-section">
+            <h3>Game History</h3>
+            <div id="admin-history" class="admin-history">No games played yet.</div>
+            <button class="admin-btn" onclick="Admin.clearHistory()" style="margin-top:8px">Clear History</button>
+          </div>
+
+          <!-- Data -->
+          <div class="admin-section">
+            <h3>Data</h3>
+            <div class="admin-actions">
+              <button class="admin-btn save" onclick="Admin.forceSave()">Force Save</button>
+              <button class="admin-btn danger" onclick="Admin.resetAll()">Reset All Data</button>
+              <button class="admin-btn" onclick="Admin.exportData()">Export Save</button>
+              <button class="admin-btn" onclick="Admin.importData()">Import Save</button>
+            </div>
+            <textarea id="admin-data" rows="4" placeholder="Paste save data here for import..."></textarea>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Shark Duel Overlay -->
+    <div id="shark-duel" class="shark-duel hidden">
+      <div class="duel-title">LOAN SHARK DUEL</div>
+      <div class="duel-score" id="duel-score">You 0 - 0 Shark</div>
+      <div class="duel-cards">
+        <div class="duel-card" id="duel-player-card">?</div>
+        <div class="duel-vs">VS</div>
+        <div class="duel-card" id="duel-shark-card">?</div>
+      </div>
+      <div class="duel-result" id="duel-result"></div>
+      <button class="game-btn" id="duel-draw-btn" onclick="Loans.duelDraw()">DRAW!</button>
+    </div>
+  </div>
+
+  <script src="js/settings.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/clicker.js"></script>
+  <script src="js/coinflip.js"></script>
+  <script src="js/slots.js"></script>
+  <script src="js/crash.js"></script>
+  <script src="js/blackjack.js"></script>
+  <script src="js/plinko.js"></script>
+  <script src="js/roulette.js"></script>
+  <script src="js/horses.js"></script>
+  <script src="js/lottery.js"></script>
+  <script src="js/loans.js"></script>
+  <script src="js/properties.js"></script>
+  <script src="js/crime.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

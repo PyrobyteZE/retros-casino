@@ -1,0 +1,10 @@
+# APK build artifacts
+apk-build/.gradle/
+apk-build/app/build/
+apk-build/build/
+apk-build/local.properties
+*.apk
+
+# OS
+.DS_Store
+Thumbs.db
