@@ -60,7 +60,7 @@
 
 ## Ideas / Maybe
 - [ ] NFT-style collectible cards (fake, in-game only)
-- [ ] Pet system — pets that boost earnings
+- [x] Pet system — pets that boost earnings
 - [ ] Mini-games: lockpicking, safe cracking, getaway driver
 - [ ] Story mode with missions
 - [ ] Seasonal events (Halloween heist, Christmas jackpot)
