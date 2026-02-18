@@ -64,3 +64,4 @@
 - [ ] Mini-games: lockpicking, safe cracking, getaway driver
 - [ ] Story mode with missions
 - [ ] Seasonal events (Halloween heist, Christmas jackpot)
+- [ ] Player to Player Loaning
