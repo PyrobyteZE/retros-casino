@@ -809,6 +809,31 @@
             </div>
           </div>
 
+          <!-- Stocks -->
+          <div class="admin-section">
+            <h3>Stock Market</h3>
+            <div class="admin-actions">
+              <button class="admin-btn win-btn" onclick="Admin.stocksBoom()">Bull Run (+100%)</button>
+              <button class="admin-btn danger" onclick="Admin.stocksCrash()">Market Crash (-50%)</button>
+              <button class="admin-btn win-btn" onclick="Admin.stocksGiveShares()">+100 All Shares</button>
+              <button class="admin-btn" onclick="Admin.stocksResetPrices()">Reset Prices</button>
+              <button class="admin-btn danger" onclick="Admin.stocksResetPortfolio()">Clear Portfolio</button>
+            </div>
+          </div>
+
+          <!-- Crypto -->
+          <div class="admin-section">
+            <h3>Crypto Mining</h3>
+            <div class="admin-actions">
+              <button class="admin-btn win-btn" onclick="Admin.cryptoGiveCoins()">+10 BTC +100 ETH +100K DOGE</button>
+              <button class="admin-btn win-btn" onclick="Admin.cryptoMaxRigs()">Max All Rigs</button>
+              <button class="admin-btn win-btn" onclick="Admin.cryptoMaxUpgrades()">Max Upgrades + Cooling</button>
+              <button class="admin-btn win-btn" onclick="Admin.cryptoPumpPrices()">Pump Prices (3-5x)</button>
+              <button class="admin-btn" onclick="Admin.cryptoResetHeat()">Reset Heat</button>
+              <button class="admin-btn danger" onclick="Admin.cryptoResetAll()">Reset All Crypto</button>
+            </div>
+          </div>
+
           <!-- Game History -->
           <div class="admin-section">
             <h3>Game History</h3>
@@ -849,6 +874,7 @@
   <div id="chat-panel" class="chat-panel">
     <div class="chat-header" onclick="Firebase.toggleChat()">
       <span>Live Chat</span>
+      <span id="chat-status" class="chat-status chat-status-offline">Connecting...</span>
       <span class="chat-toggle">&#x25BC;</span>
     </div>
     <div class="chat-body">

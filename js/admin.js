@@ -381,6 +381,110 @@ const Admin = {
     this.renderHistory();
   },
 
+  // === Stocks Admin ===
+  stocksCrash() {
+    if (typeof Stocks === 'undefined') return;
+    for (let i = 0; i < Stocks.stocks.length; i++) {
+      Stocks.prices[i] *= 0.5;
+      if (Stocks.prices[i] < 1) Stocks.prices[i] = 1;
+    }
+    Stocks._addNews('ADMIN: Market Crash! All stocks -50%', false);
+    if (App.currentScreen === 'stocks') Stocks.render();
+  },
+
+  stocksBoom() {
+    if (typeof Stocks === 'undefined') return;
+    for (let i = 0; i < Stocks.stocks.length; i++) {
+      Stocks.prices[i] *= 2;
+    }
+    Stocks._addNews('ADMIN: Bull Run! All stocks +100%', true);
+    if (App.currentScreen === 'stocks') Stocks.render();
+  },
+
+  stocksGiveShares() {
+    if (typeof Stocks === 'undefined') return;
+    Stocks.stocks.forEach(s => {
+      if (!Stocks.holdings[s.symbol]) {
+        Stocks.holdings[s.symbol] = { shares: 0, avgCost: 0 };
+      }
+      Stocks.holdings[s.symbol].shares += 100;
+    });
+    if (App.currentScreen === 'stocks') Stocks.render();
+  },
+
+  stocksResetPortfolio() {
+    if (typeof Stocks === 'undefined') return;
+    Stocks.holdings = {};
+    Stocks.cashInvested = 0;
+    Stocks.totalProfit = 0;
+    if (App.currentScreen === 'stocks') Stocks.render();
+  },
+
+  stocksResetPrices() {
+    if (typeof Stocks === 'undefined') return;
+    Stocks.stocks.forEach((s, i) => {
+      Stocks.prices[i] = s.basePrice;
+      Stocks.priceHistory[i] = [];
+      for (let j = 0; j < 60; j++) Stocks.priceHistory[i].push(s.basePrice);
+    });
+    if (App.currentScreen === 'stocks') Stocks.render();
+  },
+
+  // === Crypto Admin ===
+  cryptoGiveCoins() {
+    if (typeof Crypto === 'undefined') return;
+    Crypto.wallet.BTC += 10;
+    Crypto.wallet.ETH += 100;
+    Crypto.wallet.DOGE += 100000;
+    if (App.currentScreen === 'crypto') Crypto.render();
+  },
+
+  cryptoMaxRigs() {
+    if (typeof Crypto === 'undefined') return;
+    for (let i = 0; i < Crypto.rigs.length; i++) {
+      Crypto.rigOwned[i] = true;
+      Crypto.rigLevels[i] = Crypto.rigs[i].maxLevel;
+    }
+    if (App.currentScreen === 'crypto') Crypto.render();
+  },
+
+  cryptoMaxUpgrades() {
+    if (typeof Crypto === 'undefined') return;
+    Crypto.upgrades.cpu = 10;
+    Crypto.upgrades.gpu = 5;
+    Crypto.upgrades.overclock = 5;
+    for (let i = 0; i < Crypto.coolingUpgrades.length; i++) {
+      Crypto.cooling[i] = true;
+    }
+    if (App.currentScreen === 'crypto') Crypto.render();
+  },
+
+  cryptoResetHeat() {
+    if (typeof Crypto === 'undefined') return;
+    Crypto.heat = 0;
+    if (App.currentScreen === 'crypto') Crypto.render();
+  },
+
+  cryptoResetAll() {
+    if (typeof Crypto === 'undefined') return;
+    Crypto.wallet = { BTC: 0, ETH: 0, DOGE: 0 };
+    Crypto.totalMined = { BTC: 0, ETH: 0, DOGE: 0 };
+    Crypto.rigOwned = Crypto.rigs.map(() => false);
+    Crypto.rigLevels = Crypto.rigs.map(() => 0);
+    Crypto.upgrades = { cpu: 0, gpu: 0, overclock: 0 };
+    Crypto.cooling = Crypto.coolingUpgrades.map(() => false);
+    Crypto.heat = 0;
+    if (App.currentScreen === 'crypto') Crypto.render();
+  },
+
+  cryptoPumpPrices() {
+    if (typeof Crypto === 'undefined') return;
+    Crypto.coinPrices[0] *= 3; // BTC 3x
+    Crypto.coinPrices[1] *= 3; // ETH 3x
+    Crypto.coinPrices[2] *= 5; // DOGE 5x
+    if (App.currentScreen === 'crypto') Crypto.render();
+  },
+
   // === Data ===
   forceSave() {
     App.save();

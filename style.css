@@ -3612,6 +3612,23 @@ html[data-platform="desktop"] #screen-pets .game-container {
   color: var(--green);
 }
 
+.chat-status {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: auto;
+  margin-right: 8px;
+}
+.chat-status-online {
+  color: #00e676;
+  background: rgba(0, 230, 118, 0.1);
+}
+.chat-status-offline {
+  color: #ff9100;
+  background: rgba(255, 145, 0, 0.1);
+}
+
 .chat-toggle {
   font-size: 10px;
   transition: transform 0.2s;

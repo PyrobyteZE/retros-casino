@@ -1,7 +1,6 @@
 // Firebase Multiplayer - Leaderboard, Trading, Chat, Profiles
 const Firebase = {
   // === CONFIG ===
-  // User: paste your Firebase project config here
   config: {
     apiKey: 'AIzaSyBjMFWLOks_IfOi-xma3hBJnh_qVZBzt-Q',
     authDomain: 'retros-casino.firebaseapp.com',
@@ -27,19 +26,23 @@ const Firebase = {
   tradeListener: null,
   leaderboardListener: null,
   viewingProfile: null,
+  connectionState: 'disconnected', // 'disconnected', 'connecting', 'connected'
 
   // === INIT ===
   init() {
-    // Check if Firebase SDK is loaded and config is set
+    this._updateChatStatus('Connecting...');
     if (!this._hasConfig()) {
       this.online = false;
+      this._updateChatStatus('No config');
       return;
     }
     try {
       if (typeof firebase === 'undefined') {
         this.online = false;
+        this._updateChatStatus('SDK not loaded');
         return;
       }
+      this.connectionState = 'connecting';
       if (!firebase.apps.length) {
         this.app = firebase.initializeApp(this.config);
       } else {
@@ -48,8 +51,18 @@ const Firebase = {
       this.db = firebase.database();
       this.auth = firebase.auth();
       this._signIn();
+      // Monitor connection state
+      this.db.ref('.info/connected').on('value', snap => {
+        if (snap.val() === true) {
+          this._updateChatStatus('Online');
+        } else if (this.connectionState === 'connected') {
+          this._updateChatStatus('Reconnecting...');
+        }
+      });
     } catch (e) {
       this.online = false;
+      this.connectionState = 'disconnected';
+      this._updateChatStatus('Error: ' + e.message);
     }
   },
 
@@ -61,16 +74,34 @@ const Firebase = {
     return this.online && this.uid && this.db;
   },
 
+  _updateChatStatus(text) {
+    const el = document.getElementById('chat-status');
+    if (el) {
+      el.textContent = text;
+      el.className = 'chat-status ' + (this.isOnline() ? 'chat-status-online' : 'chat-status-offline');
+    }
+    // Update leaderboard badge too
+    const badge = document.getElementById('lb-online-badge');
+    if (badge) {
+      badge.textContent = this.isOnline() ? 'Online' : text;
+      badge.className = 'lb-online-badge ' + (this.isOnline() ? 'lb-badge-online' : '');
+    }
+  },
+
   _signIn() {
-    // Check for stored UID
-    const storedUid = localStorage.getItem('retros_casino_uid');
+    this._updateChatStatus('Signing in...');
     this.auth.signInAnonymously().then(cred => {
       this.uid = cred.user.uid;
       localStorage.setItem('retros_casino_uid', this.uid);
       this.online = true;
+      this.connectionState = 'connected';
+      this._updateChatStatus('Online');
       this._startListeners();
-    }).catch(() => {
+    }).catch(err => {
       this.online = false;
+      this.connectionState = 'disconnected';
+      this._updateChatStatus('Auth failed');
+      console.error('Firebase auth error:', err.code, err.message);
     });
   },
 
@@ -81,7 +112,7 @@ const Firebase = {
     // Push leaderboard every 60s
     setInterval(() => this.pushLeaderboard(), 60000);
     // Initial push
-    setTimeout(() => this.pushLeaderboard(), 5000);
+    setTimeout(() => this.pushLeaderboard(), 3000);
   },
 
   // === LEADERBOARD ===
