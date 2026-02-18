@@ -3,13 +3,13 @@ const Firebase = {
   // === CONFIG ===
   // User: paste your Firebase project config here
   config: {
-    apiKey: '',
-    authDomain: '',
-    databaseURL: '',
-    projectId: '',
-    storageBucket: '',
-    messagingSenderId: '',
-    appId: '',
+    apiKey: 'AIzaSyBjMFWLOks_IfOi-xma3hBJnh_qVZBzt-Q',
+    authDomain: 'retros-casino.firebaseapp.com',
+    databaseURL: 'https://retros-casino-default-rtdb.firebaseio.com',
+    projectId: 'retros-casino',
+    storageBucket: 'retros-casino.firebasestorage.app',
+    messagingSenderId: '843660779109',
+    appId: '1:843660779109:web:2730bc041e9b26f5bdb08c',
   },
 
   // State
