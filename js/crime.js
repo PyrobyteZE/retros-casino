@@ -91,7 +91,9 @@ const Crime = {
     if (!this.owned[id]) return 0;
     if (this.isShutdown(id)) return 0;
     const biz = this.businesses[id];
-    return biz.baseIncome * (this.levels[id] + 1) * this.getRebirthMultiplier() * this.getManagerMultiplier(id);
+    let income = biz.baseIncome * (this.levels[id] + 1) * this.getRebirthMultiplier() * this.getManagerMultiplier(id);
+    if (typeof Pets !== 'undefined') income *= Pets.getBoosts().incomeMult;
+    return income;
   },
 
   getTotalIncome() {

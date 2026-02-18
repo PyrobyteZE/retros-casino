@@ -63,6 +63,8 @@ const Loans = {
 
     App.addBalance(-payAmount);
     this.debt = App.safeAdd(this.debt, -payAmount);
+    this._totalPaid = (this._totalPaid || 0) + payAmount;
+    if (typeof Pets !== 'undefined') Pets.checkEasterEgg('loan_overpay', this._totalPaid);
     if (this.debt <= 0.01) {
       this.debt = 0;
       this.loanTime = 0;

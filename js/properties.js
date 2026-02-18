@@ -129,10 +129,12 @@ const Properties = {
   getIncome(id) {
     if (!this.owned[id]) return 0;
     const biz = this.businesses[id];
-    return biz.baseIncome * (this.levels[id] + 1) * this.getRebirthMultiplier()
+    let income = biz.baseIncome * (this.levels[id] + 1) * this.getRebirthMultiplier()
       * this.getManagerMultiplier(id)
       * this.getEventMultiplier(id)
       * this.getRivalMultiplier(id);
+    if (typeof Pets !== 'undefined') income *= Pets.getBoosts().incomeMult;
+    return income;
   },
 
   getTotalIncome() {

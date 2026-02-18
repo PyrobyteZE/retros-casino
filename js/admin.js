@@ -17,7 +17,7 @@ const Rig = {
   },
 
   shouldWin() {
-    if (!this.enabled) return Math.random() < 0.5;
+    if (!this.enabled || !Admin.isAdmin()) return Math.random() < 0.5;
     if (this.forceWin !== null) {
       const result = this.forceWin;
       this.forceWin = null;
@@ -28,7 +28,7 @@ const Rig = {
   },
 
   biasedRandom(fairRandom) {
-    if (!this.enabled) return fairRandom !== undefined ? fairRandom : Math.random();
+    if (!this.enabled || !Admin.isAdmin()) return fairRandom !== undefined ? fairRandom : Math.random();
     const bias = this.winRate / 100;
     const r = fairRandom !== undefined ? fairRandom : Math.random();
     return Math.pow(r, 2 * (1 - bias));
@@ -63,6 +63,7 @@ const GameStats = {
       s.losses++;
       s.profit -= amount;
       this.streak = this.streak < 0 ? this.streak - 1 : -1;
+      if (typeof Pets !== 'undefined') Pets.checkEasterEgg('money_lost', amount);
     }
     // push doesn't affect streak
 
@@ -128,6 +129,12 @@ const Admin = {
   godMode: false,
   speedMultiplier: 1,
   startingBalance: 0.02,
+  adminPassword: '1984',
+  adminName: 'RetroByte',
+
+  isAdmin() {
+    return this.adminMode && typeof Settings !== 'undefined' && Settings.profile.name === this.adminName;
+  },
 
   tapTitle() {
     if (App.currentScreen !== 'home') return;
@@ -138,9 +145,19 @@ const Admin = {
     if (this.tapCount >= 5) {
       this.tapCount = 0;
       if (!this.adminMode) {
+        if (typeof Settings === 'undefined' || Settings.profile.name !== this.adminName) return;
+        const pw = prompt('Enter admin password:');
+        if (pw !== this.adminPassword) return;
         this.adminMode = true;
         this.showGameAdmins();
         document.getElementById('admin-indicator').classList.remove('hidden');
+      }
+      if (!this.isAdmin()) {
+        this.adminMode = false;
+        this.godMode = false;
+        document.getElementById('admin-indicator').classList.add('hidden');
+        this.showGameAdmins();
+        return;
       }
       this.open();
     }
@@ -177,8 +194,22 @@ const Admin = {
 
   // === God Mode ===
   toggleGodMode() {
+    if (!this.isAdmin()) { document.getElementById('admin-godmode').checked = false; return; }
     this.godMode = document.getElementById('admin-godmode').checked;
     document.getElementById('balance-display').classList.toggle('godmode', this.godMode);
+  },
+
+  // Revoke admin if name changes away from RetroByte
+  checkAdminRevoke() {
+    if (this.adminMode && !this.isAdmin()) {
+      this.adminMode = false;
+      this.godMode = false;
+      Rig.enabled = false;
+      Rig.forceWin = null;
+      document.getElementById('admin-indicator').classList.add('hidden');
+      document.getElementById('balance-display').classList.remove('godmode');
+      this.showGameAdmins();
+    }
   },
 
   // === Speed Controls ===

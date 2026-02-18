@@ -60,6 +60,7 @@ const Settings = {
     this.profile.name = name.slice(0, 16) || 'Player';
     this.updateProfileDisplay();
     this.save();
+    if (typeof Admin !== 'undefined') Admin.checkAdminRevoke();
   },
 
   updateProfileDisplay() {

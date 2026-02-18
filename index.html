@@ -132,6 +132,22 @@
             <div class="casino-icon">&#x1F6A8;</div>
             <div class="casino-name">Crime</div>
           </div>
+          <div class="casino-card" onclick="App.showScreen('pets')">
+            <div class="casino-icon">&#x1F43E;</div>
+            <div class="casino-name">Pets</div>
+          </div>
+          <div class="casino-card" onclick="App.showScreen('stocks')">
+            <div class="casino-icon">&#x1F4C8;</div>
+            <div class="casino-name">Stocks</div>
+          </div>
+          <div class="casino-card" onclick="App.showScreen('crypto')">
+            <div class="casino-icon">&#x26CF;&#xFE0F;</div>
+            <div class="casino-name">Crypto</div>
+          </div>
+          <div class="casino-card" onclick="App.showScreen('leaderboard')">
+            <div class="casino-icon">&#x1F3C6;</div>
+            <div class="casino-name">Leaderboard</div>
+          </div>
           <div class="casino-card" onclick="App.showScreen('settings')">
             <div class="casino-icon">&#x2699;&#xFE0F;</div>
             <div class="casino-name">Settings</div>
@@ -606,6 +622,55 @@
         </div>
       </section>
 
+      <!-- Pets -->
+      <section id="screen-pets" class="screen">
+        <div class="game-container">
+          <div id="pet-boost-banner" class="pet-boost-banner">No active boosts</div>
+          <div class="pet-tabs">
+            <button class="pet-tab-btn active" data-tab="collection" onclick="Pets.setTab('collection')">Collection</button>
+            <button class="pet-tab-btn" data-tab="gacha" onclick="Pets.setTab('gacha')">Gacha</button>
+            <button class="pet-tab-btn" data-tab="forge" onclick="Pets.setTab('forge')">Forge</button>
+            <button class="pet-tab-btn" data-tab="market" onclick="Pets.setTab('market')">Market</button>
+          </div>
+          <div id="pet-content"></div>
+          <div id="pet-gacha-result" class="pet-gacha-overlay hidden"></div>
+        </div>
+      </section>
+
+      <!-- Stocks -->
+      <section id="screen-stocks" class="screen">
+        <div class="game-container">
+          <div class="stock-tabs">
+            <button class="stock-tab-btn active" data-tab="market" onclick="Stocks.setTab('market')">Market</button>
+            <button class="stock-tab-btn" data-tab="portfolio" onclick="Stocks.setTab('portfolio')">Portfolio</button>
+            <button class="stock-tab-btn" data-tab="news" onclick="Stocks.setTab('news')">News</button>
+          </div>
+          <div id="stocks-content"></div>
+        </div>
+      </section>
+
+      <!-- Crypto Mining -->
+      <section id="screen-crypto" class="screen">
+        <div class="game-container">
+          <div class="crypto-tabs">
+            <button class="crypto-tab-btn active" data-tab="mine" onclick="Crypto.setTab('mine')">Mine</button>
+            <button class="crypto-tab-btn" data-tab="rigs" onclick="Crypto.setTab('rigs')">Rigs</button>
+            <button class="crypto-tab-btn" data-tab="exchange" onclick="Crypto.setTab('exchange')">Exchange</button>
+          </div>
+          <div id="crypto-content"></div>
+        </div>
+      </section>
+
+      <!-- Leaderboard -->
+      <section id="screen-leaderboard" class="screen">
+        <div class="game-container">
+          <div class="lb-header">
+            <div class="lb-online-badge" id="lb-online-badge">Offline</div>
+          </div>
+          <div id="leaderboard-content"></div>
+        </div>
+      </section>
+
       <!-- Settings -->
       <section id="screen-settings" class="screen">
         <div class="settings-panel">
@@ -780,6 +845,29 @@
     </div>
   </div>
 
+  <!-- Chat Panel -->
+  <div id="chat-panel" class="chat-panel">
+    <div class="chat-header" onclick="Firebase.toggleChat()">
+      <span>Live Chat</span>
+      <span class="chat-toggle">&#x25BC;</span>
+    </div>
+    <div class="chat-body">
+      <div id="chat-messages" class="chat-messages"></div>
+      <div class="chat-input-row">
+        <input type="text" id="chat-input" maxlength="200" placeholder="Type a message..." onkeydown="if(event.key==='Enter')Firebase.submitChat()">
+        <button onclick="Firebase.submitChat()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chat Toggle Button -->
+  <button id="chat-toggle-btn" class="chat-toggle-btn" onclick="Firebase.toggleChat()">&#x1F4AC;</button>
+
+  <!-- Firebase CDN (optional - only loads if configured) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
   <script src="js/settings.js"></script>
   <script src="js/app.js"></script>
   <script src="js/clicker.js"></script>
@@ -794,6 +882,10 @@
   <script src="js/loans.js"></script>
   <script src="js/properties.js"></script>
   <script src="js/crime.js"></script>
+  <script src="js/pets.js"></script>
+  <script src="js/stocks.js"></script>
+  <script src="js/crypto.js"></script>
+  <script src="js/firebase.js"></script>
   <script src="js/admin.js"></script>
 </body>
 </html>

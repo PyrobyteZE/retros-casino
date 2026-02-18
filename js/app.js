@@ -99,6 +99,10 @@ const App = {
       lottery: 'Lottery',
       properties: 'Properties',
       crime: 'Crime Empire',
+      pets: 'Pets',
+      stocks: 'Stock Market',
+      crypto: 'Crypto Mining',
+      leaderboard: 'Leaderboard',
       settings: 'Settings',
       admin: 'Admin Panel'
     };
@@ -122,6 +126,10 @@ const App = {
     if (name === 'lottery') Lottery.init();
     if (name === 'properties') Properties.init();
     if (name === 'crime') Crime.init();
+    if (name === 'pets') Pets.init();
+    if (name === 'stocks') Stocks.init();
+    if (name === 'crypto') Crypto.init();
+    if (name === 'leaderboard') { if (typeof Firebase !== 'undefined') { Firebase.renderLeaderboard(); const badge = document.getElementById('lb-online-badge'); if (badge) { badge.textContent = Firebase.isOnline() ? 'Online' : 'Offline'; badge.className = 'lb-online-badge ' + (Firebase.isOnline() ? 'lb-badge-online' : ''); } } }
     if (name === 'settings') Settings.render();
   },
 
@@ -142,9 +150,13 @@ const App = {
       loanTime: Loans.loanTime,
       properties: typeof Properties !== 'undefined' ? Properties.getSaveData() : null,
       crime: typeof Crime !== 'undefined' ? Crime.getSaveData() : null,
-      version: 5
+      pets: typeof Pets !== 'undefined' ? Pets.getSaveData() : null,
+      stocks: typeof Stocks !== 'undefined' ? Stocks.getSaveData() : null,
+      crypto: typeof Crypto !== 'undefined' ? Crypto.getSaveData() : null,
+      version: 7
     };
     localStorage.setItem('retros_casino_save', JSON.stringify(data));
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushLeaderboard();
   },
 
   load() {
@@ -167,6 +179,15 @@ const App = {
       if (typeof Crime !== 'undefined' && data.crime) {
         Crime.loadSaveData(data.crime);
       }
+      if (typeof Pets !== 'undefined' && data.pets) {
+        Pets.loadSaveData(data.pets);
+      }
+      if (typeof Stocks !== 'undefined' && data.stocks) {
+        Stocks.loadSaveData(data.stocks);
+      }
+      if (typeof Crypto !== 'undefined' && data.crypto) {
+        Crypto.loadSaveData(data.crypto);
+      }
     } catch (e) {}
   },
 
@@ -181,5 +202,9 @@ document.addEventListener('DOMContentLoaded', () => {
   Clicker.init();
   Loans.init();
   Properties.init();
+  Pets.init();
+  if (typeof Stocks !== 'undefined') Stocks.init();
+  if (typeof Crypto !== 'undefined') Crypto.init();
+  if (typeof Firebase !== 'undefined') Firebase.init();
   GameStats.initAllHUDs();
 });

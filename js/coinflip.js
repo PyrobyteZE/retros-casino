@@ -30,7 +30,9 @@ const CoinFlip = {
   },
 
   getWinChance() {
-    return this.getCurrentTier().chance;
+    let chance = this.getCurrentTier().chance;
+    if (typeof Pets !== 'undefined') chance = Math.min(75, chance + Pets.getBoosts().luckAdd);
+    return chance;
   },
 
   getPayout() {
@@ -85,10 +87,18 @@ const CoinFlip = {
         this.showResult('Won ' + App.formatMoney(winnings) + '!', 'win');
         GameStats.record('coinflip', 'win', winnings - bet);
         this.addHistory(result, true, winnings - bet);
+        // Easter egg: track win streak
+        this._cfWinStreak = (this._cfWinStreak || 0) + 1;
+        if (typeof Pets !== 'undefined') Pets.checkEasterEgg('cf_win_streak', this._cfWinStreak);
       } else {
         this.showResult('Lost ' + App.formatMoney(bet), 'lose');
         GameStats.record('coinflip', 'lose', bet);
         this.addHistory(result, false, bet);
+        this._cfWinStreak = 0;
+        if (typeof Pets !== 'undefined') {
+          Pets.checkEasterEgg('cf_streak_reset');
+          Pets.checkEasterEgg('money_lost', bet);
+        }
       }
       this.flipping = false;
     }, 600);

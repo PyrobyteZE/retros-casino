@@ -169,6 +169,9 @@ const Clicker = {
     // Apply rebirth multiplier
     base *= this.getEarningsMultiplier();
 
+    // Apply pet boost
+    if (typeof Pets !== 'undefined') base *= Pets.getBoosts().clickMult;
+
     return base;
   },
 
@@ -202,6 +205,7 @@ const Clicker = {
     const level = App.upgrades.autoClicker || 0;
     let rate = this.upgradeDefs[1].effect(level);
     rate *= this.getEarningsMultiplier();
+    if (typeof Pets !== 'undefined') rate *= Pets.getBoosts().incomeMult;
     return rate;
   },
 
@@ -215,6 +219,7 @@ const Clicker = {
     const result = this.getClickValueWithLuck();
     App.addBalance(result.value);
     App.totalClicks++;
+    if (typeof Pets !== 'undefined') Pets.checkEasterEgg('click_count', App.totalClicks);
     this.updateStats();
     this.renderUpgrades();
     this.updateRebirthUI();
