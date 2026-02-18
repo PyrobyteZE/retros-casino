@@ -34,8 +34,8 @@
 - [ ] **Player Trading** — send money to other players
 - [ ] **Black Market** — buy/sell rare items and boosts
 - [ ] **Auction House** — bid on exclusive upgrades
-- [ ] **Stock Market** — fake stocks that fluctuate, buy low sell high
-- [ ] **Crypto Mining** — passive income minigame with GPU upgrades
+- [x] **Stock Market** — fake stocks that fluctuate, buy low sell high
+- [x] **Crypto Mining** — passive income minigame with GPU upgrades
 
 ## v1.4 - Competitive
 - [ ] **Weekly Tournaments** — highest profit in 7 days wins prizes
