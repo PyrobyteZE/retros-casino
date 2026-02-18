@@ -43,7 +43,9 @@ A fun idle casino game with fake currency — click, gamble, and build your empi
 
 ## Android APK
 
-Build the APK yourself:
+Download the latest APK from [Releases](https://github.com/PyrobyteZE/retros-casino/releases).
+
+Or build it yourself:
 
 ```bash
 cd apk-build
@@ -51,6 +53,10 @@ ANDROID_HOME=~/android-sdk ./gradlew assembleDebug
 ```
 
 The APK will be at `apk-build/app/build/outputs/apk/debug/app-debug.apk`
+
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for planned features — multiplayer, PvP robbing, trading, tournaments, and more.
 
 ## Tech
 
