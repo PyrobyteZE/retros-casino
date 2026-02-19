@@ -127,6 +127,7 @@ const Admin = {
   tapTimer: null,
   adminMode: false,
   godMode: false,
+  trollMode: false,
   speedMultiplier: 1,
   startingBalance: 0.02,
   adminPassword: '1984',
@@ -296,8 +297,75 @@ const Admin = {
     this.updateRigStatus();
   },
 
-  refreshGameRig() {
-    // visual feedback could go here
+  refreshGameRig() {},
+
+  // === Troll Mode ===
+  toggleTroll() {
+    this.trollMode = !this.trollMode;
+    const btn = document.getElementById('admin-troll-toggle');
+    if (btn) btn.textContent = this.trollMode ? 'Troll: ON' : 'Troll: OFF';
+  },
+
+  trollFakeBalance() {
+    // Shows a fake $0.00 balance to scare friends
+    const el = document.getElementById('balance');
+    if (el) el.textContent = '0.00';
+    setTimeout(() => App.updateBalance(), 5000);
+  },
+
+  trollFlipScreen() {
+    document.getElementById('app').style.transform =
+      document.getElementById('app').style.transform === 'rotate(180deg)' ? '' : 'rotate(180deg)';
+  },
+
+  trollShake() {
+    const app = document.getElementById('app');
+    app.classList.add('troll-shake');
+    setTimeout(() => app.classList.remove('troll-shake'), 3000);
+  },
+
+  trollFakeReset() {
+    // Fake "data deleted" alert then restore
+    const el = document.getElementById('balance');
+    const real = el.textContent;
+    el.textContent = '0.00';
+    alert('ERROR: Save data corrupted! All progress lost.');
+    setTimeout(() => { el.textContent = real; }, 100);
+  },
+
+  trollRainbow() {
+    document.documentElement.classList.toggle('troll-rainbow');
+  },
+
+  trollHideBalance() {
+    document.getElementById('balance-display').classList.toggle('hidden');
+  },
+
+  trollBlur() {
+    const screens = document.getElementById('screens');
+    screens.style.filter = screens.style.filter === 'blur(8px)' ? '' : 'blur(8px)';
+  },
+
+  // === Custom Stock News (synced to all players) ===
+  sendStockNews() {
+    const input = document.getElementById('admin-stock-news');
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    const isGood = document.getElementById('admin-stock-news-good').checked;
+
+    // Add locally
+    if (typeof Stocks !== 'undefined') {
+      Stocks._addNews(text, isGood);
+      if (App.currentScreen === 'stocks') Stocks.render();
+    }
+
+    // Push to Firebase so all players see it
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.pushStockNews(text, isGood);
+    }
+
+    input.value = '';
   },
 
   // === Balance ===

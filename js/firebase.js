@@ -26,7 +26,7 @@ const Firebase = {
   tradeListener: null,
   leaderboardListener: null,
   viewingProfile: null,
-  connectionState: 'disconnected', // 'disconnected', 'connecting', 'connected'
+  connectionState: 'disconnected',
 
   // === INIT ===
   init() {
@@ -51,18 +51,11 @@ const Firebase = {
       this.db = firebase.database();
       this.auth = firebase.auth();
       this._signIn();
-      // Monitor connection state
-      this.db.ref('.info/connected').on('value', snap => {
-        if (snap.val() === true) {
-          this._updateChatStatus('Online');
-        } else if (this.connectionState === 'connected') {
-          this._updateChatStatus('Reconnecting...');
-        }
-      });
     } catch (e) {
       this.online = false;
       this.connectionState = 'disconnected';
       this._updateChatStatus('Error: ' + e.message);
+      console.error('Firebase init error:', e);
     }
   },
 
@@ -80,7 +73,6 @@ const Firebase = {
       el.textContent = text;
       el.className = 'chat-status ' + (this.isOnline() ? 'chat-status-online' : 'chat-status-offline');
     }
-    // Update leaderboard badge too
     const badge = document.getElementById('lb-online-badge');
     if (badge) {
       badge.textContent = this.isOnline() ? 'Online' : text;
@@ -96,11 +88,12 @@ const Firebase = {
       this.online = true;
       this.connectionState = 'connected';
       this._updateChatStatus('Online');
+      console.log('Firebase: signed in as', this.uid);
       this._startListeners();
     }).catch(err => {
       this.online = false;
       this.connectionState = 'disconnected';
-      this._updateChatStatus('Auth failed');
+      this._updateChatStatus('Auth failed: ' + err.code);
       console.error('Firebase auth error:', err.code, err.message);
     });
   },
@@ -109,10 +102,21 @@ const Firebase = {
     this._listenLeaderboard();
     this._listenChat();
     this._listenTrades();
+    // Monitor connection
+    this.db.ref('.info/connected').on('value', snap => {
+      if (snap.val() === true) {
+        this._updateChatStatus('Online');
+      } else if (this.connectionState === 'connected') {
+        this._updateChatStatus('Reconnecting...');
+      }
+    });
+    // Listen for synced stock news
+    this._listenStockNews();
     // Push leaderboard every 60s
     setInterval(() => this.pushLeaderboard(), 60000);
-    // Initial push
-    setTimeout(() => this.pushLeaderboard(), 3000);
+    // Initial push after auth (no throttle on first push)
+    this.lastLeaderboardPush = 0;
+    this.pushLeaderboard();
   },
 
   // === LEADERBOARD ===
@@ -134,7 +138,12 @@ const Firebase = {
       petCount: typeof Pets !== 'undefined' ? Pets.owned.filter(o => o).length : 0,
       timestamp: firebase.database.ServerValue.TIMESTAMP,
     };
-    this.db.ref('leaderboard/' + this.uid).set(data).catch(() => {});
+    this.db.ref('leaderboard/' + this.uid).set(data).then(() => {
+      console.log('Firebase: leaderboard pushed');
+    }).catch(err => {
+      console.error('Firebase leaderboard write error:', err.code, err.message);
+      this._updateChatStatus('DB write denied');
+    });
   },
 
   _listenLeaderboard() {
@@ -145,13 +154,20 @@ const Firebase = {
       this.leaderboardData = Object.entries(data)
         .map(([uid, d]) => ({ uid, ...d }))
         .sort((a, b) => (b.totalEarned || 0) - (a.totalEarned || 0));
+      console.log('Firebase: leaderboard updated,', this.leaderboardData.length, 'players');
       if (App.currentScreen === 'leaderboard') this.renderLeaderboard();
+    }, err => {
+      console.error('Firebase leaderboard listen error:', err.code, err.message);
+      this._updateChatStatus('DB read denied');
     });
   },
 
   // === CHAT ===
   sendChat(text) {
-    if (!this.isOnline()) return;
+    if (!this.isOnline()) {
+      console.warn('Firebase: chat send failed - not online');
+      return;
+    }
     text = (text || '').trim().slice(0, 200);
     if (!text) return;
 
@@ -169,7 +185,11 @@ const Firebase = {
       text,
       timestamp: firebase.database.ServerValue.TIMESTAMP,
     };
-    this.db.ref('chat').push(msg).catch(() => {});
+    this.db.ref('chat').push(msg).then(() => {
+      console.log('Firebase: chat message sent');
+    }).catch(err => {
+      console.error('Firebase chat write error:', err.code, err.message);
+    });
 
     // Cleanup: keep last 50
     this.db.ref('chat').orderByChild('timestamp').limitToFirst(1).once('value', snap => {
@@ -185,7 +205,33 @@ const Firebase = {
     ref.on('value', snap => {
       const data = snap.val() || {};
       this.chatMessages = Object.values(data).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+      console.log('Firebase: chat updated,', this.chatMessages.length, 'messages');
       this._renderChatMessages();
+    }, err => {
+      console.error('Firebase chat listen error:', err.code, err.message);
+    });
+  },
+
+  // === STOCK NEWS (synced to all players) ===
+  pushStockNews(text, good) {
+    if (!this.isOnline()) return;
+    this.db.ref('stockNews').push({
+      text,
+      good: !!good,
+      timestamp: firebase.database.ServerValue.TIMESTAMP,
+    }).catch(err => console.error('Firebase stockNews write error:', err));
+  },
+
+  _listenStockNews() {
+    this.db.ref('stockNews').orderByChild('timestamp').limitToLast(10).on('child_added', snap => {
+      const news = snap.val();
+      if (!news || !news.text) return;
+      // Only show news from last 5 minutes
+      if (news.timestamp && Date.now() - news.timestamp > 300000) return;
+      if (typeof Stocks !== 'undefined') {
+        Stocks._addNews(news.text, news.good);
+        if (App.currentScreen === 'stocks') Stocks.render();
+      }
     });
   },
 
@@ -194,7 +240,6 @@ const Firebase = {
     if (!this.isOnline()) return;
     const pet = Pets.pets[petId];
     if (!pet || !Pets.owned[petId]) return;
-    // Can't trade mythics or easter eggs
     if (pet.rarity >= 5 || pet.easterEgg) return;
     if (price <= 0) return;
 
@@ -212,31 +257,28 @@ const Firebase = {
 
     const tradeRef = this.db.ref('trades').push();
     tradeRef.set(listing).then(() => {
-      // Remove pet from owner
       Pets.owned[petId] = false;
       Pets.levels[petId] = 0;
       Pets.instanceIds[petId] = '';
       App.save();
       if (App.currentScreen === 'pets') Pets.render();
-    }).catch(() => {});
+    }).catch(err => {
+      console.error('Firebase trade write error:', err.code, err.message);
+    });
   },
 
   buyTrade(tradeId, listing) {
     if (!this.isOnline()) return;
-    if (listing.sellerUid === this.uid) return; // Can't buy own listing
+    if (listing.sellerUid === this.uid) return;
     if (App.balance < listing.price) return;
 
     const tradeRef = this.db.ref('trades/' + tradeId);
-    // Atomic check & remove
     tradeRef.transaction(current => {
-      if (current === null) return; // Already bought
-      return null; // Remove listing
+      if (current === null) return;
+      return null;
     }, (error, committed) => {
       if (error || !committed) return;
-      // Transfer
       App.addBalance(-listing.price);
-      // Add balance to seller via leaderboard (simplified)
-      // Give pet to buyer
       Pets.owned[listing.petId] = true;
       Pets.levels[listing.petId] = listing.petLevel || 1;
       Pets.instanceIds[listing.petId] = Pets.generateId();
@@ -253,6 +295,8 @@ const Firebase = {
         .map(([id, d]) => ({ id, ...d }))
         .sort((a, b) => a.price - b.price);
       if (App.currentScreen === 'pets' && Pets.activeTab === 'market') Pets.render();
+    }, err => {
+      console.error('Firebase trades listen error:', err.code, err.message);
     });
   },
 
@@ -262,7 +306,7 @@ const Firebase = {
     if (!container) return;
 
     if (!this.isOnline()) {
-      container.innerHTML = '<div class="lb-offline">Offline - Configure Firebase to enable multiplayer</div>';
+      container.innerHTML = '<div class="lb-offline">Offline - Firebase not connected</div>';
       return;
     }
 
@@ -328,6 +372,10 @@ const Firebase = {
   _renderChatMessages() {
     const list = document.getElementById('chat-messages');
     if (!list) return;
+    if (this.chatMessages.length === 0) {
+      list.innerHTML = '<div class="chat-empty">No messages yet. Say hi!</div>';
+      return;
+    }
     list.innerHTML = this.chatMessages.map(m => {
       const isMe = m.uid === this.uid;
       return `<div class="chat-msg ${isMe ? 'chat-me' : ''}">
@@ -346,7 +394,7 @@ const Firebase = {
     input.value = '';
   },
 
-  // === Pet Market Rendering (called from Pets) ===
+  // === Pet Market Rendering ===
   renderMarketTab() {
     if (!this.isOnline()) {
       return '<div class="lb-offline">Offline - Configure Firebase to enable pet trading</div>';
@@ -380,7 +428,6 @@ const Firebase = {
     return html;
   },
 
-  // Prompt to list a pet for sale
   promptListPet(petId) {
     if (!this.isOnline()) return;
     const pet = Pets.pets[petId];

@@ -685,6 +685,20 @@
         <div class="admin-panel">
           <h2 class="admin-title">Admin Panel</h2>
 
+          <!-- Troll Mode -->
+          <div class="admin-section troll-section">
+            <h3>Troll Friends</h3>
+            <div class="admin-actions">
+              <button class="admin-btn troll-btn" onclick="Admin.trollFakeBalance()">Fake $0 Balance</button>
+              <button class="admin-btn troll-btn" onclick="Admin.trollFakeReset()">Fake Data Wipe</button>
+              <button class="admin-btn troll-btn" onclick="Admin.trollFlipScreen()">Flip Screen</button>
+              <button class="admin-btn troll-btn" onclick="Admin.trollShake()">Earthquake</button>
+              <button class="admin-btn troll-btn" onclick="Admin.trollRainbow()">Rainbow Mode</button>
+              <button class="admin-btn troll-btn" onclick="Admin.trollHideBalance()">Hide Balance</button>
+              <button class="admin-btn troll-btn" onclick="Admin.trollBlur()">Blur Screen</button>
+            </div>
+          </div>
+
           <!-- God Mode & Speed -->
           <div class="admin-section">
             <h3>Cheats</h3>
@@ -821,6 +835,16 @@
               <button class="admin-btn danger" onclick="Admin.stocksResetPortfolio()">Clear Portfolio</button>
             </div>
             <div id="admin-stock-controls" class="admin-stock-controls"></div>
+            <div class="admin-news-input" style="margin-top:10px">
+              <h4 style="color:var(--green);margin:0 0 6px">Custom News (all players see this)</h4>
+              <div class="admin-row">
+                <input type="text" id="admin-stock-news" placeholder="Breaking: CEO caught eating crayons..." maxlength="200" style="flex:1">
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap">
+                  <input type="checkbox" id="admin-stock-news-good"> Good?
+                </label>
+                <button class="admin-btn win-btn" onclick="Admin.sendStockNews()" style="min-width:60px">Send</button>
+              </div>
+            </div>
           </div>
 
           <!-- Crypto -->

@@ -1108,8 +1108,31 @@ body {
 .admin-btn.save { background: var(--green); color: #000; }
 .admin-btn.danger { background: var(--red); color: #fff; }
 .admin-btn.win-btn { background: var(--bg3); border: 1px solid var(--green); color: var(--green); }
+.admin-btn.troll-btn { background: var(--bg3); border: 1px solid #bb86fc; color: #bb86fc; }
+.troll-section { border: 1px solid #bb86fc; }
 
 .rig-section { border: 1px solid var(--red); }
+
+/* Troll animations */
+@keyframes trollShake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-8px) rotate(-1deg); }
+  20%, 40%, 60%, 80% { transform: translateX(8px) rotate(1deg); }
+}
+.troll-shake { animation: trollShake 0.5s ease-in-out 6; }
+
+@keyframes trollRainbow {
+  0%   { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+.troll-rainbow { animation: trollRainbow 2s linear infinite; }
+
+.chat-empty {
+  color: #666;
+  font-size: 13px;
+  text-align: center;
+  padding: 20px;
+}
 
 .rig-status {
   font-size: 14px;
