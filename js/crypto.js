@@ -112,7 +112,7 @@ const Crypto = {
     const isAuthority = typeof Firebase !== 'undefined' && Firebase.isOnline() && Firebase._isCryptoAuthority;
     const isFollower = typeof Firebase !== 'undefined' && Firebase.isOnline() && !Firebase._isCryptoAuthority;
 
-    if (isFollower) {
+    if (isFollower && !this._hasActiveTargets()) {
       // Follower: prices come from listener
       this._showOutOfSyncBanner(false);
       return;
@@ -298,11 +298,19 @@ const Crypto = {
   },
 
   // === Admin Gradual Price Control ===
+  _hasActiveTargets() {
+    return this._priceTargets.some(t => t && t.stepsLeft > 0);
+  },
+
   setGradualTarget(idx, targetPrice, steps) {
     if (!this._priceTargets.length) {
       this._priceTargets = this.coins.map(() => null);
     }
     this._priceTargets[idx] = { target: targetPrice, stepsLeft: steps || 10 };
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase._isCryptoAuthority = true;
+      Firebase._tryClaimCryptoAuthority();
+    }
   },
 
   setGradualAll(multiplier, steps) {
@@ -311,6 +319,10 @@ const Crypto = {
     }
     for (let i = 0; i < this.coins.length; i++) {
       this._priceTargets[i] = { target: this.coinPrices[i] * multiplier, stepsLeft: steps || 10 };
+    }
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase._isCryptoAuthority = true;
+      Firebase._tryClaimCryptoAuthority();
     }
   },
 

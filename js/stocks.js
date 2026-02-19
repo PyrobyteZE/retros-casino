@@ -50,7 +50,7 @@ const Stocks = {
     const isAuthority = typeof Firebase !== 'undefined' && Firebase.isOnline() && Firebase._isStockAuthority;
     const isFollower = typeof Firebase !== 'undefined' && Firebase.isOnline() && !Firebase._isStockAuthority;
 
-    if (isFollower) {
+    if (isFollower && !this._hasActiveTargets()) {
       // Follower: prices come from listener, skip local math
       this._showOutOfSyncBanner(false);
       return;
@@ -179,11 +179,20 @@ const Stocks = {
   },
 
   // === Admin Gradual Price Control ===
+  _hasActiveTargets() {
+    return this._priceTargets.some(t => t && t.stepsLeft > 0);
+  },
+
   setGradualTarget(idx, targetPrice, steps) {
     if (!this._priceTargets.length) {
       this._priceTargets = this.stocks.map(() => null);
     }
     this._priceTargets[idx] = { target: targetPrice, stepsLeft: steps || 15 };
+    // Force this tab to be authority so targets actually process
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase._isStockAuthority = true;
+      Firebase._tryClaimStockAuthority();
+    }
   },
 
   setGradualAll(multiplier, steps) {
@@ -192,6 +201,11 @@ const Stocks = {
     }
     for (let i = 0; i < this.stocks.length; i++) {
       this._priceTargets[i] = { target: this.prices[i] * multiplier, stepsLeft: steps || 15 };
+    }
+    // Force this tab to be authority so targets actually process
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase._isStockAuthority = true;
+      Firebase._tryClaimStockAuthority();
     }
   },
 
