@@ -814,13 +814,15 @@
           <div class="admin-section">
             <h3>Crypto Mining</h3>
             <div class="admin-actions">
+              <button class="admin-btn win-btn" onclick="Admin.cryptoPump()">Pump All (3x)</button>
+              <button class="admin-btn danger" onclick="Admin.cryptoDump()">Dump All (-70%)</button>
               <button class="admin-btn win-btn" onclick="Admin.cryptoGiveCoins()">+10 BTC +100 ETH +100K DOGE</button>
               <button class="admin-btn win-btn" onclick="Admin.cryptoMaxRigs()">Max All Rigs</button>
               <button class="admin-btn win-btn" onclick="Admin.cryptoMaxUpgrades()">Max Upgrades + Cooling</button>
-              <button class="admin-btn win-btn" onclick="Admin.cryptoPumpPrices()">Pump Prices (3-5x)</button>
               <button class="admin-btn" onclick="Admin.cryptoResetHeat()">Reset Heat</button>
               <button class="admin-btn danger" onclick="Admin.cryptoResetAll()">Reset All Crypto</button>
             </div>
+            <div id="admin-crypto-controls" class="admin-stock-controls"></div>
           </div>
 
           <!-- Game History -->

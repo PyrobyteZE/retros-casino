@@ -194,6 +194,7 @@ const Admin = {
     this.updateRigStatus();
     this.renderHistory();
     this.renderStockControls();
+    this.renderCryptoControls();
     document.getElementById('admin-overlay').classList.add('open');
     document.getElementById('admin-overlay-backdrop').classList.add('open');
   },
@@ -492,23 +493,14 @@ const Admin = {
 
   stocksCrash() {
     if (typeof Stocks === 'undefined') return;
-    for (let i = 0; i < Stocks.stocks.length; i++) {
-      Stocks.prices[i] *= 0.5;
-      if (Stocks.prices[i] < 1) Stocks.prices[i] = 1;
-    }
-    Stocks._addNews('Market Crash! All stocks -50%', false);
-    this._pushStockPricesNow();
-    if (App.currentScreen === 'stocks') Stocks.render();
+    Stocks.setGradualAll(0.5, 20);
+    Stocks._addNews('Market downturn! Stocks falling...', false);
   },
 
   stocksBoom() {
     if (typeof Stocks === 'undefined') return;
-    for (let i = 0; i < Stocks.stocks.length; i++) {
-      Stocks.prices[i] *= 2;
-    }
-    Stocks._addNews('Bull Run! All stocks +100%', true);
-    this._pushStockPricesNow();
-    if (App.currentScreen === 'stocks') Stocks.render();
+    Stocks.setGradualAll(2, 20);
+    Stocks._addNews('Market rally! Stocks climbing...', true);
   },
 
   stocksGiveShares() {
@@ -544,10 +536,8 @@ const Admin = {
 
   stockAdjust(idx, mult) {
     if (typeof Stocks === 'undefined') return;
-    Stocks.prices[idx] = Math.max(1, Stocks.prices[idx] * mult);
-    this._pushStockPricesNow();
-    if (App.currentScreen === 'stocks') Stocks.render();
-    this.renderStockControls();
+    const target = Math.max(1, Stocks.prices[idx] * mult);
+    Stocks.setGradualTarget(idx, target, 15);
   },
 
   stockSetPrice(idx) {
@@ -556,10 +546,7 @@ const Admin = {
     if (!input) return;
     const val = parseFloat(input.value);
     if (isNaN(val) || val < 1) return;
-    Stocks.prices[idx] = val;
-    this._pushStockPricesNow();
-    if (App.currentScreen === 'stocks') Stocks.render();
-    this.renderStockControls();
+    Stocks.setGradualTarget(idx, val, 15);
   },
 
   renderStockControls() {
@@ -588,6 +575,62 @@ const Admin = {
   },
 
   // === Crypto Admin ===
+  _pushCryptoPricesNow() {
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline() && Firebase._isCryptoAuthority) {
+      Firebase.pushCryptoPrices(Crypto.coinPrices.slice());
+    }
+  },
+
+  cryptoPump() {
+    if (typeof Crypto === 'undefined') return;
+    Crypto.setGradualAll(3, 12);
+  },
+
+  cryptoDump() {
+    if (typeof Crypto === 'undefined') return;
+    Crypto.setGradualAll(0.3, 12);
+  },
+
+  cryptoAdjust(idx, mult) {
+    if (typeof Crypto === 'undefined') return;
+    const target = Math.max(0.01, Crypto.coinPrices[idx] * mult);
+    Crypto.setGradualTarget(idx, target, 10);
+  },
+
+  cryptoSetPrice(idx) {
+    if (typeof Crypto === 'undefined') return;
+    const input = document.getElementById('admin-crypto-price-' + idx);
+    if (!input) return;
+    const val = parseFloat(input.value);
+    if (isNaN(val) || val < 0.01) return;
+    Crypto.setGradualTarget(idx, val, 10);
+  },
+
+  renderCryptoControls() {
+    const container = document.getElementById('admin-crypto-controls');
+    if (!container || typeof Crypto === 'undefined') return;
+    let html = '<div class="admin-stock-grid">';
+    Crypto.coins.forEach((c, i) => {
+      const price = Crypto.coinPrices[i];
+      html += `<div class="admin-stock-row">
+        <span class="admin-stock-sym" style="color:${c.color}">${c.symbol}</span>
+        <span class="admin-stock-price">${App.formatMoney(price)}</span>
+        <div class="admin-stock-btns">
+          <button class="rig-btn lose" onclick="Admin.cryptoAdjust(${i},0.3)">-70%</button>
+          <button class="rig-btn lose" onclick="Admin.cryptoAdjust(${i},0.5)">-50%</button>
+          <button class="rig-btn win" onclick="Admin.cryptoAdjust(${i},2)">+100%</button>
+          <button class="rig-btn win" onclick="Admin.cryptoAdjust(${i},5)">+400%</button>
+        </div>
+        <div class="admin-stock-set">
+          <input type="number" id="admin-crypto-price-${i}" value="${price.toFixed(2)}" min="0.01" step="0.01" style="width:80px">
+          <button onclick="Admin.cryptoSetPrice(${i})">Set</button>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+  },
+
   cryptoGiveCoins() {
     if (typeof Crypto === 'undefined') return;
     Crypto.wallet.BTC += 10;
@@ -636,10 +679,7 @@ const Admin = {
 
   cryptoPumpPrices() {
     if (typeof Crypto === 'undefined') return;
-    Crypto.coinPrices[0] *= 3; // BTC 3x
-    Crypto.coinPrices[1] *= 3; // ETH 3x
-    Crypto.coinPrices[2] *= 5; // DOGE 5x
-    if (App.currentScreen === 'crypto') Crypto.render();
+    Crypto.setGradualAll(3, 12);
   },
 
   // === Data ===

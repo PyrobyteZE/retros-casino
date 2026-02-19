@@ -46,6 +46,7 @@ const Crypto = {
   priceTimer: null,
   initialized: false,
   mineAnimating: false,
+  _priceTargets: [],  // admin gradual targets
 
   init() {
     if (!this.initialized) {
@@ -58,6 +59,7 @@ const Crypto = {
         for (let i = 0; i < 30; i++) arr.push(c.baseValue);
         return arr;
       });
+      this._priceTargets = this.coins.map(() => null);
       this.initialized = true;
     }
     this.startTick();
@@ -123,7 +125,17 @@ const Crypto = {
     }
 
     for (let i = 0; i < this.coins.length; i++) {
-      const change = this.coinPrices[i] * (Math.random() - 0.5) * 0.03;
+      let change = this.coinPrices[i] * (Math.random() - 0.5) * 0.03;
+
+      // Admin gradual price target drift
+      const tgt = this._priceTargets[i];
+      if (tgt && tgt.stepsLeft > 0) {
+        const drift = (tgt.target - this.coinPrices[i]) / tgt.stepsLeft;
+        change = drift + this.coinPrices[i] * (Math.random() - 0.5) * 0.01;
+        tgt.stepsLeft--;
+        if (tgt.stepsLeft <= 0) this._priceTargets[i] = null;
+      }
+
       this.coinPrices[i] = Math.max(this.coins[i].baseValue * 0.1, this.coinPrices[i] + change);
       this.priceHistory[i].push(this.coinPrices[i]);
       if (this.priceHistory[i].length > 30) this.priceHistory[i].shift();
@@ -285,7 +297,92 @@ const Crypto = {
     this.render();
   },
 
+  // === Admin Gradual Price Control ===
+  setGradualTarget(idx, targetPrice, steps) {
+    if (!this._priceTargets.length) {
+      this._priceTargets = this.coins.map(() => null);
+    }
+    this._priceTargets[idx] = { target: targetPrice, stepsLeft: steps || 10 };
+  },
+
+  setGradualAll(multiplier, steps) {
+    if (!this._priceTargets.length) {
+      this._priceTargets = this.coins.map(() => null);
+    }
+    for (let i = 0; i < this.coins.length; i++) {
+      this._priceTargets[i] = { target: this.coinPrices[i] * multiplier, stepsLeft: steps || 10 };
+    }
+  },
+
   // === Exchange ===
+  buyCoin(symbol, cashAmount) {
+    const idx = this.coins.findIndex(c => c.symbol === symbol);
+    if (idx < 0) return;
+    if (cashAmount <= 0 || App.balance < cashAmount) return;
+    const coinAmount = cashAmount / this.coinPrices[idx];
+    App.addBalance(-cashAmount);
+    this.wallet[symbol] += coinAmount;
+    App.save();
+    this.render();
+  },
+
+  promptBuyCoin(symbol) {
+    const idx = this.coins.findIndex(c => c.symbol === symbol);
+    if (idx < 0) return;
+    const price = this.coinPrices[idx];
+    const maxCash = App.balance;
+    if (maxCash < 1) return;
+
+    const amounts = [100, 1000, 10000, Math.floor(maxCash)].filter(a => a > 0 && a <= maxCash);
+    const unique = [...new Set(amounts)];
+
+    let html = `<div class="stock-trade-modal">
+      <div class="stock-trade-title">Buy ${symbol} @ ${App.formatMoney(price)}</div>
+      <div class="stock-trade-buttons">`;
+    unique.forEach(a => {
+      const coins = a / price;
+      html += `<button class="stock-trade-btn" onclick="Crypto.buyCoin('${symbol}',${a});Crypto.closeModal()">${App.formatMoney(a)}<br>${coins.toFixed(4)} ${symbol}</button>`;
+    });
+    html += `</div><button class="stock-trade-cancel" onclick="Crypto.closeModal()">Cancel</button></div>`;
+    this._showModal(html);
+  },
+
+  promptSellCoin(symbol) {
+    const idx = this.coins.findIndex(c => c.symbol === symbol);
+    if (idx < 0) return;
+    const price = this.coinPrices[idx];
+    const owned = this.wallet[symbol];
+    if (owned <= 0) return;
+
+    const amounts = [0.25, 0.5, 1.0].map(pct => owned * pct).filter(a => a > 0);
+    let html = `<div class="stock-trade-modal">
+      <div class="stock-trade-title">Sell ${symbol} @ ${App.formatMoney(price)}</div>
+      <div class="stock-trade-buttons">`;
+    const labels = ['25%', '50%', 'All'];
+    amounts.forEach((a, i) => {
+      html += `<button class="stock-trade-btn stock-sell-btn" onclick="Crypto.sellCoin('${symbol}',${a});Crypto.closeModal()">${labels[i]}<br>${App.formatMoney(a * price)}</button>`;
+    });
+    html += `</div><button class="stock-trade-cancel" onclick="Crypto.closeModal()">Cancel</button></div>`;
+    this._showModal(html);
+  },
+
+  _showModal(html) {
+    let modal = document.getElementById('crypto-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'crypto-modal';
+      modal.className = 'stock-modal-overlay';
+      document.getElementById('app').appendChild(modal);
+    }
+    modal.innerHTML = html;
+    modal.classList.remove('hidden');
+  },
+
+  closeModal() {
+    const modal = document.getElementById('crypto-modal');
+    if (modal) modal.classList.add('hidden');
+  },
+
   sellCoin(symbol, amount) {
     const idx = this.coins.findIndex(c => c.symbol === symbol);
     if (idx < 0) return;
@@ -454,9 +551,8 @@ const Crypto = {
         </div>
         <canvas id="crypto-chart-${coin.symbol}" class="crypto-chart" width="200" height="40"></canvas>
         <div class="exchange-actions">
-          <button class="stock-sell-btn" onclick="Crypto.sellCoin('${coin.symbol}', ${amount * 0.25})" ${amount > 0 ? '' : 'disabled'}>Sell 25%</button>
-          <button class="stock-sell-btn" onclick="Crypto.sellCoin('${coin.symbol}', ${amount * 0.5})" ${amount > 0 ? '' : 'disabled'}>Sell 50%</button>
-          <button class="stock-sell-btn" onclick="Crypto.sellAllCoin('${coin.symbol}')" ${amount > 0 ? '' : 'disabled'}>Sell All</button>
+          <button class="stock-buy-btn" onclick="Crypto.promptBuyCoin('${coin.symbol}')">Buy</button>
+          <button class="stock-sell-btn" onclick="Crypto.promptSellCoin('${coin.symbol}')" ${amount > 0 ? '' : 'disabled'}>Sell</button>
         </div>
       </div>`;
     });

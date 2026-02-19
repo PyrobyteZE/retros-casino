@@ -23,6 +23,7 @@ const Stocks = {
   tickTimer: null,
   eventTimer: null,
   initialized: false,
+  _priceTargets: [],  // admin gradual price targets: [{ target, stepsLeft }] per stock
 
   init() {
     if (!this.initialized) {
@@ -32,6 +33,7 @@ const Stocks = {
         for (let i = 0; i < 60; i++) arr.push(s.basePrice);
         return arr;
       });
+      this._priceTargets = this.stocks.map(() => null);
       this.initialized = true;
     }
     this.startTick();
@@ -69,6 +71,16 @@ const Stocks = {
       if (s.symbol === 'JOY' && Math.random() < 0.005) {
         const dipPct = -(0.20 + Math.random() * 0.20); // -20% to -40%
         change = this.prices[i] * dipPct;
+      }
+
+      // Admin gradual price target drift
+      const tgt = this._priceTargets[i];
+      if (tgt && tgt.stepsLeft > 0) {
+        const drift = (tgt.target - this.prices[i]) / tgt.stepsLeft;
+        // Add drift + some noise so it looks natural
+        change = drift + this.prices[i] * (Math.random() - 0.5) * s.volatility * 0.3;
+        tgt.stepsLeft--;
+        if (tgt.stepsLeft <= 0) this._priceTargets[i] = null;
       }
 
       this.prices[i] = Math.max(1, this.prices[i] + change);
@@ -164,6 +176,23 @@ const Stocks = {
   _addNews(text, good) {
     this.newsHistory.unshift({ text, good, time: Date.now() });
     if (this.newsHistory.length > 20) this.newsHistory.pop();
+  },
+
+  // === Admin Gradual Price Control ===
+  setGradualTarget(idx, targetPrice, steps) {
+    if (!this._priceTargets.length) {
+      this._priceTargets = this.stocks.map(() => null);
+    }
+    this._priceTargets[idx] = { target: targetPrice, stepsLeft: steps || 15 };
+  },
+
+  setGradualAll(multiplier, steps) {
+    if (!this._priceTargets.length) {
+      this._priceTargets = this.stocks.map(() => null);
+    }
+    for (let i = 0; i < this.stocks.length; i++) {
+      this._priceTargets[i] = { target: this.prices[i] * multiplier, stepsLeft: steps || 15 };
+    }
   },
 
   // === Trading ===
