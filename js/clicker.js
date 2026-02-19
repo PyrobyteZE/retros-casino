@@ -85,13 +85,33 @@ const Clicker = {
     return base * Math.pow(5, r); // 5x more starting cash per rebirth
   },
 
+  // Rebirth requirements scale with each rebirth
+  getRebirthRequirements() {
+    const r = this.getRebirths();
+    // First rebirth: 50/50, then escalates
+    const clickReq = 50;
+    const autoReq = 50;
+    // Each rebirth also requires more total earned money
+    const earnedReq = r === 0 ? 5000 : 5000 * Math.pow(10, r); // 5K, 50K, 500K, 5M, 50M...
+    return { clickReq, autoReq, earnedReq };
+  },
+
   canRebirth() {
-    return (App.upgrades.clickValue || 0) >= 50 && (App.upgrades.autoClicker || 0) >= 50;
+    const req = this.getRebirthRequirements();
+    return (App.upgrades.clickValue || 0) >= req.clickReq &&
+           (App.upgrades.autoClicker || 0) >= req.autoReq &&
+           App.totalEarned >= req.earnedReq;
   },
 
   doRebirth() {
     if (!this.canRebirth()) return;
-    if (!confirm('REBIRTH: Reset all progress for permanent bonuses?\n\n' +
+    const req = this.getRebirthRequirements();
+    if (!confirm('REBIRTH: Reset ALL progress for permanent bonuses?\n\n' +
+      'This will reset:\n' +
+      '• All upgrades & balance\n' +
+      '• Properties & Crime buildings\n' +
+      '• Stock portfolio & crypto rigs\n' +
+      '• Loans & debt\n\n' +
       'You will get:\n' +
       '• 1.5x earnings multiplier (stacks)\n' +
       '• 10% cheaper upgrades\n' +
@@ -107,11 +127,46 @@ const Clicker = {
     // Preserve coinLuck through rebirth
     const savedCoinLuck = App.upgrades.coinLuck || 0;
 
-    // Reset progress but keep rebirth count + preserved data
+    // Reset core progress
     App.balance = this.getStartingCash();
     App.totalEarned = 0;
     App.totalClicks = 0;
     App.upgrades = { clickValue: 0, autoClicker: 0, luckyClick: 0, critClick: 0, autoBet: 0, coinLuck: savedCoinLuck };
+
+    // Reset properties
+    if (typeof Properties !== 'undefined') Properties.resetAll();
+
+    // Reset crime
+    if (typeof Crime !== 'undefined' && Crime.resetAll) Crime.resetAll();
+
+    // Reset loans
+    if (typeof Loans !== 'undefined') {
+      Loans.debt = 0;
+      Loans.loanTime = 0;
+      Loans.stopInterest();
+      Loans.updateUI();
+      Loans.updateDebtDisplay();
+    }
+
+    // Reset stocks
+    if (typeof Stocks !== 'undefined') {
+      Stocks.holdings = {};
+      Stocks.cashInvested = 0;
+      Stocks.totalProfit = 0;
+      Stocks.newsHistory = [];
+    }
+
+    // Reset crypto
+    if (typeof Crypto !== 'undefined') {
+      Crypto.wallet = { BTC: 0, ETH: 0, DOGE: 0 };
+      Crypto.totalMined = { BTC: 0, ETH: 0, DOGE: 0 };
+      Crypto.rigOwned = Crypto.rigs.map(() => false);
+      Crypto.rigLevels = Crypto.rigs.map(() => 0);
+      Crypto.upgrades = { cpu: 0, gpu: 0, overclock: 0 };
+      Crypto.cooling = Crypto.coolingUpgrades.map(() => false);
+      Crypto.heat = 0;
+    }
+
     App.updateBalance();
     App.save();
 
@@ -148,16 +203,36 @@ const Clicker = {
       }
     }
 
-    // Rebirth button visibility
+    // Rebirth button + requirement display
     const btnEl = document.getElementById('rebirth-btn');
+    const reqEl = document.getElementById('rebirth-req');
+    const req = this.getRebirthRequirements();
+    const canDo = this.canRebirth();
+
     if (btnEl) {
-      btnEl.classList.toggle('hidden', !this.canRebirth());
+      btnEl.classList.toggle('hidden', canDo ? false : true);
+    }
+
+    // Show requirements when not yet met
+    if (reqEl) {
+      const clickOk = (App.upgrades.clickValue || 0) >= req.clickReq;
+      const autoOk = (App.upgrades.autoClicker || 0) >= req.autoReq;
+      const earnOk = App.totalEarned >= req.earnedReq;
+      if (canDo) {
+        reqEl.innerHTML = '<span style="color:var(--green)">Ready to rebirth!</span>';
+      } else {
+        reqEl.innerHTML = '<span class="rebirth-req-title">Next Rebirth Requires:</span>' +
+          '<span class="' + (clickOk ? 'req-met' : 'req-unmet') + '">Click Lv ' + (App.upgrades.clickValue||0) + '/' + req.clickReq + '</span>' +
+          '<span class="' + (autoOk ? 'req-met' : 'req-unmet') + '">Auto Lv ' + (App.upgrades.autoClicker||0) + '/' + req.autoReq + '</span>' +
+          '<span class="' + (earnOk ? 'req-met' : 'req-unmet') + '">Earned ' + App.formatMoney(App.totalEarned) + ' / ' + App.formatMoney(req.earnedReq) + '</span>';
+      }
+      reqEl.classList.remove('hidden');
     }
 
     // Rebirth info panel
     const infoEl = document.getElementById('rebirth-info');
     if (infoEl) {
-      infoEl.classList.toggle('hidden', r === 0 && !this.canRebirth());
+      infoEl.classList.toggle('hidden', r === 0 && !canDo && App.totalEarned < req.earnedReq * 0.1);
     }
   },
 

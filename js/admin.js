@@ -189,6 +189,7 @@ const Admin = {
     document.getElementById('rig-winrate-display').textContent = Rig.winRate + '%';
     this.updateRigStatus();
     this.renderHistory();
+    this.renderStockControls();
     App.showScreen('admin');
   },
 
@@ -428,6 +429,50 @@ const Admin = {
       for (let j = 0; j < 60; j++) Stocks.priceHistory[i].push(s.basePrice);
     });
     if (App.currentScreen === 'stocks') Stocks.render();
+    this.renderStockControls();
+  },
+
+  stockAdjust(idx, mult) {
+    if (typeof Stocks === 'undefined') return;
+    Stocks.prices[idx] = Math.max(1, Stocks.prices[idx] * mult);
+    if (App.currentScreen === 'stocks') Stocks.render();
+    this.renderStockControls();
+  },
+
+  stockSetPrice(idx) {
+    if (typeof Stocks === 'undefined') return;
+    const input = document.getElementById('admin-stock-price-' + idx);
+    if (!input) return;
+    const val = parseFloat(input.value);
+    if (isNaN(val) || val < 1) return;
+    Stocks.prices[idx] = val;
+    if (App.currentScreen === 'stocks') Stocks.render();
+    this.renderStockControls();
+  },
+
+  renderStockControls() {
+    const container = document.getElementById('admin-stock-controls');
+    if (!container || typeof Stocks === 'undefined') return;
+    let html = '<div class="admin-stock-grid">';
+    Stocks.stocks.forEach((s, i) => {
+      const price = Stocks.prices[i];
+      html += `<div class="admin-stock-row">
+        <span class="admin-stock-sym">${s.symbol}</span>
+        <span class="admin-stock-price">${App.formatMoney(price)}</span>
+        <div class="admin-stock-btns">
+          <button class="rig-btn lose" onclick="Admin.stockAdjust(${i},0.5)">-50%</button>
+          <button class="rig-btn lose" onclick="Admin.stockAdjust(${i},0.8)">-20%</button>
+          <button class="rig-btn win" onclick="Admin.stockAdjust(${i},1.25)">+25%</button>
+          <button class="rig-btn win" onclick="Admin.stockAdjust(${i},2)">+100%</button>
+        </div>
+        <div class="admin-stock-set">
+          <input type="number" id="admin-stock-price-${i}" value="${Math.round(price)}" min="1" style="width:70px">
+          <button onclick="Admin.stockSetPrice(${i})">Set</button>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
   },
 
   // === Crypto Admin ===
