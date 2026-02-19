@@ -72,7 +72,9 @@ body {
   padding: 2px 6px;
   border-radius: 4px;
   letter-spacing: 1px;
+  cursor: pointer;
 }
+#admin-indicator:active { opacity: 0.7; }
 
 #balance-display {
   background: var(--bg3);
