@@ -2402,10 +2402,9 @@ html[data-platform="desktop"] #plinko-canvas {
   height: 500px;
 }
 
-/* Admin panel wider */
-html[data-platform="desktop"] .admin-panel {
-  max-width: 700px;
-  margin: 0 auto;
+/* Admin overlay wider on desktop */
+html[data-platform="desktop"] .admin-overlay {
+  width: 480px;
 }
 
 /* Upgrade list: 2 columns */
@@ -3905,8 +3904,344 @@ html[data-platform="desktop"] .chat-panel {
   max-width: 500px;
 }
 
+/* ====== ADMIN OVERLAY ====== */
+
+.admin-overlay-backdrop {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(10, 10, 20, 0.7);
+  z-index: 1500;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+.admin-overlay-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.admin-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 380px;
+  max-width: 100%;
+  background: var(--bg);
+  z-index: 1501;
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.5);
+}
+
+.admin-overlay.open {
+  transform: translateX(0);
+}
+
+.admin-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--bg3);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.admin-overlay-header .admin-title {
+  margin: 0;
+  font-size: 18px;
+}
+
+.admin-overlay-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#admin-badge-toggle {
+  font-size: 11px;
+  padding: 4px 10px;
+}
+
+.admin-overlay-close {
+  background: none;
+  border: 1px solid var(--bg3);
+  color: var(--text);
+  font-size: 24px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.admin-overlay-close:active {
+  background: var(--bg3);
+}
+
+.admin-overlay-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile: full width */
+@media (max-width: 480px) {
+  .admin-overlay {
+    width: 100%;
+  }
+}
+
+/* ====== CHAT UNREAD DOT ====== */
+
+.chat-toggle-btn {
+  position: relative;
+}
+
+.chat-unread-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 10px;
+  height: 10px;
+  background: var(--red);
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+  pointer-events: none;
+}
+
+.chat-header .chat-unread-dot {
+  position: static;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  border: none;
+}
+
 html[data-platform="desktop"] #screen-stocks .game-container,
 html[data-platform="desktop"] #screen-crypto .game-container,
 html[data-platform="desktop"] #screen-leaderboard .game-container {
   max-width: 800px;
+}
+
+/* ====== COIN FLIP TABS ====== */
+.cf-tabs {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+}
+
+.cf-tab-btn {
+  flex: 1;
+  padding: 10px 8px;
+  border: 1px solid var(--bg3);
+  border-radius: 8px 8px 0 0;
+  background: var(--bg2);
+  color: var(--text-dim);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.cf-tab-btn.active {
+  background: var(--bg3);
+  color: var(--green);
+  border-color: var(--green);
+}
+
+/* ====== PVP COIN FLIP ====== */
+.pvp-create-section {
+  background: var(--bg2);
+  border: 1px solid var(--bg3);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.pvp-create-section h3 {
+  font-size: 14px;
+  color: var(--green);
+  margin-bottom: 10px;
+}
+
+.pvp-create-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.pvp-create-row input[type="number"] {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--bg3);
+  border-radius: 8px;
+  color: var(--green);
+  font-size: 16px;
+  padding: 8px 12px;
+  font-weight: 700;
+}
+
+.pvp-choice-btn {
+  padding: 8px 18px;
+  border: 2px solid var(--bg3);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-dim);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.pvp-choice-btn.pvp-choice-selected {
+  border-color: var(--green);
+  color: var(--green);
+  background: rgba(0, 230, 118, 0.1);
+}
+
+.pvp-create-btn {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  background: var(--green);
+  color: #000;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pvp-create-btn:active {
+  opacity: 0.8;
+}
+
+.pvp-section-title {
+  font-size: 13px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 16px 0 8px;
+}
+
+.pvp-flip-card {
+  background: var(--bg2);
+  border: 1px solid var(--bg3);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pvp-flip-avatar {
+  font-size: 24px;
+}
+
+.pvp-flip-info {
+  flex: 1;
+}
+
+.pvp-flip-name {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.pvp-flip-details {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.pvp-flip-amount {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.pvp-flip-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.pvp-accept-btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  background: var(--green);
+  color: #000;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.pvp-cancel-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--red);
+  border-radius: 6px;
+  background: none;
+  color: var(--red);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.pvp-result-card {
+  background: var(--bg2);
+  border: 1px solid var(--bg3);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.pvp-result-card .pvp-winner {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.pvp-result-card .pvp-loser {
+  color: var(--red);
+}
+
+.pvp-result-coin {
+  font-size: 18px;
+  font-weight: 800;
+  min-width: 24px;
+  text-align: center;
+}
+
+.pvp-empty {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 13px;
+  padding: 20px;
+}
+
+/* ====== OUT OF SYNC BANNER ====== */
+.out-of-sync-banner {
+  background: #e65100;
+  color: #fff;
+  text-align: center;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 6px;
+  margin-bottom: 8px;
 }

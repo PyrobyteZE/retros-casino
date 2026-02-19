@@ -158,57 +158,11 @@
 
       <!-- Coin Flip -->
       <section id="screen-coinflip" class="screen">
-        <div class="game-container">
-          <div class="game-hud">
-            <div class="hud-item"><span class="hud-label">House Edge</span><span id="cf-house-edge">0%</span></div>
-            <div class="hud-item"><span class="hud-label">W/L</span><span id="cf-record">0/0</span></div>
-            <div class="hud-item"><span class="hud-label">Profit</span><span id="cf-profit">$0</span></div>
-          </div>
-          <div id="cf-history" class="cf-history"></div>
-          <div id="cf-result" class="game-result"></div>
-          <div id="cf-coin" class="coin">?</div>
-          <!-- Lucky Coin Upgrade -->
-          <div class="cf-luck-panel">
-            <div id="cf-luck-locked" class="cf-luck-locked">Requires VIP 5</div>
-            <div class="cf-luck-info">
-              <span class="cf-luck-label" id="cf-luck-name">Fair Coin</span>
-              <span class="cf-luck-stat">Win: <strong id="cf-luck-chance">50%</strong></span>
-              <span class="cf-luck-stat">Pay: <strong id="cf-luck-payout">2.0x</strong></span>
-            </div>
-            <button class="cf-luck-btn" id="cf-luck-btn" onclick="CoinFlip.buyLuck()">Upgrade: $500</button>
-          </div>
-          <div class="bet-controls">
-            <label>Bet: $<input type="number" id="cf-bet" value="10" min="0.01" step="0.01"></label>
-            <div class="bet-buttons">
-              <button onclick="CoinFlip.halfBet()">1/2</button>
-              <button onclick="CoinFlip.doubleBet()">2x</button>
-              <button onclick="CoinFlip.maxBet()">Max</button>
-            </div>
-          </div>
-          <div class="game-actions">
-            <button class="game-btn heads" onclick="CoinFlip.flip('heads')">Heads</button>
-            <button class="game-btn tails" onclick="CoinFlip.flip('tails')">Tails</button>
-          </div>
-          <!-- Per-game admin rig -->
-          <div class="game-admin hidden" id="cf-admin">
-            <div class="game-admin-header" onclick="Admin.toggleGamePanel('cf-admin')">
-              <span>Admin Controls</span><span class="game-admin-arrow">&#x25BC;</span>
-            </div>
-            <div class="game-admin-body">
-              <div class="admin-row">
-                <label>Force Result:</label>
-                <button class="rig-btn win" onclick="Rig.games.coinflip.forceResult='heads';Admin.refreshGameRig()">Heads</button>
-                <button class="rig-btn lose" onclick="Rig.games.coinflip.forceResult='tails';Admin.refreshGameRig()">Tails</button>
-                <button class="rig-btn" onclick="Rig.games.coinflip.forceResult=null;Admin.refreshGameRig()">Off</button>
-              </div>
-              <div class="admin-row">
-                <label>Win Streak:</label>
-                <input type="number" id="cf-rig-streak" min="0" value="0" onchange="Rig.games.coinflip.winStreak=+this.value">
-                <span class="rig-hint">Next N auto-win</span>
-              </div>
-            </div>
-          </div>
+        <div class="cf-tabs">
+          <button class="cf-tab-btn active" data-tab="solo" onclick="CoinFlip.setTab('solo')">Solo</button>
+          <button class="cf-tab-btn" data-tab="pvp" onclick="CoinFlip.setTab('pvp')">PvP</button>
         </div>
+        <div id="cf-content"></div>
       </section>
 
       <!-- Slots -->
@@ -680,11 +634,20 @@
         </div>
       </section>
 
-      <!-- Admin Menu -->
-      <section id="screen-admin" class="screen">
-        <div class="admin-panel">
-          <h2 class="admin-title">Admin Panel</h2>
+    </main>
 
+    <!-- Admin Overlay -->
+    <div id="admin-overlay-backdrop" class="admin-overlay-backdrop" onclick="Admin.close()"></div>
+    <div id="admin-overlay" class="admin-overlay">
+      <div class="admin-overlay-header">
+        <h2 class="admin-title">Admin Panel</h2>
+        <div class="admin-overlay-header-actions">
+          <button id="admin-badge-toggle" class="admin-btn" onclick="Admin.toggleBadge()">Hide Badge</button>
+          <button class="admin-overlay-close" onclick="Admin.close()">&times;</button>
+        </div>
+      </div>
+      <div class="admin-overlay-body">
+        <div class="admin-panel">
           <!-- Troll Mode -->
           <div class="admin-section troll-section">
             <h3>Troll Friends</h3>
@@ -879,8 +842,8 @@
             <textarea id="admin-data" rows="4" placeholder="Paste save data here for import..."></textarea>
           </div>
         </div>
-      </section>
-    </main>
+      </div>
+    </div>
 
     <!-- Shark Duel Overlay -->
     <div id="shark-duel" class="shark-duel hidden">

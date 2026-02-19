@@ -17,7 +17,7 @@ const Rig = {
   },
 
   shouldWin() {
-    if (!this.enabled) return Math.random() < 0.5;
+    if (!this.enabled || !Admin.isAdmin()) return Math.random() < 0.5;
     if (this.forceWin !== null) {
       const result = this.forceWin;
       this.forceWin = null;
@@ -28,7 +28,7 @@ const Rig = {
   },
 
   biasedRandom(fairRandom) {
-    if (!this.enabled) return fairRandom !== undefined ? fairRandom : Math.random();
+    if (!this.enabled || !Admin.isAdmin()) return fairRandom !== undefined ? fairRandom : Math.random();
     const bias = this.winRate / 100;
     const r = fairRandom !== undefined ? fairRandom : Math.random();
     return Math.pow(r, 2 * (1 - bias));
@@ -63,6 +63,7 @@ const GameStats = {
       s.losses++;
       s.profit -= amount;
       this.streak = this.streak < 0 ? this.streak - 1 : -1;
+      if (typeof Pets !== 'undefined') Pets.checkEasterEgg('money_lost', amount);
     }
     // push doesn't affect streak
 
@@ -126,11 +127,18 @@ const Admin = {
   tapTimer: null,
   adminMode: false,
   godMode: false,
+  trollMode: false,
+  badgeHidden: false,
   speedMultiplier: 1,
   startingBalance: 0.02,
+  adminPassword: '1984',
+  adminName: 'RetroByte',
+
+  isAdmin() {
+    return this.adminMode && typeof Settings !== 'undefined' && Settings.profile.name === this.adminName;
+  },
 
   tapTitle() {
-    if (App.currentScreen !== 'home') return;
     this.tapCount++;
     clearTimeout(this.tapTimer);
     this.tapTimer = setTimeout(() => { this.tapCount = 0; }, 2000);
@@ -138,9 +146,21 @@ const Admin = {
     if (this.tapCount >= 5) {
       this.tapCount = 0;
       if (!this.adminMode) {
+        if (typeof Settings === 'undefined' || Settings.profile.name !== this.adminName) return;
+        const pw = prompt('Enter admin password:');
+        if (pw !== this.adminPassword) return;
         this.adminMode = true;
         this.showGameAdmins();
-        document.getElementById('admin-indicator').classList.remove('hidden');
+        if (!this.badgeHidden) {
+          document.getElementById('admin-indicator').classList.remove('hidden');
+        }
+      }
+      if (!this.isAdmin()) {
+        this.adminMode = false;
+        this.godMode = false;
+        document.getElementById('admin-indicator').classList.add('hidden');
+        this.showGameAdmins();
+        return;
       }
       this.open();
     }
@@ -170,15 +190,49 @@ const Admin = {
     document.getElementById('rig-toggle').checked = Rig.enabled;
     document.getElementById('rig-winrate').value = Rig.winRate;
     document.getElementById('rig-winrate-display').textContent = Rig.winRate + '%';
+    document.getElementById('admin-badge-toggle').textContent = this.badgeHidden ? 'Show Badge' : 'Hide Badge';
     this.updateRigStatus();
     this.renderHistory();
-    App.showScreen('admin');
+    this.renderStockControls();
+    document.getElementById('admin-overlay').classList.add('open');
+    document.getElementById('admin-overlay-backdrop').classList.add('open');
+  },
+
+  close() {
+    document.getElementById('admin-overlay').classList.remove('open');
+    document.getElementById('admin-overlay-backdrop').classList.remove('open');
+  },
+
+  toggleBadge() {
+    this.badgeHidden = !this.badgeHidden;
+    const indicator = document.getElementById('admin-indicator');
+    if (this.badgeHidden) {
+      indicator.classList.add('hidden');
+    } else if (this.adminMode) {
+      indicator.classList.remove('hidden');
+    }
+    document.getElementById('admin-badge-toggle').textContent = this.badgeHidden ? 'Show Badge' : 'Hide Badge';
   },
 
   // === God Mode ===
   toggleGodMode() {
+    if (!this.isAdmin()) { document.getElementById('admin-godmode').checked = false; return; }
     this.godMode = document.getElementById('admin-godmode').checked;
     document.getElementById('balance-display').classList.toggle('godmode', this.godMode);
+  },
+
+  // Revoke admin if name changes away from RetroByte
+  checkAdminRevoke() {
+    if (this.adminMode && !this.isAdmin()) {
+      this.adminMode = false;
+      this.godMode = false;
+      Rig.enabled = false;
+      Rig.forceWin = null;
+      document.getElementById('admin-indicator').classList.add('hidden');
+      document.getElementById('balance-display').classList.remove('godmode');
+      this.close();
+      this.showGameAdmins();
+    }
   },
 
   // === Speed Controls ===
@@ -264,8 +318,87 @@ const Admin = {
     this.updateRigStatus();
   },
 
-  refreshGameRig() {
-    // visual feedback could go here
+  refreshGameRig() {},
+
+  // === Troll Mode ===
+  toggleTroll() {
+    this.trollMode = !this.trollMode;
+    const btn = document.getElementById('admin-troll-toggle');
+    if (btn) btn.textContent = this.trollMode ? 'Troll: ON' : 'Troll: OFF';
+  },
+
+  trollFakeBalance() {
+    // Shows a fake $0.00 balance to scare friends
+    const el = document.getElementById('balance');
+    if (el) el.textContent = '0.00';
+    setTimeout(() => App.updateBalance(), 5000);
+  },
+
+  trollFlipScreen() {
+    document.getElementById('app').style.transform =
+      document.getElementById('app').style.transform === 'rotate(180deg)' ? '' : 'rotate(180deg)';
+  },
+
+  trollShake() {
+    const app = document.getElementById('app');
+    app.classList.add('troll-shake');
+    setTimeout(() => app.classList.remove('troll-shake'), 3000);
+  },
+
+  trollFakeReset() {
+    // Fake "data deleted" alert then restore
+    const el = document.getElementById('balance');
+    const real = el.textContent;
+    el.textContent = '0.00';
+    alert('ERROR: Save data corrupted! All progress lost.');
+    setTimeout(() => { el.textContent = real; }, 100);
+  },
+
+  trollRainbow() {
+    document.documentElement.classList.toggle('troll-rainbow');
+  },
+
+  trollHideBalance() {
+    document.getElementById('balance-display').classList.toggle('hidden');
+  },
+
+  trollBlur() {
+    const screens = document.getElementById('screens');
+    screens.style.filter = screens.style.filter === 'blur(8px)' ? '' : 'blur(8px)';
+  },
+
+  // === Custom Stock News (synced to all players) ===
+  _funnyFallbackNews: [
+    'CEO found living double life as a goat farmer',
+    'Quarterly earnings beat by exactly $1',
+    'Company mascot escapes from office again',
+    'Intern accidentally deleted the database',
+    'Stock price changed because Mercury is in retrograde',
+  ],
+
+  sendStockNews() {
+    const input = document.getElementById('admin-stock-news');
+    if (!input) return;
+    let text = input.value.trim();
+    const isGood = document.getElementById('admin-stock-news-good').checked;
+
+    // If empty, pick a funny fallback
+    if (!text) {
+      text = this._funnyFallbackNews[Math.floor(Math.random() * this._funnyFallbackNews.length)];
+    }
+
+    // Add locally — no "ADMIN:" prefix
+    if (typeof Stocks !== 'undefined') {
+      Stocks._addNews(text, isGood);
+      if (App.currentScreen === 'stocks') Stocks.render();
+    }
+
+    // Push to Firebase so all players see it
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.pushStockNews(text, isGood);
+    }
+
+    input.value = '';
   },
 
   // === Balance ===
@@ -348,6 +481,165 @@ const Admin = {
     GameStats.initAllHUDs();
     GameStats.updateStreak();
     this.renderHistory();
+  },
+
+  // === Stocks Admin ===
+  _pushStockPricesNow() {
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline() && Firebase._isStockAuthority) {
+      Firebase.pushStockPrices(Stocks.prices.slice());
+    }
+  },
+
+  stocksCrash() {
+    if (typeof Stocks === 'undefined') return;
+    for (let i = 0; i < Stocks.stocks.length; i++) {
+      Stocks.prices[i] *= 0.5;
+      if (Stocks.prices[i] < 1) Stocks.prices[i] = 1;
+    }
+    Stocks._addNews('Market Crash! All stocks -50%', false);
+    this._pushStockPricesNow();
+    if (App.currentScreen === 'stocks') Stocks.render();
+  },
+
+  stocksBoom() {
+    if (typeof Stocks === 'undefined') return;
+    for (let i = 0; i < Stocks.stocks.length; i++) {
+      Stocks.prices[i] *= 2;
+    }
+    Stocks._addNews('Bull Run! All stocks +100%', true);
+    this._pushStockPricesNow();
+    if (App.currentScreen === 'stocks') Stocks.render();
+  },
+
+  stocksGiveShares() {
+    if (typeof Stocks === 'undefined') return;
+    Stocks.stocks.forEach(s => {
+      if (!Stocks.holdings[s.symbol]) {
+        Stocks.holdings[s.symbol] = { shares: 0, avgCost: 0 };
+      }
+      Stocks.holdings[s.symbol].shares += 100;
+    });
+    if (App.currentScreen === 'stocks') Stocks.render();
+  },
+
+  stocksResetPortfolio() {
+    if (typeof Stocks === 'undefined') return;
+    Stocks.holdings = {};
+    Stocks.cashInvested = 0;
+    Stocks.totalProfit = 0;
+    if (App.currentScreen === 'stocks') Stocks.render();
+  },
+
+  stocksResetPrices() {
+    if (typeof Stocks === 'undefined') return;
+    Stocks.stocks.forEach((s, i) => {
+      Stocks.prices[i] = s.basePrice;
+      Stocks.priceHistory[i] = [];
+      for (let j = 0; j < 60; j++) Stocks.priceHistory[i].push(s.basePrice);
+    });
+    this._pushStockPricesNow();
+    if (App.currentScreen === 'stocks') Stocks.render();
+    this.renderStockControls();
+  },
+
+  stockAdjust(idx, mult) {
+    if (typeof Stocks === 'undefined') return;
+    Stocks.prices[idx] = Math.max(1, Stocks.prices[idx] * mult);
+    this._pushStockPricesNow();
+    if (App.currentScreen === 'stocks') Stocks.render();
+    this.renderStockControls();
+  },
+
+  stockSetPrice(idx) {
+    if (typeof Stocks === 'undefined') return;
+    const input = document.getElementById('admin-stock-price-' + idx);
+    if (!input) return;
+    const val = parseFloat(input.value);
+    if (isNaN(val) || val < 1) return;
+    Stocks.prices[idx] = val;
+    this._pushStockPricesNow();
+    if (App.currentScreen === 'stocks') Stocks.render();
+    this.renderStockControls();
+  },
+
+  renderStockControls() {
+    const container = document.getElementById('admin-stock-controls');
+    if (!container || typeof Stocks === 'undefined') return;
+    let html = '<div class="admin-stock-grid">';
+    Stocks.stocks.forEach((s, i) => {
+      const price = Stocks.prices[i];
+      html += `<div class="admin-stock-row">
+        <span class="admin-stock-sym">${s.symbol}</span>
+        <span class="admin-stock-price">${App.formatMoney(price)}</span>
+        <div class="admin-stock-btns">
+          <button class="rig-btn lose" onclick="Admin.stockAdjust(${i},0.5)">-50%</button>
+          <button class="rig-btn lose" onclick="Admin.stockAdjust(${i},0.8)">-20%</button>
+          <button class="rig-btn win" onclick="Admin.stockAdjust(${i},1.25)">+25%</button>
+          <button class="rig-btn win" onclick="Admin.stockAdjust(${i},2)">+100%</button>
+        </div>
+        <div class="admin-stock-set">
+          <input type="number" id="admin-stock-price-${i}" value="${Math.round(price)}" min="1" style="width:70px">
+          <button onclick="Admin.stockSetPrice(${i})">Set</button>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+  },
+
+  // === Crypto Admin ===
+  cryptoGiveCoins() {
+    if (typeof Crypto === 'undefined') return;
+    Crypto.wallet.BTC += 10;
+    Crypto.wallet.ETH += 100;
+    Crypto.wallet.DOGE += 100000;
+    if (App.currentScreen === 'crypto') Crypto.render();
+  },
+
+  cryptoMaxRigs() {
+    if (typeof Crypto === 'undefined') return;
+    for (let i = 0; i < Crypto.rigs.length; i++) {
+      Crypto.rigOwned[i] = true;
+      Crypto.rigLevels[i] = Crypto.rigs[i].maxLevel;
+    }
+    if (App.currentScreen === 'crypto') Crypto.render();
+  },
+
+  cryptoMaxUpgrades() {
+    if (typeof Crypto === 'undefined') return;
+    Crypto.upgrades.cpu = 10;
+    Crypto.upgrades.gpu = 5;
+    Crypto.upgrades.overclock = 5;
+    for (let i = 0; i < Crypto.coolingUpgrades.length; i++) {
+      Crypto.cooling[i] = true;
+    }
+    if (App.currentScreen === 'crypto') Crypto.render();
+  },
+
+  cryptoResetHeat() {
+    if (typeof Crypto === 'undefined') return;
+    Crypto.heat = 0;
+    if (App.currentScreen === 'crypto') Crypto.render();
+  },
+
+  cryptoResetAll() {
+    if (typeof Crypto === 'undefined') return;
+    Crypto.wallet = { BTC: 0, ETH: 0, DOGE: 0 };
+    Crypto.totalMined = { BTC: 0, ETH: 0, DOGE: 0 };
+    Crypto.rigOwned = Crypto.rigs.map(() => false);
+    Crypto.rigLevels = Crypto.rigs.map(() => 0);
+    Crypto.upgrades = { cpu: 0, gpu: 0, overclock: 0 };
+    Crypto.cooling = Crypto.coolingUpgrades.map(() => false);
+    Crypto.heat = 0;
+    if (App.currentScreen === 'crypto') Crypto.render();
+  },
+
+  cryptoPumpPrices() {
+    if (typeof Crypto === 'undefined') return;
+    Crypto.coinPrices[0] *= 3; // BTC 3x
+    Crypto.coinPrices[1] *= 3; // ETH 3x
+    Crypto.coinPrices[2] *= 5; // DOGE 5x
+    if (App.currentScreen === 'crypto') Crypto.render();
   },
 
   // === Data ===

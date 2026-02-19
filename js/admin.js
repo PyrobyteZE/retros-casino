@@ -128,6 +128,7 @@ const Admin = {
   adminMode: false,
   godMode: false,
   trollMode: false,
+  badgeHidden: false,
   speedMultiplier: 1,
   startingBalance: 0.02,
   adminPassword: '1984',
@@ -138,7 +139,6 @@ const Admin = {
   },
 
   tapTitle() {
-    if (App.currentScreen !== 'home') return;
     this.tapCount++;
     clearTimeout(this.tapTimer);
     this.tapTimer = setTimeout(() => { this.tapCount = 0; }, 2000);
@@ -151,7 +151,9 @@ const Admin = {
         if (pw !== this.adminPassword) return;
         this.adminMode = true;
         this.showGameAdmins();
-        document.getElementById('admin-indicator').classList.remove('hidden');
+        if (!this.badgeHidden) {
+          document.getElementById('admin-indicator').classList.remove('hidden');
+        }
       }
       if (!this.isAdmin()) {
         this.adminMode = false;
@@ -188,10 +190,28 @@ const Admin = {
     document.getElementById('rig-toggle').checked = Rig.enabled;
     document.getElementById('rig-winrate').value = Rig.winRate;
     document.getElementById('rig-winrate-display').textContent = Rig.winRate + '%';
+    document.getElementById('admin-badge-toggle').textContent = this.badgeHidden ? 'Show Badge' : 'Hide Badge';
     this.updateRigStatus();
     this.renderHistory();
     this.renderStockControls();
-    App.showScreen('admin');
+    document.getElementById('admin-overlay').classList.add('open');
+    document.getElementById('admin-overlay-backdrop').classList.add('open');
+  },
+
+  close() {
+    document.getElementById('admin-overlay').classList.remove('open');
+    document.getElementById('admin-overlay-backdrop').classList.remove('open');
+  },
+
+  toggleBadge() {
+    this.badgeHidden = !this.badgeHidden;
+    const indicator = document.getElementById('admin-indicator');
+    if (this.badgeHidden) {
+      indicator.classList.add('hidden');
+    } else if (this.adminMode) {
+      indicator.classList.remove('hidden');
+    }
+    document.getElementById('admin-badge-toggle').textContent = this.badgeHidden ? 'Show Badge' : 'Hide Badge';
   },
 
   // === God Mode ===
@@ -210,6 +230,7 @@ const Admin = {
       Rig.forceWin = null;
       document.getElementById('admin-indicator').classList.add('hidden');
       document.getElementById('balance-display').classList.remove('godmode');
+      this.close();
       this.showGameAdmins();
     }
   },
@@ -347,14 +368,26 @@ const Admin = {
   },
 
   // === Custom Stock News (synced to all players) ===
+  _funnyFallbackNews: [
+    'CEO found living double life as a goat farmer',
+    'Quarterly earnings beat by exactly $1',
+    'Company mascot escapes from office again',
+    'Intern accidentally deleted the database',
+    'Stock price changed because Mercury is in retrograde',
+  ],
+
   sendStockNews() {
     const input = document.getElementById('admin-stock-news');
     if (!input) return;
-    const text = input.value.trim();
-    if (!text) return;
+    let text = input.value.trim();
     const isGood = document.getElementById('admin-stock-news-good').checked;
 
-    // Add locally
+    // If empty, pick a funny fallback
+    if (!text) {
+      text = this._funnyFallbackNews[Math.floor(Math.random() * this._funnyFallbackNews.length)];
+    }
+
+    // Add locally — no "ADMIN:" prefix
     if (typeof Stocks !== 'undefined') {
       Stocks._addNews(text, isGood);
       if (App.currentScreen === 'stocks') Stocks.render();
@@ -451,13 +484,20 @@ const Admin = {
   },
 
   // === Stocks Admin ===
+  _pushStockPricesNow() {
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline() && Firebase._isStockAuthority) {
+      Firebase.pushStockPrices(Stocks.prices.slice());
+    }
+  },
+
   stocksCrash() {
     if (typeof Stocks === 'undefined') return;
     for (let i = 0; i < Stocks.stocks.length; i++) {
       Stocks.prices[i] *= 0.5;
       if (Stocks.prices[i] < 1) Stocks.prices[i] = 1;
     }
-    Stocks._addNews('ADMIN: Market Crash! All stocks -50%', false);
+    Stocks._addNews('Market Crash! All stocks -50%', false);
+    this._pushStockPricesNow();
     if (App.currentScreen === 'stocks') Stocks.render();
   },
 
@@ -466,7 +506,8 @@ const Admin = {
     for (let i = 0; i < Stocks.stocks.length; i++) {
       Stocks.prices[i] *= 2;
     }
-    Stocks._addNews('ADMIN: Bull Run! All stocks +100%', true);
+    Stocks._addNews('Bull Run! All stocks +100%', true);
+    this._pushStockPricesNow();
     if (App.currentScreen === 'stocks') Stocks.render();
   },
 
@@ -496,6 +537,7 @@ const Admin = {
       Stocks.priceHistory[i] = [];
       for (let j = 0; j < 60; j++) Stocks.priceHistory[i].push(s.basePrice);
     });
+    this._pushStockPricesNow();
     if (App.currentScreen === 'stocks') Stocks.render();
     this.renderStockControls();
   },
@@ -503,6 +545,7 @@ const Admin = {
   stockAdjust(idx, mult) {
     if (typeof Stocks === 'undefined') return;
     Stocks.prices[idx] = Math.max(1, Stocks.prices[idx] * mult);
+    this._pushStockPricesNow();
     if (App.currentScreen === 'stocks') Stocks.render();
     this.renderStockControls();
   },
@@ -514,6 +557,7 @@ const Admin = {
     const val = parseFloat(input.value);
     if (isNaN(val) || val < 1) return;
     Stocks.prices[idx] = val;
+    this._pushStockPricesNow();
     if (App.currentScreen === 'stocks') Stocks.render();
     this.renderStockControls();
   },

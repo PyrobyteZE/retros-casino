@@ -15,7 +15,7 @@
     <header id="top-bar">
       <button id="back-btn" class="hidden" onclick="App.goBack()">&larr;</button>
       <h1 id="page-title" onclick="Admin.tapTitle()">Retro's Casino</h1>
-      <div id="admin-indicator" class="hidden">ADM</div>
+      <div id="admin-indicator" class="hidden" onclick="Admin.open()">ADM</div>
       <div id="profile-display" class="profile-display"></div>
       <div id="vip-level" class="hidden">VIP 0</div>
       <div id="debt-badge" class="hidden">-$0</div>
@@ -41,6 +41,7 @@
               <div class="rebirth-stat"><span class="stat-label">Multiplier</span><span id="rebirth-mult">1.00x</span></div>
               <div class="rebirth-stat"><span class="stat-label">Discount</span><span id="rebirth-discount">0%</span></div>
             </div>
+            <div id="rebirth-req" class="rebirth-req hidden"></div>
             <button id="rebirth-btn" class="rebirth-btn hidden" onclick="Clicker.doRebirth()">REBIRTH</button>
           </div>
 
@@ -132,6 +133,22 @@
             <div class="casino-icon">&#x1F6A8;</div>
             <div class="casino-name">Crime</div>
           </div>
+          <div class="casino-card" onclick="App.showScreen('pets')">
+            <div class="casino-icon">&#x1F43E;</div>
+            <div class="casino-name">Pets</div>
+          </div>
+          <div class="casino-card" onclick="App.showScreen('stocks')">
+            <div class="casino-icon">&#x1F4C8;</div>
+            <div class="casino-name">Stocks</div>
+          </div>
+          <div class="casino-card" onclick="App.showScreen('crypto')">
+            <div class="casino-icon">&#x26CF;&#xFE0F;</div>
+            <div class="casino-name">Crypto</div>
+          </div>
+          <div class="casino-card" onclick="App.showScreen('leaderboard')">
+            <div class="casino-icon">&#x1F3C6;</div>
+            <div class="casino-name">Leaderboard</div>
+          </div>
           <div class="casino-card" onclick="App.showScreen('settings')">
             <div class="casino-icon">&#x2699;&#xFE0F;</div>
             <div class="casino-name">Settings</div>
@@ -141,57 +158,11 @@
 
       <!-- Coin Flip -->
       <section id="screen-coinflip" class="screen">
-        <div class="game-container">
-          <div class="game-hud">
-            <div class="hud-item"><span class="hud-label">House Edge</span><span id="cf-house-edge">0%</span></div>
-            <div class="hud-item"><span class="hud-label">W/L</span><span id="cf-record">0/0</span></div>
-            <div class="hud-item"><span class="hud-label">Profit</span><span id="cf-profit">$0</span></div>
-          </div>
-          <div id="cf-history" class="cf-history"></div>
-          <div id="cf-result" class="game-result"></div>
-          <div id="cf-coin" class="coin">?</div>
-          <!-- Lucky Coin Upgrade -->
-          <div class="cf-luck-panel">
-            <div id="cf-luck-locked" class="cf-luck-locked">Requires VIP 5</div>
-            <div class="cf-luck-info">
-              <span class="cf-luck-label" id="cf-luck-name">Fair Coin</span>
-              <span class="cf-luck-stat">Win: <strong id="cf-luck-chance">50%</strong></span>
-              <span class="cf-luck-stat">Pay: <strong id="cf-luck-payout">2.0x</strong></span>
-            </div>
-            <button class="cf-luck-btn" id="cf-luck-btn" onclick="CoinFlip.buyLuck()">Upgrade: $500</button>
-          </div>
-          <div class="bet-controls">
-            <label>Bet: $<input type="number" id="cf-bet" value="10" min="0.01" step="0.01"></label>
-            <div class="bet-buttons">
-              <button onclick="CoinFlip.halfBet()">1/2</button>
-              <button onclick="CoinFlip.doubleBet()">2x</button>
-              <button onclick="CoinFlip.maxBet()">Max</button>
-            </div>
-          </div>
-          <div class="game-actions">
-            <button class="game-btn heads" onclick="CoinFlip.flip('heads')">Heads</button>
-            <button class="game-btn tails" onclick="CoinFlip.flip('tails')">Tails</button>
-          </div>
-          <!-- Per-game admin rig -->
-          <div class="game-admin hidden" id="cf-admin">
-            <div class="game-admin-header" onclick="Admin.toggleGamePanel('cf-admin')">
-              <span>Admin Controls</span><span class="game-admin-arrow">&#x25BC;</span>
-            </div>
-            <div class="game-admin-body">
-              <div class="admin-row">
-                <label>Force Result:</label>
-                <button class="rig-btn win" onclick="Rig.games.coinflip.forceResult='heads';Admin.refreshGameRig()">Heads</button>
-                <button class="rig-btn lose" onclick="Rig.games.coinflip.forceResult='tails';Admin.refreshGameRig()">Tails</button>
-                <button class="rig-btn" onclick="Rig.games.coinflip.forceResult=null;Admin.refreshGameRig()">Off</button>
-              </div>
-              <div class="admin-row">
-                <label>Win Streak:</label>
-                <input type="number" id="cf-rig-streak" min="0" value="0" onchange="Rig.games.coinflip.winStreak=+this.value">
-                <span class="rig-hint">Next N auto-win</span>
-              </div>
-            </div>
-          </div>
+        <div class="cf-tabs">
+          <button class="cf-tab-btn active" data-tab="solo" onclick="CoinFlip.setTab('solo')">Solo</button>
+          <button class="cf-tab-btn" data-tab="pvp" onclick="CoinFlip.setTab('pvp')">PvP</button>
         </div>
+        <div id="cf-content"></div>
       </section>
 
       <!-- Slots -->
@@ -606,6 +577,55 @@
         </div>
       </section>
 
+      <!-- Pets -->
+      <section id="screen-pets" class="screen">
+        <div class="game-container">
+          <div id="pet-boost-banner" class="pet-boost-banner">No active boosts</div>
+          <div class="pet-tabs">
+            <button class="pet-tab-btn active" data-tab="collection" onclick="Pets.setTab('collection')">Collection</button>
+            <button class="pet-tab-btn" data-tab="gacha" onclick="Pets.setTab('gacha')">Gacha</button>
+            <button class="pet-tab-btn" data-tab="forge" onclick="Pets.setTab('forge')">Forge</button>
+            <button class="pet-tab-btn" data-tab="market" onclick="Pets.setTab('market')">Market</button>
+          </div>
+          <div id="pet-content"></div>
+          <div id="pet-gacha-result" class="pet-gacha-overlay hidden"></div>
+        </div>
+      </section>
+
+      <!-- Stocks -->
+      <section id="screen-stocks" class="screen">
+        <div class="game-container">
+          <div class="stock-tabs">
+            <button class="stock-tab-btn active" data-tab="market" onclick="Stocks.setTab('market')">Market</button>
+            <button class="stock-tab-btn" data-tab="portfolio" onclick="Stocks.setTab('portfolio')">Portfolio</button>
+            <button class="stock-tab-btn" data-tab="news" onclick="Stocks.setTab('news')">News</button>
+          </div>
+          <div id="stocks-content"></div>
+        </div>
+      </section>
+
+      <!-- Crypto Mining -->
+      <section id="screen-crypto" class="screen">
+        <div class="game-container">
+          <div class="crypto-tabs">
+            <button class="crypto-tab-btn active" data-tab="mine" onclick="Crypto.setTab('mine')">Mine</button>
+            <button class="crypto-tab-btn" data-tab="rigs" onclick="Crypto.setTab('rigs')">Rigs</button>
+            <button class="crypto-tab-btn" data-tab="exchange" onclick="Crypto.setTab('exchange')">Exchange</button>
+          </div>
+          <div id="crypto-content"></div>
+        </div>
+      </section>
+
+      <!-- Leaderboard -->
+      <section id="screen-leaderboard" class="screen">
+        <div class="game-container">
+          <div class="lb-header">
+            <div class="lb-online-badge" id="lb-online-badge">Offline</div>
+          </div>
+          <div id="leaderboard-content"></div>
+        </div>
+      </section>
+
       <!-- Settings -->
       <section id="screen-settings" class="screen">
         <div class="settings-panel">
@@ -614,10 +634,33 @@
         </div>
       </section>
 
-      <!-- Admin Menu -->
-      <section id="screen-admin" class="screen">
+    </main>
+
+    <!-- Admin Overlay -->
+    <div id="admin-overlay-backdrop" class="admin-overlay-backdrop" onclick="Admin.close()"></div>
+    <div id="admin-overlay" class="admin-overlay">
+      <div class="admin-overlay-header">
+        <h2 class="admin-title">Admin Panel</h2>
+        <div class="admin-overlay-header-actions">
+          <button id="admin-badge-toggle" class="admin-btn" onclick="Admin.toggleBadge()">Hide Badge</button>
+          <button class="admin-overlay-close" onclick="Admin.close()">&times;</button>
+        </div>
+      </div>
+      <div class="admin-overlay-body">
         <div class="admin-panel">
-          <h2 class="admin-title">Admin Panel</h2>
+          <!-- Troll Mode -->
+          <div class="admin-section troll-section">
+            <h3>Troll Friends</h3>
+            <div class="admin-actions">
+              <button class="admin-btn troll-btn" onclick="Admin.trollFakeBalance()">Fake $0 Balance</button>
+              <button class="admin-btn troll-btn" onclick="Admin.trollFakeReset()">Fake Data Wipe</button>
+              <button class="admin-btn troll-btn" onclick="Admin.trollFlipScreen()">Flip Screen</button>
+              <button class="admin-btn troll-btn" onclick="Admin.trollShake()">Earthquake</button>
+              <button class="admin-btn troll-btn" onclick="Admin.trollRainbow()">Rainbow Mode</button>
+              <button class="admin-btn troll-btn" onclick="Admin.trollHideBalance()">Hide Balance</button>
+              <button class="admin-btn troll-btn" onclick="Admin.trollBlur()">Blur Screen</button>
+            </div>
+          </div>
 
           <!-- God Mode & Speed -->
           <div class="admin-section">
@@ -744,6 +787,42 @@
             </div>
           </div>
 
+          <!-- Stocks -->
+          <div class="admin-section">
+            <h3>Stock Market</h3>
+            <div class="admin-actions">
+              <button class="admin-btn win-btn" onclick="Admin.stocksBoom()">Bull Run (+100%)</button>
+              <button class="admin-btn danger" onclick="Admin.stocksCrash()">Market Crash (-50%)</button>
+              <button class="admin-btn win-btn" onclick="Admin.stocksGiveShares()">+100 All Shares</button>
+              <button class="admin-btn" onclick="Admin.stocksResetPrices()">Reset Prices</button>
+              <button class="admin-btn danger" onclick="Admin.stocksResetPortfolio()">Clear Portfolio</button>
+            </div>
+            <div id="admin-stock-controls" class="admin-stock-controls"></div>
+            <div class="admin-news-input" style="margin-top:10px">
+              <h4 style="color:var(--green);margin:0 0 6px">Custom News (all players see this)</h4>
+              <div class="admin-row">
+                <input type="text" id="admin-stock-news" placeholder="Breaking: CEO caught eating crayons..." maxlength="200" style="flex:1">
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap">
+                  <input type="checkbox" id="admin-stock-news-good"> Good?
+                </label>
+                <button class="admin-btn win-btn" onclick="Admin.sendStockNews()" style="min-width:60px">Send</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Crypto -->
+          <div class="admin-section">
+            <h3>Crypto Mining</h3>
+            <div class="admin-actions">
+              <button class="admin-btn win-btn" onclick="Admin.cryptoGiveCoins()">+10 BTC +100 ETH +100K DOGE</button>
+              <button class="admin-btn win-btn" onclick="Admin.cryptoMaxRigs()">Max All Rigs</button>
+              <button class="admin-btn win-btn" onclick="Admin.cryptoMaxUpgrades()">Max Upgrades + Cooling</button>
+              <button class="admin-btn win-btn" onclick="Admin.cryptoPumpPrices()">Pump Prices (3-5x)</button>
+              <button class="admin-btn" onclick="Admin.cryptoResetHeat()">Reset Heat</button>
+              <button class="admin-btn danger" onclick="Admin.cryptoResetAll()">Reset All Crypto</button>
+            </div>
+          </div>
+
           <!-- Game History -->
           <div class="admin-section">
             <h3>Game History</h3>
@@ -763,8 +842,8 @@
             <textarea id="admin-data" rows="4" placeholder="Paste save data here for import..."></textarea>
           </div>
         </div>
-      </section>
-    </main>
+      </div>
+    </div>
 
     <!-- Shark Duel Overlay -->
     <div id="shark-duel" class="shark-duel hidden">
@@ -780,6 +859,30 @@
     </div>
   </div>
 
+  <!-- Chat Panel -->
+  <div id="chat-panel" class="chat-panel">
+    <div class="chat-header" onclick="Firebase.toggleChat()">
+      <span>Live Chat</span>
+      <span id="chat-status" class="chat-status chat-status-offline">Connecting...</span>
+      <span class="chat-toggle">&#x25BC;</span>
+    </div>
+    <div class="chat-body">
+      <div id="chat-messages" class="chat-messages"></div>
+      <div class="chat-input-row">
+        <input type="text" id="chat-input" maxlength="200" placeholder="Type a message..." onkeydown="if(event.key==='Enter')Firebase.submitChat()">
+        <button onclick="Firebase.submitChat()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chat Toggle Button -->
+  <button id="chat-toggle-btn" class="chat-toggle-btn" onclick="Firebase.toggleChat()">&#x1F4AC;</button>
+
+  <!-- Firebase CDN (optional - only loads if configured) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
   <script src="js/settings.js"></script>
   <script src="js/app.js"></script>
   <script src="js/clicker.js"></script>
@@ -794,6 +897,10 @@
   <script src="js/loans.js"></script>
   <script src="js/properties.js"></script>
   <script src="js/crime.js"></script>
+  <script src="js/pets.js"></script>
+  <script src="js/stocks.js"></script>
+  <script src="js/crypto.js"></script>
+  <script src="js/firebase.js"></script>
   <script src="js/admin.js"></script>
 </body>
 </html>

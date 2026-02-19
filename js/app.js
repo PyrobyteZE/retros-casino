@@ -103,8 +103,7 @@ const App = {
       stocks: 'Stock Market',
       crypto: 'Crypto Mining',
       leaderboard: 'Leaderboard',
-      settings: 'Settings',
-      admin: 'Admin Panel'
+      settings: 'Settings'
     };
 
     if (this.currentScreen !== name) {
