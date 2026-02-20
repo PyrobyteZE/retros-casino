@@ -55,8 +55,7 @@ const Clicker = {
     }
   ],
 
-  autoInterval: null,
-  autoBetInterval: null,
+  _taxTimer: null,
 
   init() {
     this.renderUpgrades();
@@ -64,6 +63,27 @@ const Clicker = {
     this.updateRebirthUI();
     this.startAutoClicker();
     this.startAutoBet();
+    this.startWealthTax();
+  },
+
+  // Wealth tax: 0.1% every 60s on balances over $1T
+  startWealthTax() {
+    if (this._taxTimer) clearInterval(this._taxTimer);
+    this._taxTimer = setInterval(() => {
+      const threshold = 1_000_000_000_000; // 1T
+      if (App.balance > threshold) {
+        const tax = App.balance * 0.001; // 0.1%
+        App.addBalance(-tax);
+        // Show subtle tax notification
+        const el = document.getElementById('tax-notice');
+        if (el) {
+          el.textContent = 'Wealth tax: -' + App.formatMoney(tax);
+          el.classList.remove('hidden');
+          clearTimeout(this._taxFade);
+          this._taxFade = setTimeout(() => el.classList.add('hidden'), 3000);
+        }
+      }
+    }, 60000);
   },
 
   // === Rebirth System ===
@@ -71,12 +91,18 @@ const Clicker = {
 
   getEarningsMultiplier() {
     const r = this.getRebirths();
-    return Math.pow(1.5, r); // 1.5x per rebirth, stacks multiplicatively
+    return Math.min(5, 1 + r * 0.5); // +0.5x per rebirth, capped at 5x
   },
 
   getCostDiscount() {
     const r = this.getRebirths();
     return Math.max(0.5, 1 - r * 0.1); // 10% cheaper per rebirth, max 50%
+  },
+
+  // Dynamic max upgrade level: 10 base + 10 per VIP level, capped at 50
+  getMaxUpgradeLevel() {
+    const r = this.getRebirths();
+    return Math.min(50, 10 + r * 10);
   },
 
   getStartingCash() {
@@ -88,9 +114,10 @@ const Clicker = {
   // Rebirth requirements scale with each rebirth
   getRebirthRequirements() {
     const r = this.getRebirths();
-    // First rebirth: 50/50, then escalates
-    const clickReq = 50;
-    const autoReq = 50;
+    // Require current max upgrade level (scales with VIP)
+    const maxLvl = this.getMaxUpgradeLevel();
+    const clickReq = maxLvl;
+    const autoReq = maxLvl;
     // Each rebirth also requires more total earned money
     const earnedReq = r === 0 ? 5000 : 5000 * Math.pow(10, r); // 5K, 50K, 500K, 5M, 50M...
     return { clickReq, autoReq, earnedReq };
@@ -106,16 +133,20 @@ const Clicker = {
   doRebirth() {
     if (!this.canRebirth()) return;
     const req = this.getRebirthRequirements();
+    const unstoredPets = typeof Pets !== 'undefined' ? Pets.owned.filter(o => o).length : 0;
     if (!confirm('REBIRTH: Reset ALL progress for permanent bonuses?\n\n' +
       'This will reset:\n' +
       '• All upgrades & balance\n' +
       '• Properties & Crime buildings\n' +
       '• Stock portfolio & crypto rigs\n' +
-      '• Loans & debt\n\n' +
+      '• Loans & debt\n' +
+      (unstoredPets > 0 ? '• ' + unstoredPets + ' ACTIVE PETS WILL BE LOST!\n' : '') +
+      '\nPets in storage will be kept.\n\n' +
       'You will get:\n' +
       '• 1.5x earnings multiplier (stacks)\n' +
       '• 10% cheaper upgrades\n' +
       '• ' + App.formatMoney(this.getStartingCash() * 5) + ' starting cash\n' +
+      '• Max upgrade level +10 (now ' + Math.min(50, 10 + (this.getRebirths() + 1) * 10) + ')\n' +
       (this.getRebirths() === 0 ? '• UNLOCK: Lucky Click upgrade\n' : '') +
       (this.getRebirths() === 1 ? '• UNLOCK: Critical Click upgrade\n' : '') +
       (this.getRebirths() === 2 ? '• UNLOCK: Auto Bet upgrade\n' : '') +
@@ -165,6 +196,11 @@ const Clicker = {
       Crypto.upgrades = { cpu: 0, gpu: 0, overclock: 0 };
       Crypto.cooling = Crypto.coolingUpgrades.map(() => false);
       Crypto.heat = 0;
+    }
+
+    // Reset pets (storage survives)
+    if (typeof Pets !== 'undefined') {
+      Pets.onRebirth();
     }
 
     App.updateBalance();

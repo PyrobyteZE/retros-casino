@@ -273,18 +273,49 @@ const Stocks = {
     const maxShares = Math.floor(App.balance / price * 100) / 100;
     if (maxShares <= 0) return;
 
-    // Buy preset amounts
-    const amounts = [1, 5, 10, Math.floor(maxShares)];
-    const unique = [...new Set(amounts.filter(a => a > 0 && a <= maxShares))];
-
     let html = `<div class="stock-trade-modal">
       <div class="stock-trade-title">Buy ${symbol} @ ${App.formatMoney(price)}</div>
-      <div class="stock-trade-buttons">`;
-    unique.forEach(a => {
-      html += `<button class="stock-trade-btn" onclick="Stocks.buy('${symbol}',${a});Stocks.closeModal()">${a} share${a>1?'s':''}<br>${App.formatMoney(price*a)}</button>`;
-    });
-    html += `</div><button class="stock-trade-cancel" onclick="Stocks.closeModal()">Cancel</button></div>`;
+      <div class="stock-trade-custom-amount">
+        <label for="stock-buy-amount-input">$</label>
+        <input type="number" id="stock-buy-amount-input" placeholder="Enter amount to invest" oninput="Stocks.updateBuyButton(this.value, ${price}, '${symbol}')">
+        <button onclick="document.getElementById('stock-buy-amount-input').value = App.balance; Stocks.updateBuyButton(App.balance, ${price}, '${symbol}')">Max</button>
+      </div>
+      <div id="stock-buy-summary"></div>
+      <div class="stock-trade-buttons">
+        <button id="stock-buy-confirm-btn" class="stock-trade-btn" onclick="Stocks.buyWithMoney('${symbol}', ${price})" disabled>Buy</button>
+      </div>
+      <button class="stock-trade-cancel" onclick="Stocks.closeModal()">Cancel</button>
+    </div>`;
     this._showModal(html);
+  },
+
+  updateBuyButton(money, price, symbol) {
+    const amount = parseFloat(money);
+    const summaryEl = document.getElementById('stock-buy-summary');
+    const buyBtn = document.getElementById('stock-buy-confirm-btn');
+    if (!summaryEl || !buyBtn) return;
+
+    if (isNaN(amount) || amount <= 0) {
+      summaryEl.textContent = '';
+      buyBtn.disabled = true;
+      return;
+    }
+
+    const shares = amount / price;
+    summaryEl.textContent = `You will get ~${shares.toFixed(4)} shares`;
+    buyBtn.disabled = amount > App.balance;
+  },
+
+  buyWithMoney(symbol, price) {
+    const moneyInput = document.getElementById('stock-buy-amount-input');
+    if (!moneyInput) return;
+
+    const amount = parseFloat(moneyInput.value);
+    if (isNaN(amount) || amount <= 0 || amount > App.balance) return;
+
+    const shares = amount / price;
+    this.buy(symbol, shares);
+    this.closeModal();
   },
 
   promptSell(symbol) {

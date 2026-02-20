@@ -145,8 +145,7 @@ const App = {
       totalClicks: this.totalClicks,
       upgrades: this.upgrades,
       rebirth: this.rebirth,
-      debt: Loans.debt,
-      loanTime: Loans.loanTime,
+      loans: typeof Loans !== 'undefined' ? Loans.getSaveData() : null,
       properties: typeof Properties !== 'undefined' ? Properties.getSaveData() : null,
       crime: typeof Crime !== 'undefined' ? Crime.getSaveData() : null,
       pets: typeof Pets !== 'undefined' ? Pets.getSaveData() : null,
@@ -169,8 +168,8 @@ const App = {
       this.upgrades = data.upgrades || { clickValue: 0, autoClicker: 0, luckyClick: 0, critClick: 0, autoBet: 0 };
       this.rebirth = data.rebirth || 0;
       if (typeof Loans !== 'undefined') {
-        Loans.debt = data.debt || 0;
-        Loans.loanTime = data.loanTime || 0;
+        if (data.loans) Loans.loadSaveData(data.loans);
+        else { Loans.debt = data.debt || 0; Loans.loanTime = data.loanTime || 0; } // legacy
       }
       if (typeof Properties !== 'undefined' && data.properties) {
         Properties.loadSaveData(data.properties);

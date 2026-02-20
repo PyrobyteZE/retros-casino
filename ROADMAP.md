@@ -10,58 +10,65 @@
 - [x] Admin panel
 - [x] PWA + Android APK
 
-## v1.1 - Multiplayer Foundation
-- [ ] Player accounts (username, avatar, persistent ID)
-- [ ] Online leaderboard (top balance, total earned, rebirths)
-- [ ] Player profiles — view other players' stats and empire
-- [ ] Global chat with emoji reactions
-- [ ] Daily login rewards
+## v1.1 - Multiplayer Foundation (DONE)
+- [x] Player accounts (username, avatar, persistent ID)
+- [x] Online leaderboard (total earned, rebirths, balance tabs)
+- [x] Player profiles — view stats, send friend requests, DM
+- [x] Global chat with clickable names and rebirth tags
+- [x] Online player count (Firebase presence)
 
-## v1.2 - PvP: Rob & Raid
+## v1.2 - PvP & Social (DONE)
+- [x] **PvP Coin Flip** — challenge other players, wager money
+- [x] **Friends system** — send/accept friend requests, notifications
+- [x] **Direct Messaging** — private chat between players
+- [x] **Leaderboard redesign** — podium cards, category tabs, online dots
+- [x] **Leaderboard dedup** — admin cleanup, client-side deduplication
 - [ ] **Rob Players** — target another player's properties/crime businesses
-  - Pick a target from the leaderboard
-  - Success chance based on your level vs theirs
-  - Steal 1-5% of their cash on success
-  - Get fined if you fail
-- [ ] **Defend System** — spend money on security upgrades to lower rob chance
-- [ ] **Hit List** — bounty board where players can put prices on other players
-- [ ] **Crew System** — form a crew of 2-5 players for group heists
-- [ ] **Heists** — cooperative timed events, split the loot
-- [ ] Rob cooldown (10 min per target, 2 min global)
-- [ ] Push notifications when you get robbed
+- [ ] **Defend System** — spend money on security upgrades
+- [ ] **Hit List** — bounty board
 
-## v1.3 - Economy & Trading
-- [ ] **Player Trading** — send money to other players
-- [ ] **Black Market** — buy/sell rare items and boosts
+## v1.3 - Economy & Trading (DONE)
+- [x] **Stock Market** — fake stocks with price sync across players
+- [x] **Crypto Mining** — passive income with GPU rigs
+- [x] **Player-Influenced Economy** — large buy/sell orders move prices
+- [x] **Stock Insider Knowledge** — VIP 10+ tips with accuracy/cost
+- [x] **Wealth Tax** — 0.1% every 60s on balances over $1T
+- [x] **Admin price control** — gradual stock/crypto price manipulation
+- [ ] **Black Market** — buy/sell rare items
 - [ ] **Auction House** — bid on exclusive upgrades
-- [x] **Stock Market** — fake stocks that fluctuate, buy low sell high
-- [x] **Crypto Mining** — passive income minigame with GPU upgrades
 
-## v1.4 - Competitive
-- [ ] **Weekly Tournaments** — highest profit in 7 days wins prizes
-- [ ] **Casino Battles** — head-to-head slots/blackjack against other players
-- [ ] **Crew Wars** — crew vs crew territory control
-- [ ] **Seasons** — 30-day seasons with ranks (Bronze to Diamond)
+## v1.4 - Progression (DONE)
+- [x] **Rebirth system** — VIP levels, multiplier (linear +0.5x, cap 5x)
+- [x] **Dynamic upgrade caps** — max level scales with VIP (10 + VIP×10)
+- [x] **Pet system** — pets that boost earnings with forge/gacha
+- [x] **Pet storage** — store pets across rebirths
+- [x] **Name locking** — claim your username, buy from others
+- [ ] **Weekly Tournaments** — highest profit in 7 days
 - [ ] **Achievements** — unlockable badges and titles
+- [ ] **Seasons** — 30-day seasons with ranks
 
-## v1.5 - Expansion
-- [ ] **More Games**: Poker, Baccarat, Dice, Keno, Wheel of Fortune
-- [ ] **VIP Lounge** — exclusive high-roller games at VIP 5+
-- [ ] **Casino Customization** — name your casino, choose decor
-- [ ] **Prestige System** — rebirth 2.0 with prestige currencies
-- [ ] **Sound Effects & Music**
+## v1.5 - Loan Shark Overhaul (DONE)
+- [x] **Simplified loan menu** — Quick Cash $100, custom amount, Bargain only
+- [x] **Shark personality** — dialogue system with scummy/angry/understanding lines
+- [x] **Bargain minigame** — higher/lower guessing to reduce interest (-5%/+3% per round)
+- [x] **Desperate duel** — at $1T+ debt, better odds (5% shark bias, 90%/75% debt removal)
+- [x] **Player-to-Player Loans** — custom amount, custom interest rate
+  - Both players must agree (offer/accept system)
+  - Lender can forgive debt at any time
+  - Loans survive rebirth (stored in Firebase)
+  - Payment notifications via toast
 
 ## v2.0 - Full Multiplayer
 - [ ] Real-time multiplayer poker tables
-- [ ] Live dealer blackjack (one player deals)
+- [ ] Live dealer blackjack
 - [ ] Spectate other players' games
-- [ ] Friends list and private messaging
+- [ ] Crew system — form crews for group heists
 - [ ] Crew headquarters with shared upgrades
 
 ## Ideas / Maybe
 - [ ] NFT-style collectible cards (fake, in-game only)
-- [x] Pet system — pets that boost earnings
 - [ ] Mini-games: lockpicking, safe cracking, getaway driver
 - [ ] Story mode with missions
 - [ ] Seasonal events (Halloween heist, Christmas jackpot)
-- [ ] Player to Player Loaning
+- [ ] More casino games: Poker, Baccarat, Keno, Wheel of Fortune
+- [ ] Sound effects & music

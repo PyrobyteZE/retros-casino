@@ -64,6 +64,7 @@
             <span class="loan-toggle">&#x25BC;</span>
           </div>
           <div id="loan-body" class="loan-body">
+            <div id="shark-dialogue" class="shark-dialogue hidden"></div>
             <div class="loan-status">
               <div class="loan-stat">
                 <span class="stat-label">Debt</span>
@@ -76,6 +77,12 @@
             </div>
             <div id="loan-warning" class="loan-warning"></div>
             <div id="loan-options" class="loan-options"></div>
+            <!-- Custom amount + Bargain -->
+            <div class="loan-custom-row">
+              <input type="number" id="loan-custom-amount" class="loan-custom-input" placeholder="Custom amount...">
+              <button class="loan-custom-btn" onclick="Loans.takeCustomLoan()">Borrow</button>
+              <button class="loan-bargain-btn" onclick="Loans.startBargain()">Bargain</button>
+            </div>
             <div id="loan-pay-section" class="loan-pay-section hidden">
               <div class="loan-pay-row">
                 <button class="loan-pay-btn" onclick="Loans.payBack(Loans.debt * 0.1)">Pay 10%</button>
@@ -84,6 +91,28 @@
               </div>
               <button id="shark-duel-btn" class="loan-duel-btn hidden" onclick="Loans.startDuel()">&#x1F3B2; Challenge Shark</button>
             </div>
+          </div>
+        </div>
+
+        <!-- P2P Player Loans -->
+        <div class="p2p-loan-panel">
+          <div class="p2p-loan-header" onclick="document.getElementById('p2p-loan-body').classList.toggle('hidden')">
+            <span class="p2p-loan-title">&#x1F91D; Player Loans</span>
+            <span class="loan-toggle">&#x25BC;</span>
+          </div>
+          <div id="p2p-loan-body" class="p2p-loan-body hidden">
+            <div class="p2p-create-section">
+              <label>Offer a loan to another player:</label>
+              <input type="text" id="p2p-borrower-name" placeholder="Borrower's name">
+              <div class="p2p-input-row">
+                <input type="number" id="p2p-loan-amount" placeholder="Amount">
+                <input type="number" id="p2p-interest-rate" placeholder="Rate %" min="1" max="100" value="5">
+                <span>%/min</span>
+              </div>
+              <button class="p2p-offer-btn" onclick="Loans.createPlayerLoan()">&#x1F4E4; Send Loan Offer</button>
+            </div>
+            <div class="p2p-divider"></div>
+            <div id="p2p-loan-content"><div class="p2p-empty">No active player loans</div></div>
           </div>
         </div>
 
@@ -858,6 +887,21 @@
       </div>
       <div class="duel-result" id="duel-result"></div>
       <button class="game-btn" id="duel-draw-btn" onclick="Loans.duelDraw()">DRAW!</button>
+    </div>
+
+    <!-- Bargain Overlay -->
+    <div id="bargain-overlay" class="bargain-overlay hidden">
+      <h3>&#x1F988; Bargain with the Shark</h3>
+      <div class="bargain-info">Guess if the shark's number is Higher or Lower than the midpoint each round. Correct = -5% interest, Wrong = +3% penalty.</div>
+      <div id="bargain-round" style="font-weight:700;color:var(--gold)">Round 0/5</div>
+      <div id="bargain-status" style="font-size:14px;color:var(--text-dim)">Press Higher or Lower to start!</div>
+      <div id="bargain-discount" style="font-size:20px;font-weight:800;color:var(--green)">0% discount</div>
+      <div class="bargain-buttons">
+        <button id="bargain-high" class="bargain-btn bargain-btn-high" onclick="Loans.bargainGuess('high')">&#x2B06; Higher</button>
+        <button id="bargain-low" class="bargain-btn bargain-btn-low" onclick="Loans.bargainGuess('low')">&#x2B07; Lower</button>
+      </div>
+      <button id="bargain-done" class="bargain-close-btn" onclick="Loans.closeBargain(true)">Take Loan</button>
+      <button class="bargain-close-btn" onclick="Loans.closeBargain(false)" style="border-color:var(--red);color:var(--red)">Cancel</button>
     </div>
   </div>
 

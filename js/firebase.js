@@ -96,6 +96,7 @@ const Firebase = {
       this.connectionState = 'connected';
       this._updateChatStatus('Online');
       console.log('Firebase: signed in as', this.uid);
+      this._setupPresence(); // Re-add setup presence
       this._startListeners();
     }).catch(err => {
       this.online = false;
@@ -114,6 +115,7 @@ const Firebase = {
     this.db.ref('.info/connected').on('value', snap => {
       if (snap.val() === true) {
         this._updateChatStatus('Online');
+        this._setupPresence(); // Ensure presence is set up on reconnect
       } else if (this.connectionState === 'connected') {
         this._updateChatStatus('Reconnecting...');
       }
@@ -127,11 +129,50 @@ const Firebase = {
     this._tryClaimCryptoAuthority();
     this._stockAuthorityInterval = setInterval(() => this._tryClaimStockAuthority(), 30000);
     this._cryptoAuthorityInterval = setInterval(() => this._tryClaimCryptoAuthority(), 30000);
+    // Presence listener
+    this._listenPresence(); // Re-add presence listener
     // Push leaderboard every 60s
     setInterval(() => this.pushLeaderboard(), 60000);
     // Initial push after auth (no throttle on first push)
     this.lastLeaderboardPush = 0;
     this.pushLeaderboard();
+  },
+
+  // === PRESENCE ===
+  _setupPresence() {
+    if (!this.isOnline()) return;
+    const name = typeof Settings !== 'undefined' ? Settings.profile.name : 'Player';
+    const avatar = typeof Settings !== 'undefined' ? Settings.avatars[Settings.profile.avatar] : '';
+    const ref = this.db.ref('presence/' + this.uid);
+    ref.set({
+      name,
+      avatar,
+      sessionId: this._sessionId,
+      timestamp: firebase.database.ServerValue.TIMESTAMP,
+    });
+    ref.onDisconnect().remove();
+  },
+
+  _listenPresence() {
+    this.db.ref('presence').on('value', snap => {
+      const data = snap.val() || {};
+      this.onlinePlayers = data;
+      this.onlineCount = Object.keys(data).length;
+      this._updateOnlineCount();
+    });
+  },
+
+  _updateOnlineCount() {
+    const badge = document.getElementById('lb-online-badge');
+    if (badge) {
+      if (this.isOnline()) {
+        badge.textContent = this.onlineCount + ' Player' + (this.onlineCount !== 1 ? 's' : '') + ' Online';
+        badge.className = 'lb-online-badge lb-badge-online';
+      } else {
+        badge.textContent = 'Offline';
+        badge.className = 'lb-online-badge';
+      }
+    }
   },
 
   // === LEADERBOARD ===
