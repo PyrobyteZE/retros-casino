@@ -726,13 +726,15 @@ const Firebase = {
   _tryClaimStockAuthority() {
     if (!this.isOnline()) return;
     const sessionId = this._sessionId;
+    const isAdminTab = typeof Admin !== 'undefined' && Admin.isAdmin();
     const ref = this.db.ref('stockPrices/authority');
     ref.transaction(current => {
       const now = Date.now();
-      if (!current || current.sessionId === sessionId || (now - (current.timestamp || 0) > 45000)) {
+      // Admin tabs always claim authority; others only if existing authority is stale (45s)
+      if (!current || current.sessionId === sessionId || (now - (current.timestamp || 0) > 45000) || isAdminTab) {
         return { sessionId, uid: this.uid, timestamp: now };
       }
-      return; // abort — someone else is authority
+      return; // abort — someone else has fresh authority
     }, (error, committed, snap) => {
       if (!error && committed && snap.val() && snap.val().sessionId === sessionId) {
         this._isStockAuthority = true;
@@ -772,13 +774,17 @@ const Firebase = {
         this._isStockAuthority = false;
       }
     }, err => console.error('Firebase stockPrices/authority read denied:', err.code));
-    // Admin commands — only the stock authority processes these; it pushes results via stockPrices/data
-    // (applying on every tab caused all tabs to fight for authority, breaking sync)
+    // Admin commands — authority applies and pushes; admin tabs also apply and steal authority
     this.db.ref('stockPrices/adminCommand').on('value', snap => {
       const cmd = snap.val();
       if (!cmd || !cmd.ts || cmd.ts <= this._lastStockCmdTs) return;
       this._lastStockCmdTs = cmd.ts;
-      if (typeof Stocks !== 'undefined' && this._isStockAuthority) Stocks.applyAdminCommand(cmd);
+      const isAdminTab = typeof Admin !== 'undefined' && Admin.isAdmin();
+      if (typeof Stocks !== 'undefined' && (this._isStockAuthority || isAdminTab)) {
+        Stocks.applyAdminCommand(cmd);
+        // Admin tab claims authority so it can push the result on next tick
+        if (isAdminTab && !this._isStockAuthority) this._tryClaimStockAuthority();
+      }
     }, err => console.error('Firebase stockPrices/adminCommand read denied:', err.code));
   },
 
@@ -786,10 +792,12 @@ const Firebase = {
   _tryClaimCryptoAuthority() {
     if (!this.isOnline()) return;
     const sessionId = this._sessionId;
+    const isAdminTab = typeof Admin !== 'undefined' && Admin.isAdmin();
     const ref = this.db.ref('cryptoPrices/authority');
     ref.transaction(current => {
       const now = Date.now();
-      if (!current || current.sessionId === sessionId || (now - (current.timestamp || 0) > 45000)) {
+      // Admin tabs always claim authority; others only if existing authority is stale (45s)
+      if (!current || current.sessionId === sessionId || (now - (current.timestamp || 0) > 45000) || isAdminTab) {
         return { sessionId, uid: this.uid, timestamp: now };
       }
       return;
@@ -829,12 +837,16 @@ const Firebase = {
         this._isCryptoAuthority = false;
       }
     }, err => console.error('Firebase cryptoPrices/authority read denied:', err.code));
-    // Admin commands — only the crypto authority processes these
+    // Admin commands — authority applies and pushes; admin tabs also apply and steal authority
     this.db.ref('cryptoPrices/adminCommand').on('value', snap => {
       const cmd = snap.val();
       if (!cmd || !cmd.ts || cmd.ts <= this._lastCryptoCmdTs) return;
       this._lastCryptoCmdTs = cmd.ts;
-      if (typeof Crypto !== 'undefined' && this._isCryptoAuthority) Crypto.applyAdminCommand(cmd);
+      const isAdminTab = typeof Admin !== 'undefined' && Admin.isAdmin();
+      if (typeof Crypto !== 'undefined' && (this._isCryptoAuthority || isAdminTab)) {
+        Crypto.applyAdminCommand(cmd);
+        if (isAdminTab && !this._isCryptoAuthority) this._tryClaimCryptoAuthority();
+      }
     }, err => console.error('Firebase cryptoPrices/adminCommand read denied:', err.code));
   },
 
@@ -873,12 +885,15 @@ const Firebase = {
 
   pushAdminStockCommand(cmd) {
     if (!this.isOnline()) return;
+    // Claim authority so this admin tab pushes the result on next tick
+    this._tryClaimStockAuthority();
     this.db.ref('stockPrices/adminCommand').set({ ...cmd, ts: Date.now() })
       .catch(err => console.error('Firebase adminStockCommand write error:', err));
   },
 
   pushAdminCryptoCommand(cmd) {
     if (!this.isOnline()) return;
+    this._tryClaimCryptoAuthority();
     this.db.ref('cryptoPrices/adminCommand').set({ ...cmd, ts: Date.now() })
       .catch(err => console.error('Firebase adminCryptoCommand write error:', err));
   },

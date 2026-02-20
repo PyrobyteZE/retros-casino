@@ -27,6 +27,12 @@ body {
   user-select: none;
 }
 
+input, textarea, select {
+  -webkit-user-select: text;
+  user-select: text;
+  touch-action: manipulation;
+}
+
 #app {
   max-width: 420px;
   margin: 0 auto;

@@ -228,10 +228,24 @@ const Stocks = {
       const dir = pct > 0.001 ? 'up' : pct < -0.001 ? 'dn' : 'flat';
       const arrow = dir === 'up' ? '\u25B2' : dir === 'dn' ? '\u25BC' : '\u25A0';
       const pctStr = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
-      return `<span class="ticker-item ticker-${dir}">${s.symbol} $${price < 10 ? price.toFixed(2) : Math.round(price)} ${arrow}${pctStr}</span>`;
-    }).join('<span class="ticker-sep"> | </span>');
-    // Duplicate content for seamless looping animation
-    el.innerHTML = `<div class="ticker-track">${items}<span class="ticker-sep">&nbsp;&nbsp;&nbsp;</span>${items}</div>`;
+      return { text: `${s.symbol} $${price < 10 ? price.toFixed(2) : Math.round(price)} ${arrow}${pctStr}`, dir };
+    });
+    // Update existing spans in-place to preserve the CSS scroll animation
+    const existing = el.querySelectorAll('.ticker-item');
+    if (existing.length === items.length * 2) {
+      items.forEach((item, i) => {
+        existing[i].textContent = item.text;
+        existing[i].className = `ticker-item ticker-${item.dir}`;
+        existing[i + items.length].textContent = item.text;
+        existing[i + items.length].className = `ticker-item ticker-${item.dir}`;
+      });
+      return;
+    }
+    // First run or item count changed — build structure fresh
+    const html = items.map(item =>
+      `<span class="ticker-item ticker-${item.dir}">${item.text}</span>`
+    ).join('<span class="ticker-sep"> | </span>');
+    el.innerHTML = `<div class="ticker-track">${html}<span class="ticker-sep">&nbsp;&nbsp;&nbsp;</span>${html}</div>`;
   },
 
   // Funny SHARK interest-rate news

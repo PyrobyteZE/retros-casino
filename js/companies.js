@@ -351,8 +351,8 @@ const Companies = {
           <div style="font-size:36px;text-align:center;margin-bottom:8px">&#x1F3E2;</div>
           <div style="font-weight:800;font-size:18px;text-align:center;margin-bottom:4px">Found a Company</div>
           <div class="company-found-cost">Cost: $${App.formatMoney(this.FOUND_COST)}</div>
-          <input type="text" id="co-found-name" placeholder="Company Name (e.g. Retro Corp)" maxlength="32">
-          <input type="text" id="co-found-ticker" placeholder="Ticker (e.g. RETRO)" maxlength="5" style="text-transform:uppercase">
+          <input type="text" id="co-found-name" placeholder="Company Name (e.g. Retro Corp)" maxlength="32" style="font-size:16px">
+          <input type="text" id="co-found-ticker" placeholder="Ticker (e.g. RETRO)" maxlength="5" style="text-transform:uppercase;font-size:16px">
           <button class="company-found-btn" onclick="Companies.foundCompany()">Found Company — $${App.formatMoney(this.FOUND_COST)}</button>
         </div>`;
       return;
