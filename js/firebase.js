@@ -772,12 +772,13 @@ const Firebase = {
         this._isStockAuthority = false;
       }
     }, err => console.error('Firebase stockPrices/authority read denied:', err.code));
-    // Admin commands — all tabs apply immediately regardless of authority
+    // Admin commands — only the stock authority processes these; it pushes results via stockPrices/data
+    // (applying on every tab caused all tabs to fight for authority, breaking sync)
     this.db.ref('stockPrices/adminCommand').on('value', snap => {
       const cmd = snap.val();
       if (!cmd || !cmd.ts || cmd.ts <= this._lastStockCmdTs) return;
       this._lastStockCmdTs = cmd.ts;
-      if (typeof Stocks !== 'undefined') Stocks.applyAdminCommand(cmd);
+      if (typeof Stocks !== 'undefined' && this._isStockAuthority) Stocks.applyAdminCommand(cmd);
     }, err => console.error('Firebase stockPrices/adminCommand read denied:', err.code));
   },
 
@@ -828,12 +829,12 @@ const Firebase = {
         this._isCryptoAuthority = false;
       }
     }, err => console.error('Firebase cryptoPrices/authority read denied:', err.code));
-    // Admin commands — all tabs apply immediately regardless of authority
+    // Admin commands — only the crypto authority processes these
     this.db.ref('cryptoPrices/adminCommand').on('value', snap => {
       const cmd = snap.val();
       if (!cmd || !cmd.ts || cmd.ts <= this._lastCryptoCmdTs) return;
       this._lastCryptoCmdTs = cmd.ts;
-      if (typeof Crypto !== 'undefined') Crypto.applyAdminCommand(cmd);
+      if (typeof Crypto !== 'undefined' && this._isCryptoAuthority) Crypto.applyAdminCommand(cmd);
     }, err => console.error('Firebase cryptoPrices/adminCommand read denied:', err.code));
   },
 

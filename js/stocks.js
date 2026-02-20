@@ -414,15 +414,17 @@ const Stocks = {
   applyAdminCommand(cmd) {
     if (!cmd || !cmd.type) return;
     if (!this._priceTargets.length) this._priceTargets = this.stocks.map(() => null);
+    // NOTE: directly set targets without calling setGradualTarget() — that function steals
+    // stock authority, which would cause every tab to fight for authority simultaneously.
     switch (cmd.type) {
       case 'target':
         if (cmd.idx >= 0 && cmd.idx < this.stocks.length) {
-          this.setGradualTarget(cmd.idx, cmd.target, cmd.steps || 15);
+          this._priceTargets[cmd.idx] = { target: cmd.target, stepsLeft: cmd.steps || 15 };
         }
         break;
       case 'adjust':
         if (cmd.idx >= 0 && cmd.idx < this.stocks.length) {
-          this.setGradualTarget(cmd.idx, Math.max(1, this.prices[cmd.idx] * cmd.mult), 15);
+          this._priceTargets[cmd.idx] = { target: Math.max(1, this.prices[cmd.idx] * cmd.mult), stepsLeft: 15 };
         }
         break;
       case 'crash':
