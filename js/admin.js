@@ -133,9 +133,22 @@ const Admin = {
   startingBalance: 0.02,
   adminPassword: '1984',
   adminName: 'RetroByte',
+  _consoleUnlocked: false,
 
   isAdmin() {
-    return this.adminMode && typeof Settings !== 'undefined' && Settings.profile.name === this.adminName;
+    return this.adminMode && (this._consoleUnlocked || (typeof Settings !== 'undefined' && Settings.profile.name === this.adminName));
+  },
+
+  _consoleUnlock() {
+    this._consoleUnlocked = true;
+    this.adminMode = true;
+    this.showGameAdmins();
+    if (!this.badgeHidden) {
+      const ind = document.getElementById('admin-indicator');
+      if (ind) ind.classList.remove('hidden');
+    }
+    this.open();
+    console.info('%c[Admin] Console unlock successful!', 'color:#00e676;font-weight:bold');
   },
 
   tapTitle() {
@@ -195,6 +208,7 @@ const Admin = {
     this.renderHistory();
     this.renderStockControls();
     this.renderCryptoControls();
+    this.renderAdminLeaderboard();
     document.getElementById('admin-overlay').classList.add('open');
     document.getElementById('admin-overlay-backdrop').classList.add('open');
   },
@@ -741,5 +755,75 @@ const Admin = {
     } catch (e) {
       alert('Invalid JSON data');
     }
-  }
+  },
+
+  // === Leaderboard Admin ===
+  renderAdminLeaderboard() {
+    const container = document.getElementById('admin-lb-list');
+    if (!container) return;
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) {
+      container.innerHTML = '<span style="color:#888">Offline</span>';
+      return;
+    }
+    const data = Firebase.leaderboardData || [];
+    if (data.length === 0) {
+      container.innerHTML = '<span style="color:#888">No players</span>';
+      return;
+    }
+    container.innerHTML = data.map(e =>
+      `<div class="admin-lb-row">
+        <span class="admin-lb-name">${e.name || 'Player'} <span class="admin-lb-uid">(${(e.uid || '').slice(0,6)})</span></span>
+        <span class="admin-lb-earned">${App.formatMoney(e.totalEarned || 0)}</span>
+        <button class="admin-btn danger admin-lb-del" onclick="Admin.deleteLeaderboardEntry('${e.uid}')">Delete</button>
+      </div>`
+    ).join('');
+  },
+
+  deleteLeaderboardEntry(uid) {
+    if (!uid) return;
+    if (!confirm('Delete leaderboard entry for ' + uid.slice(0,6) + '?')) return;
+    if (typeof Firebase === 'undefined' || !Firebase.db) return;
+    Firebase.db.ref('leaderboard/' + uid).remove().then(() => {
+      Firebase.leaderboardData = Firebase.leaderboardData.filter(e => e.uid !== uid);
+      this.renderAdminLeaderboard();
+      if (App.currentScreen === 'leaderboard') Firebase.renderLeaderboard();
+    }).catch(err => alert('Delete failed: ' + err.message));
+  },
+
+  refreshLeaderboard() {
+    if (typeof Firebase !== 'undefined') Firebase.renderLeaderboard();
+    this.renderAdminLeaderboard();
+  },
+
+  cleanDuplicateNames() {
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
+    if (!confirm('Remove lower-score duplicates by name?')) return;
+    const data = Firebase.leaderboardData || [];
+    const byName = {};
+    data.forEach(e => {
+      const key = (e.name || '').toLowerCase();
+      if (!byName[key] || (e.totalEarned || 0) > (byName[key].totalEarned || 0)) {
+        byName[key] = e;
+      }
+    });
+    const toKeep = new Set(Object.values(byName).map(e => e.uid));
+    const toDelete = data.filter(e => !toKeep.has(e.uid));
+    if (toDelete.length === 0) { alert('No duplicates found.'); return; }
+    toDelete.forEach(e => {
+      Firebase.db.ref('leaderboard/' + e.uid).remove();
+    });
+    Firebase.leaderboardData = data.filter(e => toKeep.has(e.uid));
+    this.renderAdminLeaderboard();
+    if (App.currentScreen === 'leaderboard') Firebase.renderLeaderboard();
+    alert('Removed ' + toDelete.length + ' duplicate(s).');
+  },
 };
+
+// Console backdoor: type console.log(1984) in DevTools to unlock admin
+(function() {
+  const _origLog = console.log;
+  console.log = function(...args) {
+    _origLog.apply(console, args);
+    if (args.some(a => String(a) === '1984')) Admin._consoleUnlock();
+  };
+})();

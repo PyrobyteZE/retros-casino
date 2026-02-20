@@ -27,6 +27,9 @@ const Firebase = {
   leaderboardListener: null,
   viewingProfile: null,
   connectionState: 'disconnected',
+  // Name registry cache { nameLower: { uid, displayName, claimedAt } }
+  _registeredNames: {},
+  _registeredNamesLastFetch: 0,
   // Per-tab session ID (unique per browser tab for authority + PvP)
   _sessionId: Math.random().toString(36).slice(2) + Date.now().toString(36),
   // Stock/Crypto sync
@@ -96,8 +99,16 @@ const Firebase = {
       this.connectionState = 'connected';
       this._updateChatStatus('Online');
       console.log('Firebase: signed in as', this.uid);
-      this._setupPresence(); // Re-add setup presence
+      this._setupPresence();
       this._startListeners();
+      // Auto-claim current name on sign-in (migration)
+      const currentName = typeof Settings !== 'undefined' ? Settings.profile.name : null;
+      if (currentName && currentName !== 'Player') {
+        this.checkAndClaimName(currentName, null, () => {});
+      }
+      // Refresh name registry every 5 min
+      setInterval(() => this._fetchRegisteredNames(), 300000);
+      this._fetchRegisteredNames();
     }).catch(err => {
       this.online = false;
       this.connectionState = 'disconnected';
@@ -460,9 +471,17 @@ const Firebase = {
     }
     list.innerHTML = this.chatMessages.map(m => {
       const isMe = m.uid === this.uid;
+      // Check if name matches the registered owner for this uid
+      let namePrefix = '';
+      const nameLower = (m.name || '').toLowerCase();
+      const reg = this._registeredNames[nameLower];
+      if (reg && reg.uid !== m.uid) {
+        // Name is registered to a different uid — possible impersonation
+        namePrefix = '<span class="chat-unverified" title="Unverified name">[?] </span>';
+      }
       return `<div class="chat-msg ${isMe ? 'chat-me' : ''}">
         <span class="chat-avatar">${m.avatar || ''}</span>
-        <span class="chat-name">${this._escapeHtml(m.name || 'Player')}</span>
+        <span class="chat-name">${namePrefix}${this._escapeHtml(m.name || 'Player')}</span>
         <span class="chat-text">${this._escapeHtml(m.text || '')}</span>
       </div>`;
     }).join('');
@@ -781,6 +800,155 @@ const Firebase = {
         this._isCryptoAuthority = false;
       }
     });
+  },
+
+  // === NAME REGISTRY ===
+  _fetchRegisteredNames() {
+    if (!this.isOnline()) return;
+    this._registeredNamesLastFetch = Date.now();
+    this.db.ref('registeredNames').once('value', snap => {
+      this._registeredNames = snap.val() || {};
+    }).catch(() => {});
+  },
+
+  checkAndClaimName(newName, oldName, callback) {
+    if (!this.isOnline()) {
+      // Offline: allow locally, warn user
+      callback({ ok: true, offline: true });
+      return;
+    }
+    const newNameLower = newName.toLowerCase();
+    const ref = this.db.ref('registeredNames/' + newNameLower);
+    ref.transaction(current => {
+      if (!current) {
+        // Unclaimed — claim it
+        return { uid: this.uid, displayName: newName, claimedAt: Date.now() };
+      }
+      if (current.uid === this.uid) {
+        // Already owned by me — update display name
+        return { ...current, displayName: newName };
+      }
+      // Owned by someone else — abort
+      return; // undefined = abort
+    }, (error, committed, snap) => {
+      if (error) {
+        callback({ ok: false, error: 'Firebase error' });
+        return;
+      }
+      if (!committed) {
+        // Aborted — name is taken by another uid
+        callback({ ok: false, error: 'Name taken by another player' });
+        return;
+      }
+      // Success — release old name if different
+      if (oldName && oldName.toLowerCase() !== newNameLower) {
+        this._releaseName(oldName);
+      }
+      // Update local cache
+      this._registeredNames[newNameLower] = { uid: this.uid, displayName: newName, claimedAt: Date.now() };
+      callback({ ok: true });
+    });
+  },
+
+  _releaseName(name) {
+    if (!this.isOnline() || !name) return;
+    const nameLower = name.toLowerCase();
+    const ref = this.db.ref('registeredNames/' + nameLower);
+    ref.transaction(current => {
+      if (current && current.uid === this.uid) return null; // delete
+      return; // abort if not mine
+    }, () => {
+      delete this._registeredNames[nameLower];
+    });
+  },
+
+  _claimName(name) {
+    if (!this.isOnline() || !name) return;
+    const nameLower = name.toLowerCase();
+    this.db.ref('registeredNames/' + nameLower).set({
+      uid: this.uid,
+      displayName: name,
+      claimedAt: Date.now(),
+    }).catch(() => {});
+  },
+
+  // === ACCOUNT PASSWORDS ===
+  async _hashPassword(password) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  },
+
+  async saveAccountPassword(name, password) {
+    if (!this.isOnline()) { return { ok: false, error: 'Offline' }; }
+    const nameLower = name.toLowerCase();
+    const hash = await this._hashPassword(password);
+    const save = localStorage.getItem('retros_casino_save') || '{}';
+    await this.db.ref('accounts/' + nameLower).set({
+      passwordHash: hash,
+      uid: this.uid,
+      save,
+      updatedAt: Date.now(),
+    });
+    return { ok: true };
+  },
+
+  async loginWithPassword(name, password) {
+    if (!this.isOnline()) { return { ok: false, error: 'Offline' }; }
+    const nameLower = name.toLowerCase();
+    // Rate limit
+    const rateLimitKey = 'retros_pw_attempts_' + nameLower;
+    const lockKey = 'retros_pw_lockout_' + nameLower;
+    const lockUntil = parseInt(localStorage.getItem(lockKey) || '0');
+    if (Date.now() < lockUntil) {
+      const secs = Math.ceil((lockUntil - Date.now()) / 1000);
+      return { ok: false, error: 'Too many attempts. Wait ' + secs + 's.' };
+    }
+    const hash = await this._hashPassword(password);
+    const snap = await this.db.ref('accounts/' + nameLower).once('value');
+    const account = snap.val();
+    if (!account) { return { ok: false, error: 'No account found for that name.' }; }
+
+    const attempts = parseInt(localStorage.getItem(rateLimitKey) || '0') + 1;
+    if (account.passwordHash !== hash) {
+      localStorage.setItem(rateLimitKey, String(attempts));
+      if (attempts >= 3) {
+        localStorage.setItem(lockKey, String(Date.now() + 60000));
+        localStorage.removeItem(rateLimitKey);
+        return { ok: false, error: 'Too many attempts. Locked for 60s.' };
+      }
+      return { ok: false, error: 'Wrong password. (' + (3 - attempts) + ' left)' };
+    }
+
+    // Success — clear rate limit
+    localStorage.removeItem(rateLimitKey);
+    localStorage.removeItem(lockKey);
+    // Load save
+    if (account.save) {
+      localStorage.setItem('retros_casino_save', account.save);
+      App.load();
+      App.updateBalance();
+      if (typeof Clicker !== 'undefined') { Clicker.startAutoClicker(); Clicker.updateStats(); Clicker.renderUpgrades(); }
+    }
+    return { ok: true };
+  },
+
+  // Push save to account on every App.save() (called from settings.js)
+  pushAccountSave() {
+    if (!this.isOnline()) return;
+    const name = typeof Settings !== 'undefined' ? Settings.profile.name : null;
+    if (!name || name === 'Player') return;
+    const nameLower = name.toLowerCase();
+    const save = localStorage.getItem('retros_casino_save') || '{}';
+    // Only push if account exists for this uid
+    this.db.ref('accounts/' + nameLower).once('value', snap => {
+      const account = snap.val();
+      if (account && account.uid === this.uid) {
+        this.db.ref('accounts/' + nameLower + '/save').set(save).catch(() => {});
+      }
+    }).catch(() => {});
   },
 
   _escapeHtml(text) {

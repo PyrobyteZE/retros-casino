@@ -4746,3 +4746,117 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
 .p2p-decline { background: transparent; border: 1px solid var(--text-dim); color: var(--text-dim); }
 .p2p-pay { background: var(--green); color: #000; }
 .p2p-forgive { background: transparent; border: 1px solid var(--gold); color: var(--gold); }
+
+/* === Admin Leaderboard List === */
+.admin-lb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.admin-lb-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  background: var(--bg);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.admin-lb-name { flex: 1; font-weight: 600; }
+.admin-lb-uid { color: var(--text-dim); font-size: 11px; font-weight: 400; }
+.admin-lb-earned { color: var(--green); font-weight: 700; min-width: 70px; text-align: right; }
+.admin-lb-del { padding: 2px 8px; font-size: 11px; }
+
+/* === P2P Name Combo Dropdown === */
+.p2p-name-combo { position: relative; }
+.p2p-name-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg2);
+  border: 1px solid var(--bg3);
+  border-radius: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.p2p-name-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.p2p-name-option:hover { background: var(--bg3); }
+.p2p-name-opt-avatar { font-size: 16px; }
+.p2p-name-opt-name { flex: 1; font-weight: 600; }
+.p2p-name-opt-tag { color: var(--text-dim); font-size: 11px; }
+
+/* === Settings extras === */
+.settings-hint {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 4px 0 8px;
+  line-height: 1.4;
+}
+.settings-btn {
+  background: var(--green);
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.settings-btn:hover { opacity: 0.85; }
+.settings-divider {
+  height: 1px;
+  background: var(--bg3);
+  margin: 12px 0;
+}
+
+/* === Chat unverified name === */
+.chat-unverified { color: var(--red); font-size: 11px; font-weight: 700; }
+
+/* === Market Sabotage === */
+.stock-attack-btn {
+  background: transparent;
+  border: 1px solid var(--red);
+  color: var(--red);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 14px;
+  cursor: pointer;
+  line-height: 1;
+}
+.stock-attack-btn:hover { background: var(--red); color: #fff; }
+.attack-info {
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.8;
+  text-align: left;
+  margin-top: 8px;
+}
+.attack-cooldown {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: center;
+}
+.stock-attack-locked {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-color: var(--text-dim);
+  color: var(--text-dim);
+}
+.stock-attack-locked:hover { background: transparent; color: var(--text-dim); }

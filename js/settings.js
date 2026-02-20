@@ -57,10 +57,37 @@ const Settings = {
   },
 
   setName(name) {
-    this.profile.name = name.slice(0, 16) || 'Player';
-    this.updateProfileDisplay();
-    this.save();
-    if (typeof Admin !== 'undefined') Admin.checkAdminRevoke();
+    const newName = name.slice(0, 16) || 'Player';
+    const oldName = this.profile.name;
+
+    // Skip registry for generic default name
+    if (newName === 'Player' || typeof Firebase === 'undefined' || !Firebase.isOnline()) {
+      this.profile.name = newName;
+      this.updateProfileDisplay();
+      this.save();
+      if (typeof Admin !== 'undefined') Admin.checkAdminRevoke();
+      if (newName === 'Player' && oldName !== 'Player' && typeof Firebase !== 'undefined') {
+        Firebase._releaseName(oldName);
+      }
+      return;
+    }
+
+    Firebase.checkAndClaimName(newName, oldName, result => {
+      if (!result.ok) {
+        alert('Name not available: ' + result.error);
+        // Revert input field
+        const input = document.getElementById('settings-name');
+        if (input) input.value = this.profile.name;
+        return;
+      }
+      if (result.offline) {
+        console.warn('Name change: offline, not verified');
+      }
+      this.profile.name = newName;
+      this.updateProfileDisplay();
+      this.save();
+      if (typeof Admin !== 'undefined') Admin.checkAdminRevoke();
+    });
   },
 
   updateProfileDisplay() {
@@ -138,6 +165,33 @@ const Settings = {
         <div class="theme-name">${(this.themes.find(t => t.id === this.currentTheme) || this.themes[0]).name}</div>
       </div>
 
+      <!-- Account / Save Transfer -->
+      <div class="settings-section">
+        <h3>Account (Save Transfer)</h3>
+        <p class="settings-hint">Set a password to recover your save on any device.</p>
+        <div class="settings-row">
+          <label>New Password:</label>
+          <input type="password" id="settings-set-pw" placeholder="Min 4 chars" autocomplete="new-password">
+        </div>
+        <div class="settings-row">
+          <label>Confirm:</label>
+          <input type="password" id="settings-confirm-pw" placeholder="Confirm password" autocomplete="new-password">
+        </div>
+        <button class="settings-btn" onclick="Settings.setAccountPassword()">Set Password</button>
+
+        <div class="settings-divider"></div>
+        <p class="settings-hint">On a new device, login to restore your save:</p>
+        <div class="settings-row">
+          <label>Username:</label>
+          <input type="text" id="settings-login-name" placeholder="Your username" autocomplete="username">
+        </div>
+        <div class="settings-row">
+          <label>Password:</label>
+          <input type="password" id="settings-login-pw" placeholder="Your password" autocomplete="current-password">
+        </div>
+        <button class="settings-btn" onclick="Settings.loginWithPassword()">Login / Restore Save</button>
+      </div>
+
       <!-- Options -->
       <div class="settings-section">
         <h3>Options</h3>
@@ -180,6 +234,47 @@ const Settings = {
         </div>
       </div>
     `;
+  },
+
+  // === ACCOUNT PASSWORD ===
+  async setAccountPassword() {
+    const pw = document.getElementById('settings-set-pw')?.value?.trim();
+    const confirm = document.getElementById('settings-confirm-pw')?.value?.trim();
+    if (!pw) { alert('Enter a password.'); return; }
+    if (pw !== confirm) { alert('Passwords do not match.'); return; }
+    if (pw.length < 4) { alert('Password must be at least 4 characters.'); return; }
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) { alert('Must be online to set a password.'); return; }
+    const name = this.profile.name;
+    if (!name || name === 'Player') { alert('Set a unique username first.'); return; }
+
+    const result = await Firebase.saveAccountPassword(name, pw);
+    if (result.ok) {
+      document.getElementById('settings-set-pw').value = '';
+      document.getElementById('settings-confirm-pw').value = '';
+      alert('Password set! You can now recover your save on any device by logging in with your name and password.');
+    } else {
+      alert('Failed: ' + result.error);
+    }
+  },
+
+  async loginWithPassword() {
+    const name = document.getElementById('settings-login-name')?.value?.trim();
+    const pw = document.getElementById('settings-login-pw')?.value?.trim();
+    if (!name || !pw) { alert('Enter name and password.'); return; }
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) { alert('Must be online to log in.'); return; }
+
+    const result = await Firebase.loginWithPassword(name, pw);
+    if (result.ok) {
+      document.getElementById('settings-login-name').value = '';
+      document.getElementById('settings-login-pw').value = '';
+      alert('Logged in! Save data loaded from ' + name + '\'s account.');
+      this.profile.name = name;
+      this.updateProfileDisplay();
+      this.save();
+      this.render();
+    } else {
+      alert('Login failed: ' + result.error);
+    }
   },
 
   // === SAVE / LOAD ===

@@ -13,6 +13,12 @@ const Loans = {
   duelState: null,     // { playerScore, sharkScore, round, playerCard, sharkCard, phase }
   duelActive: false,
 
+  // Reckoning system (10T debt cap)
+  MAX_DEBT: 10_000_000_000_000,           // 10 trillion hard cap
+  MAX_LOAN: 100_000_000_000,              // 100 billion max single loan
+  _reckoningActive: false,
+  _reckoningRebirthThreshold: 0,         // App.rebirth must reach this to borrow again
+
   // Bargain system
   _bargainState: null,
   _bargainDiscount: 0, // accumulated interest discount from bargaining
@@ -69,6 +75,14 @@ const Loans = {
     this.startInterest();
     this.loadPlayerLoans();
     this.startPlayerLoanInterest();
+    // Close P2P dropdown on outside click
+    document.addEventListener('click', e => {
+      const combo = document.querySelector('.p2p-name-combo');
+      if (combo && !combo.contains(e.target)) {
+        const dd = document.getElementById('p2p-name-dropdown');
+        if (dd) dd.classList.add('hidden');
+      }
+    });
   },
 
   // Show shark dialogue bubble
@@ -85,12 +99,23 @@ const Loans = {
     }
   },
 
-  // Get max loan amount based on player progress
+  // Get max loan amount based on player progress (hard cap: 100 billion)
   getMaxLoan() {
     const earned = App.totalEarned;
     const rebirth = App.rebirth || 0;
     let max = 500 + earned * 0.1 + rebirth * 50000;
-    return Math.floor(max);
+    return Math.floor(Math.min(max, this.MAX_LOAN));
+  },
+
+  // Is the player locked out of loans after a reckoning loss?
+  isLoanLocked() {
+    if (this._reckoningRebirthThreshold <= 0) return false;
+    return (App.rebirth || 0) < this._reckoningRebirthThreshold;
+  },
+
+  getLoanLockMessage() {
+    const needed = this._reckoningRebirthThreshold - (App.rebirth || 0);
+    return `The Shark won't deal with you. Rebirth ${needed} more time${needed !== 1 ? 's' : ''} to restore credit.`;
   },
 
   // Get interest rate based on current debt level
@@ -104,6 +129,11 @@ const Loans = {
   },
 
   takeLoan(amount) {
+    if (this.isLoanLocked()) {
+      this._showDialogue('angry');
+      alert(this.getLoanLockMessage());
+      return;
+    }
     if (this.debt > this.getMaxLoan() * 3) {
       this._showDialogue('angry');
       return;
@@ -196,6 +226,12 @@ const Loans = {
 
       this.updateUI();
       this.updateDebtDisplay();
+
+      // Hard cap: trigger reckoning at 10 trillion
+      if (this.debt >= this.MAX_DEBT && !this._reckoningActive) {
+        this.debt = this.MAX_DEBT;
+        this._triggerReckoning();
+      }
     }, this.interestCycle * 1000);
   },
 
@@ -264,6 +300,17 @@ const Loans = {
     }
 
     this.renderLoanButtons();
+
+    // Loan lock warning (after reckoning loss)
+    const lockWarn = document.getElementById('loan-lock-warning');
+    if (lockWarn) {
+      if (this.isLoanLocked()) {
+        lockWarn.textContent = this.getLoanLockMessage();
+        lockWarn.classList.remove('hidden');
+      } else {
+        lockWarn.classList.add('hidden');
+      }
+    }
   },
 
   renderLoanButtons() {
@@ -271,11 +318,12 @@ const Loans = {
     if (!grid) return;
 
     const maxLoan = this.getMaxLoan();
+    const locked = this.isLoanLocked();
     // Quick Cash is smaller/secondary style
     grid.innerHTML = this.maxLoans
       .filter(l => l.amount <= maxLoan * 2)
       .map((l, i) => {
-        const canAfford = l.amount <= maxLoan && this.debt < maxLoan * 3;
+        const canAfford = !locked && l.amount <= maxLoan && this.debt < maxLoan * 3;
         const isQuickCash = i === 0;
         return `<button class="loan-btn ${canAfford ? '' : 'loan-locked'} ${isQuickCash ? 'loan-quick-cash' : ''}"
           onclick="${canAfford ? 'Loans.takeLoan(' + l.amount + ')' : ''}"
@@ -518,6 +566,88 @@ const Loans = {
     this.updateUI();
   },
 
+  // ============ RECKONING (10T MAX DEBT) ============
+
+  _triggerReckoning() {
+    this._reckoningActive = true;
+    this.stopInterest();
+
+    // Show the reckoning overlay
+    const overlay = document.getElementById('shark-reckoning');
+    if (overlay) {
+      document.getElementById('reckoning-result').textContent = '';
+      document.getElementById('reckoning-result').className = 'duel-result';
+      document.getElementById('reckoning-flip-btn').disabled = false;
+      document.getElementById('reckoning-flip-btn').textContent = '\uD83E\uDE99 FLIP THE COIN';
+      overlay.classList.remove('hidden');
+    }
+  },
+
+  reckoningFlip() {
+    const btn = document.getElementById('reckoning-flip-btn');
+    const resultEl = document.getElementById('reckoning-result');
+    if (!btn || !resultEl) return;
+
+    btn.disabled = true;
+    const win = Math.random() < 0.5;
+    const coin = win ? 'HEADS' : 'TAILS';
+
+    // Animate briefly then show result
+    let ticks = 0;
+    const faces = ['\uD83E\uDE99', '\u{1FA99}'];
+    const anim = setInterval(() => {
+      btn.textContent = faces[ticks % 2];
+      ticks++;
+      if (ticks >= 10) {
+        clearInterval(anim);
+        this._resolveReckoning(win, coin, resultEl, btn);
+      }
+    }, 100);
+  },
+
+  _resolveReckoning(win, coin, resultEl, btn) {
+    this.debt = 0;
+    this.loanTime = 0;
+    this.stopInterest();
+    this._reckoningActive = false;
+
+    if (win) {
+      resultEl.textContent = `${coin} — You WIN! The Shark spares you. Debt cleared!`;
+      resultEl.className = 'duel-result duel-win';
+      btn.textContent = 'CLOSE';
+      btn.disabled = false;
+      btn.onclick = () => this.closeReckoning();
+    } else {
+      // Lose: reset rebirths, lock loans for 10 rebirths
+      this._reckoningRebirthThreshold = (App.rebirth || 0) + 10;
+      App.rebirth = 0;
+      if (typeof Clicker !== 'undefined') {
+        Clicker.updateRebirthUI();
+        Clicker.renderUpgrades();
+        Clicker.updateStats();
+        Clicker.startAutoClicker();
+        Clicker.startAutoBet();
+      }
+      resultEl.textContent = `${coin} — You LOSE! The Shark takes everything. Rebirths RESET. Rebirth 10 times before borrowing again.`;
+      resultEl.className = 'duel-result duel-lose';
+      btn.textContent = 'CLOSE';
+      btn.disabled = false;
+      btn.onclick = () => this.closeReckoning();
+    }
+
+    this.updateUI();
+    this.updateDebtDisplay();
+    App.save();
+  },
+
+  closeReckoning() {
+    const overlay = document.getElementById('shark-reckoning');
+    if (overlay) overlay.classList.add('hidden');
+    // Reset onclick back to reckoningFlip for next time
+    const btn = document.getElementById('reckoning-flip-btn');
+    if (btn) btn.onclick = () => Loans.reckoningFlip();
+  },
+
   // ============ BARGAIN SYSTEM ============
 
   startBargain() {
@@ -630,6 +760,47 @@ const Loans = {
   // ============ P2P LOANS ============
 
   _p2pLoans: {},
+  _p2pTargetUid: null,
+
+  filterBorrowerDropdown() {
+    const input = document.getElementById('p2p-borrower-name');
+    const dropdown = document.getElementById('p2p-name-dropdown');
+    if (!input || !dropdown) return;
+    const q = input.value.toLowerCase().trim();
+    this._p2pTargetUid = null; // reset on typing
+
+    if (!q || typeof Firebase === 'undefined') {
+      dropdown.classList.add('hidden');
+      return;
+    }
+
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    const matches = (Firebase.leaderboardData || [])
+      .filter(e => e.uid !== myUid && (e.name || '').toLowerCase().includes(q))
+      .slice(0, 5);
+
+    if (matches.length === 0) {
+      dropdown.classList.add('hidden');
+      return;
+    }
+
+    dropdown.innerHTML = matches.map(e =>
+      `<div class="p2p-name-option" onclick="Loans.selectBorrower('${(e.name || '').replace(/'/g, "\\'")}', '${e.uid}')">
+        <span class="p2p-name-opt-avatar">${e.avatar || '\u{1F3B2}'}</span>
+        <span class="p2p-name-opt-name">${e.name || 'Player'}</span>
+        <span class="p2p-name-opt-tag">R${e.rebirths || 0}</span>
+      </div>`
+    ).join('');
+    dropdown.classList.remove('hidden');
+  },
+
+  selectBorrower(name, uid) {
+    const input = document.getElementById('p2p-borrower-name');
+    const dropdown = document.getElementById('p2p-name-dropdown');
+    if (input) input.value = name;
+    if (dropdown) dropdown.classList.add('hidden');
+    this._p2pTargetUid = uid;
+  },
 
   loadPlayerLoans() {
     if (typeof Firebase === 'undefined' || !Firebase.isOnline()) {
@@ -751,7 +922,7 @@ const Loans = {
       lenderName: App.playerName || 'Unknown',
       borrowerName,
       borrowerNameLower: borrowerName.toLowerCase(),
-      borrowerId: null,
+      borrowerId: this._p2pTargetUid || null,
       amount,
       totalOwed: amount,
       interestRate: rate,
@@ -762,6 +933,7 @@ const Loans = {
       App.save();
       if (nameInput) nameInput.value = '';
       if (amountInput) amountInput.value = '';
+      this._p2pTargetUid = null;
       alert('Loan offer of ' + App.formatMoney(amount) + ' sent to ' + borrowerName + '!');
     }).catch(err => alert('Failed: ' + err.message));
   },
@@ -850,6 +1022,7 @@ const Loans = {
       loanTime: this.loanTime,
       bargainDiscount: this._bargainDiscount,
       duelCooldown: this.duelCooldown,
+      reckoningRebirthThreshold: this._reckoningRebirthThreshold,
     };
   },
 
@@ -859,5 +1032,6 @@ const Loans = {
     this.loanTime = data.loanTime || 0;
     this._bargainDiscount = data.bargainDiscount || 0;
     this.duelCooldown = data.duelCooldown || 0;
+    this._reckoningRebirthThreshold = data.reckoningRebirthThreshold || 0;
   },
 };
