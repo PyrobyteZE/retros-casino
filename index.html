@@ -120,6 +120,39 @@
           </div>
         </div>
 
+        <!-- R5+ Counter-Loan -->
+        <div class="p2p-loan-panel r5-panel" id="counter-loan-panel">
+          <div class="p2p-loan-header" onclick="document.getElementById('counter-loan-body').classList.toggle('hidden')">
+            <span class="p2p-loan-title">&#x1F4B0; Counter-Loan (R5)</span>
+            <span class="loan-toggle">&#x25BC;</span>
+          </div>
+          <div id="counter-loan-body" class="p2p-loan-body hidden">
+            <div id="counter-loan-section"></div>
+          </div>
+        </div>
+
+        <!-- R5+ Shark Negotiator -->
+        <div class="p2p-loan-panel r5-panel" id="negotiator-panel">
+          <div class="p2p-loan-header" onclick="document.getElementById('negotiator-body').classList.toggle('hidden')">
+            <span class="p2p-loan-title">&#x1F91D; Shark Negotiator (R5)</span>
+            <span class="loan-toggle">&#x25BC;</span>
+          </div>
+          <div id="negotiator-body" class="p2p-loan-body hidden">
+            <div id="negotiator-section"></div>
+          </div>
+        </div>
+
+        <!-- R5+ Shark Black Market -->
+        <div class="p2p-loan-panel r5-panel" id="black-market-panel">
+          <div class="p2p-loan-header" onclick="document.getElementById('black-market-body').classList.toggle('hidden')">
+            <span class="p2p-loan-title">&#x1F574; Shark's Black Market (R5)</span>
+            <span class="loan-toggle">&#x25BC;</span>
+          </div>
+          <div id="black-market-body" class="p2p-loan-body hidden">
+            <div id="black-market-section"></div>
+          </div>
+        </div>
+
         <button class="nav-casino-btn" onclick="App.showScreen('casino')">Casino Games &rarr;</button>
       </section>
 
@@ -632,6 +665,8 @@
             <button class="stock-tab-btn active" data-tab="market" onclick="Stocks.setTab('market')">Market</button>
             <button class="stock-tab-btn" data-tab="portfolio" onclick="Stocks.setTab('portfolio')">Portfolio</button>
             <button class="stock-tab-btn" data-tab="news" onclick="Stocks.setTab('news')">News</button>
+            <button class="stock-tab-btn stock-tab-r5 hidden" data-tab="shorts" onclick="Stocks.setTab('shorts')">Shorts</button>
+            <button class="stock-tab-btn stock-tab-r5 hidden" data-tab="bounties" onclick="Stocks.setTab('bounties')">Bounties</button>
           </div>
           <div id="stocks-content"></div>
         </div>

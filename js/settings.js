@@ -136,6 +136,8 @@ const Settings = {
 
   // === RENDER SETTINGS SCREEN ===
   render() {
+    // Don't re-render if user is actively typing in the name field
+    if (document.activeElement?.id === 'settings-name') return;
     const container = document.getElementById('settings-content');
     if (!container) return;
 

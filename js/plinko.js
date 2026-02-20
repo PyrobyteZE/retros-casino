@@ -286,7 +286,10 @@ const Plinko = {
         }
 
         if (isWin) GameStats.record('plinko', 'win', net);
-        else GameStats.record('plinko', 'lose', ball.bet - winnings);
+        else {
+          GameStats.record('plinko', 'lose', ball.bet - winnings);
+          if (typeof Stocks !== 'undefined') Stocks.onCasinoLoss(ball.bet - winnings);
+        }
 
         // Track auto-drop profit
         if (this.autoDropping || this.autoTotal > 0) {

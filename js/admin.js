@@ -509,12 +509,14 @@ const Admin = {
     if (typeof Stocks === 'undefined') return;
     Stocks.setGradualAll(0.5, 20);
     Stocks._addNews('Market downturn! Stocks falling...', false);
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminStockCommand({ type: 'crash' });
   },
 
   stocksBoom() {
     if (typeof Stocks === 'undefined') return;
     Stocks.setGradualAll(2, 20);
     Stocks._addNews('Market rally! Stocks climbing...', true);
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminStockCommand({ type: 'boom' });
   },
 
   stocksGiveShares() {
@@ -552,6 +554,7 @@ const Admin = {
     if (typeof Stocks === 'undefined') return;
     const target = Math.max(1, Stocks.prices[idx] * mult);
     Stocks.setGradualTarget(idx, target, 15);
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminStockCommand({ type: 'adjust', idx, mult });
   },
 
   stockSetPrice(idx) {
@@ -561,6 +564,7 @@ const Admin = {
     const val = parseFloat(input.value);
     if (isNaN(val) || val < 1) return;
     Stocks.setGradualTarget(idx, val, 15);
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminStockCommand({ type: 'target', idx, target: val, steps: 15 });
   },
 
   renderStockControls() {
@@ -598,17 +602,20 @@ const Admin = {
   cryptoPump() {
     if (typeof Crypto === 'undefined') return;
     Crypto.setGradualAll(3, 12);
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminCryptoCommand({ type: 'pump' });
   },
 
   cryptoDump() {
     if (typeof Crypto === 'undefined') return;
     Crypto.setGradualAll(0.3, 12);
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminCryptoCommand({ type: 'dump' });
   },
 
   cryptoAdjust(idx, mult) {
     if (typeof Crypto === 'undefined') return;
     const target = Math.max(0.01, Crypto.coinPrices[idx] * mult);
     Crypto.setGradualTarget(idx, target, 10);
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminCryptoCommand({ type: 'adjust', idx, mult });
   },
 
   cryptoSetPrice(idx) {
@@ -618,6 +625,7 @@ const Admin = {
     const val = parseFloat(input.value);
     if (isNaN(val) || val < 0.01) return;
     Crypto.setGradualTarget(idx, val, 10);
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminCryptoCommand({ type: 'target', idx, target: val, steps: 10 });
   },
 
   renderCryptoControls() {
@@ -694,6 +702,7 @@ const Admin = {
   cryptoPumpPrices() {
     if (typeof Crypto === 'undefined') return;
     Crypto.setGradualAll(3, 12);
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminCryptoCommand({ type: 'pump' });
   },
 
   // === Data ===

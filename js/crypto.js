@@ -326,6 +326,29 @@ const Crypto = {
     }
   },
 
+  applyAdminCommand(cmd) {
+    if (!cmd || !cmd.type) return;
+    if (!this._priceTargets.length) this._priceTargets = this.coins.map(() => null);
+    switch (cmd.type) {
+      case 'target':
+        if (cmd.idx >= 0 && cmd.idx < this.coins.length) {
+          this.setGradualTarget(cmd.idx, cmd.target, cmd.steps || 10);
+        }
+        break;
+      case 'adjust':
+        if (cmd.idx >= 0 && cmd.idx < this.coins.length) {
+          this.setGradualTarget(cmd.idx, Math.max(0.01, this.coinPrices[cmd.idx] * cmd.mult), 10);
+        }
+        break;
+      case 'pump':
+        this.setGradualAll(3, 12);
+        break;
+      case 'dump':
+        this.setGradualAll(0.3, 12);
+        break;
+    }
+  },
+
   // === Exchange ===
   buyCoin(symbol, cashAmount) {
     const idx = this.coins.findIndex(c => c.symbol === symbol);

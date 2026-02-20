@@ -24,6 +24,24 @@ const Loans = {
   _bargainDiscount: 0, // accumulated interest discount from bargaining
   _pendingLoanAmount: 0,
 
+  // Shark Negotiator (R5+): one-time 10% interest reduction
+  _negotiatorPurchased: false,
+  _interestReduction: 0,
+
+  // Counter-Loan (R5+): lend money to the shark
+  _counterLoan: { amount: 0, startedAt: 0, lastPaidAt: 0, totalEarned: 0 },
+  _counterLoanTimer: null,
+  _counterLoanSkipMessages: [
+    'The shark forgot his wallet',
+    'The shark is at the dentist (those teeth aren\'t cheap)',
+    'The shark is "in a meeting"',
+    'The shark\'s kid ate the payment slip',
+    'Connection error: shark offline',
+  ],
+
+  // Rigged Deck (R5+): consumable from shark's black market
+  _riggedDecks: { blackjack: 0, coinflip: 0 },
+
   // Shark dialogue lines
   _sharkLines: {
     scummy: [
@@ -75,6 +93,8 @@ const Loans = {
     this.startInterest();
     this.loadPlayerLoans();
     this.startPlayerLoanInterest();
+    // Restart counter-loan timer if one was active
+    if (this._counterLoan.amount > 0) this._startCounterLoanTimer();
     // Close P2P dropdown on outside click
     document.addEventListener('click', e => {
       const combo = document.querySelector('.p2p-name-combo');
@@ -213,6 +233,10 @@ const Loans = {
       if (this._bargainDiscount > 0) {
         rate = Math.max(0.01, rate - this._bargainDiscount / 100);
       }
+      // Apply negotiator reduction
+      if (this._interestReduction > 0) {
+        rate = rate * (1 - this._interestReduction);
+      }
       const interest = Math.max(0.01, this.debt * rate);
       this.debt = App.safeAdd(this.debt, interest);
 
@@ -260,6 +284,7 @@ const Loans = {
       debtDisplay.textContent = App.formatMoney(this.debt);
       let effectiveRate = this.getInterestPercent();
       if (this._bargainDiscount > 0) effectiveRate = Math.max(1, effectiveRate - this._bargainDiscount);
+      if (this._interestReduction > 0) effectiveRate = Math.max(1, Math.round(effectiveRate * (1 - this._interestReduction)));
       interestDisplay.textContent = effectiveRate + '% / min';
       paySection.classList.remove('hidden');
 
@@ -300,6 +325,17 @@ const Loans = {
     }
 
     this.renderLoanButtons();
+
+    // R5 panels visibility
+    const r5 = (App.rebirth || 0) >= 5;
+    document.querySelectorAll('.r5-panel').forEach(el => {
+      el.classList.toggle('hidden', !r5);
+    });
+    if (r5) {
+      this._renderCounterLoanSection();
+      this._renderNegotiatorSection();
+      this._renderBlackMarketSection();
+    }
 
     // Loan lock warning (after reckoning loss)
     const lockWarn = document.getElementById('loan-lock-warning');
@@ -347,7 +383,7 @@ const Loans = {
       return;
     }
 
-    const myNameLower = (App.playerName || '').toLowerCase();
+    const myNameLower = (typeof Settings !== 'undefined' ? Settings.profile.name : '').toLowerCase();
     const pending = loans.filter(([, l]) => l.status === 'pending' && l.borrowerNameLower === myNameLower);
     const borrowed = loans.filter(([, l]) => l.status === 'active' && l.borrowerId === uid);
     const lent = loans.filter(([, l]) => l.lenderId === uid && (l.status === 'active' || l.status === 'pending'));
@@ -836,7 +872,7 @@ const Loans = {
     });
 
     // Listen for pending offers by my name
-    const myName = (App.playerName || '').toLowerCase();
+    const myName = (typeof Settings !== 'undefined' ? Settings.profile.name : '').toLowerCase();
     if (myName) {
       db.ref('playerLoans').orderByChild('borrowerNameLower').equalTo(myName).on('value', snap => {
         const loans = snap.val() || {};
@@ -910,7 +946,7 @@ const Loans = {
     if (!amount || amount < 1) { alert('Enter a valid loan amount.'); return; }
     if (amount > App.balance) { alert('You don\'t have enough money.'); return; }
     if (rate < 1 || rate > 100) { alert('Interest rate must be 1-100%.'); return; }
-    if (borrowerName.toLowerCase() === (App.playerName || '').toLowerCase()) {
+    if (borrowerName.toLowerCase() === (typeof Settings !== 'undefined' ? Settings.profile.name : '').toLowerCase()) {
       alert('You can\'t loan to yourself.'); return;
     }
 
@@ -919,7 +955,7 @@ const Loans = {
     const loanRef = db.ref('playerLoans').push();
     loanRef.set({
       lenderId: uid,
-      lenderName: App.playerName || 'Unknown',
+      lenderName: (typeof Settings !== 'undefined' ? Settings.profile.name : null) || 'Unknown',
       borrowerName,
       borrowerNameLower: borrowerName.toLowerCase(),
       borrowerId: this._p2pTargetUid || null,
@@ -995,7 +1031,7 @@ const Loans = {
     db.ref('playerLoanPayments/' + loan.lenderId).push({
       amount: payAmount,
       loanId,
-      borrowerName: App.playerName || 'Unknown',
+      borrowerName: (typeof Settings !== 'undefined' ? Settings.profile.name : null) || 'Unknown',
       timestamp: Date.now(),
     });
 
@@ -1014,6 +1050,182 @@ const Loans = {
     }
   },
 
+  // ============ COUNTER-LOAN (R5+) ============
+
+  lendToShark(amount) {
+    const maxLend = 50000;
+    if ((App.rebirth || 0) < 5) { alert('Requires Rebirth 5'); return; }
+    if (!amount || amount < 1) { alert('Enter a valid amount.'); return; }
+    if (amount > maxLend) { alert('Max lend: ' + App.formatMoney(maxLend)); return; }
+    if (amount > App.balance) { alert('Not enough money.'); return; }
+    if (this._counterLoan.amount > 0) { alert('You already have an active counter-loan. Recall it first.'); return; }
+    App.addBalance(-amount);
+    this._counterLoan = { amount, startedAt: Date.now(), lastPaidAt: Date.now(), totalEarned: 0 };
+    this._startCounterLoanTimer();
+    App.save();
+    this._renderCounterLoanSection();
+  },
+
+  _startCounterLoanTimer() {
+    if (this._counterLoanTimer) clearInterval(this._counterLoanTimer);
+    if (this._counterLoan.amount <= 0) return;
+    this._counterLoanTimer = setInterval(() => this._collectSharkPayment(), 60000);
+  },
+
+  _collectSharkPayment() {
+    if (this._counterLoan.amount <= 0) {
+      clearInterval(this._counterLoanTimer);
+      this._counterLoanTimer = null;
+      return;
+    }
+    const roll = Math.random();
+    const toast = document.createElement('div');
+    toast.className = 'insider-tip-toast';
+    if (roll < 0.80) {
+      const payment = this._counterLoan.amount * 0.08;
+      App.addBalance(payment);
+      this._counterLoan.totalEarned += payment;
+      this._counterLoan.lastPaidAt = Date.now();
+      toast.textContent = '\u{1F4B0} Shark paid: +' + App.formatMoney(payment) + ' (Counter-Loan)';
+      toast.style.background = 'var(--green)';
+    } else {
+      const msg = this._counterLoanSkipMessages[Math.floor(Math.random() * this._counterLoanSkipMessages.length)];
+      toast.textContent = '\u{1F988} ' + msg;
+      toast.style.background = 'var(--bg3)';
+    }
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
+    App.save();
+    this._renderCounterLoanSection();
+  },
+
+  recallCounterLoan() {
+    if (this._counterLoan.amount <= 0) return;
+    App.addBalance(this._counterLoan.amount);
+    const toast = document.createElement('div');
+    toast.className = 'insider-tip-toast';
+    toast.textContent = '\u{1F4B5} Counter-loan recalled: +' + App.formatMoney(this._counterLoan.amount) + ' returned';
+    toast.style.background = 'var(--green)';
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+    this._counterLoan = { amount: 0, startedAt: 0, lastPaidAt: 0, totalEarned: 0 };
+    if (this._counterLoanTimer) { clearInterval(this._counterLoanTimer); this._counterLoanTimer = null; }
+    App.save();
+    this._renderCounterLoanSection();
+  },
+
+  _renderCounterLoanSection() {
+    const el = document.getElementById('counter-loan-section');
+    if (!el) return;
+    const cl = this._counterLoan;
+    if (cl.amount > 0) {
+      const elapsed = Math.floor((Date.now() - cl.startedAt) / 60000);
+      el.innerHTML = `<div class="counter-loan-active">
+        <div class="cl-stat"><span>Lent:</span><strong>${App.formatMoney(cl.amount)}</strong></div>
+        <div class="cl-stat"><span>Earned:</span><strong class="stock-up">+${App.formatMoney(cl.totalEarned)}</strong></div>
+        <div class="cl-stat"><span>Time:</span><span>${elapsed}m ago</span></div>
+        <div class="cl-note">Shark pays 8%/min (may skip)</div>
+        <button class="loan-btn" onclick="Loans.recallCounterLoan()">Recall Principal</button>
+      </div>`;
+    } else {
+      el.innerHTML = `<div class="counter-loan-form">
+        <div class="cl-note">Lend up to $50,000 to the shark — earns 8%/min (80% chance each minute)</div>
+        <div class="loan-custom-row">
+          <input type="number" id="counter-loan-amount" class="loan-custom-input" placeholder="Amount to lend..." max="50000">
+          <button class="loan-custom-btn" onclick="Loans.lendToShark(parseFloat(document.getElementById('counter-loan-amount').value))">Lend</button>
+        </div>
+      </div>`;
+    }
+  },
+
+  // ============ SHARK NEGOTIATOR (R5+) ============
+
+  buyNegotiator() {
+    if ((App.rebirth || 0) < 5) { alert('Requires Rebirth 5'); return; }
+    if (this._negotiatorPurchased) return;
+    const cost = Math.floor(this.getMaxLoan() * 0.05);
+    if (App.balance < cost) { alert('Need ' + App.formatMoney(cost)); return; }
+    App.addBalance(-cost);
+    this._negotiatorPurchased = true;
+    this._interestReduction = 0.10;
+    App.save();
+    this._renderNegotiatorSection();
+    const toast = document.createElement('div');
+    toast.className = 'insider-tip-toast';
+    toast.textContent = '\u{1F91D} Negotiator hired! Interest permanently -10%';
+    toast.style.background = 'var(--green)';
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
+  },
+
+  _renderNegotiatorSection() {
+    const el = document.getElementById('negotiator-section');
+    if (!el) return;
+    const cost = Math.floor(this.getMaxLoan() * 0.05);
+    if (this._negotiatorPurchased) {
+      el.innerHTML = `<div class="negotiator-purchased">
+        \u{1F91D} Shark Negotiator active — interest -10% <span style="color:var(--green)">✓ Purchased</span>
+      </div>`;
+    } else {
+      el.innerHTML = `<div class="negotiator-form">
+        <div class="cl-note">Hire a negotiator to permanently reduce shark interest by 10%.</div>
+        <button class="loan-btn ${App.balance >= cost ? '' : 'loan-locked'}" onclick="Loans.buyNegotiator()">
+          Hire Negotiator — ${App.formatMoney(cost)}
+        </button>
+      </div>`;
+    }
+  },
+
+  // ============ RIGGED DECK (R5+) ============
+
+  buyRiggedDeck(type) {
+    if ((App.rebirth || 0) < 5) { alert('Requires Rebirth 5'); return; }
+    const cost = 25000;
+    if (App.balance < cost) { alert('Need ' + App.formatMoney(cost)); return; }
+    if (!this._riggedDecks[type] && this._riggedDecks[type] !== 0) { alert('Unknown deck type'); return; }
+    App.addBalance(-cost);
+    this._riggedDecks[type] += 3;
+    App.save();
+    this._renderBlackMarketSection();
+    const toast = document.createElement('div');
+    toast.className = 'insider-tip-toast';
+    toast.textContent = '\u{1F0CF} Rigged ' + (type === 'blackjack' ? 'Blackjack Deck' : 'Coin') + ' — 3 uses added!';
+    toast.style.background = '#ff9100';
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  },
+
+  useRiggedDeck(type) {
+    if (!this._riggedDecks[type] || this._riggedDecks[type] <= 0) return false;
+    this._riggedDecks[type]--;
+    App.save();
+    return true;
+  },
+
+  _renderBlackMarketSection() {
+    const el = document.getElementById('black-market-section');
+    if (!el) return;
+    const bjUses = this._riggedDecks.blackjack;
+    const cfUses = this._riggedDecks.coinflip;
+    el.innerHTML = `
+      <div class="bm-item">
+        <div class="bm-info">
+          <span class="bm-name">\u{1F0CF} Rigged Blackjack Deck</span>
+          <span class="bm-desc">Dealer hits to 18 instead of 17 (3 uses)</span>
+          <span class="bm-uses">${bjUses} use${bjUses !== 1 ? 's' : ''} remaining</span>
+        </div>
+        <button class="loan-btn ${App.balance >= 25000 ? '' : 'loan-locked'}" onclick="Loans.buyRiggedDeck('blackjack')">$25,000</button>
+      </div>
+      <div class="bm-item">
+        <div class="bm-info">
+          <span class="bm-name">\u{1FA99} Rigged Coin</span>
+          <span class="bm-desc">+5% win chance next flip (3 uses)</span>
+          <span class="bm-uses">${cfUses} use${cfUses !== 1 ? 's' : ''} remaining</span>
+        </div>
+        <button class="loan-btn ${App.balance >= 25000 ? '' : 'loan-locked'}" onclick="Loans.buyRiggedDeck('coinflip')">$25,000</button>
+      </div>`;
+  },
+
   // ============ SAVE / LOAD ============
 
   getSaveData() {
@@ -1023,6 +1235,11 @@ const Loans = {
       bargainDiscount: this._bargainDiscount,
       duelCooldown: this.duelCooldown,
       reckoningRebirthThreshold: this._reckoningRebirthThreshold,
+      reckoningActive: this._reckoningActive,
+      counterLoan: this._counterLoan,
+      negotiatorPurchased: this._negotiatorPurchased,
+      interestReduction: this._interestReduction,
+      riggedDecks: this._riggedDecks,
     };
   },
 
@@ -1033,5 +1250,17 @@ const Loans = {
     this._bargainDiscount = data.bargainDiscount || 0;
     this.duelCooldown = data.duelCooldown || 0;
     this._reckoningRebirthThreshold = data.reckoningRebirthThreshold || 0;
+    if (data.reckoningActive) {
+      this._reckoningActive = true;
+      // Re-show reckoning overlay on next tick (DOM may not be ready yet)
+      setTimeout(() => {
+        const overlay = document.getElementById('shark-reckoning');
+        if (overlay) overlay.classList.remove('hidden');
+      }, 500);
+    }
+    if (data.counterLoan) this._counterLoan = Object.assign(this._counterLoan, data.counterLoan);
+    if (data.negotiatorPurchased) this._negotiatorPurchased = true;
+    if (data.interestReduction) this._interestReduction = data.interestReduction;
+    if (data.riggedDecks) this._riggedDecks = Object.assign(this._riggedDecks, data.riggedDecks);
   },
 };

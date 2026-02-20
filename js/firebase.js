@@ -37,6 +37,8 @@ const Firebase = {
   _isCryptoAuthority: false,
   _stockAuthorityInterval: null,
   _cryptoAuthorityInterval: null,
+  _lastStockCmdTs: 0,
+  _lastCryptoCmdTs: 0,
 
   // === INIT ===
   init() {
@@ -147,6 +149,11 @@ const Firebase = {
     // Initial push after auth (no throttle on first push)
     this.lastLeaderboardPush = 0;
     this.pushLeaderboard();
+    // Init Firebase-dependent features in other modules
+    if (typeof Stocks !== 'undefined') Stocks._initFirebaseFeatures();
+    if (typeof Loans !== 'undefined' && Loans._counterLoan && Loans._counterLoan.amount > 0) {
+      Loans._startCounterLoanTimer();
+    }
   },
 
   // === PRESENCE ===
@@ -751,6 +758,13 @@ const Firebase = {
         this._isStockAuthority = false;
       }
     });
+    // Admin commands — all tabs apply immediately regardless of authority
+    this.db.ref('stockPrices/adminCommand').on('value', snap => {
+      const cmd = snap.val();
+      if (!cmd || !cmd.ts || cmd.ts <= this._lastStockCmdTs) return;
+      this._lastStockCmdTs = cmd.ts;
+      if (typeof Stocks !== 'undefined') Stocks.applyAdminCommand(cmd);
+    });
   },
 
   // === CRYPTO PRICE SYNC ===
@@ -800,6 +814,58 @@ const Firebase = {
         this._isCryptoAuthority = false;
       }
     });
+    // Admin commands — all tabs apply immediately regardless of authority
+    this.db.ref('cryptoPrices/adminCommand').on('value', snap => {
+      const cmd = snap.val();
+      if (!cmd || !cmd.ts || cmd.ts <= this._lastCryptoCmdTs) return;
+      this._lastCryptoCmdTs = cmd.ts;
+      if (typeof Crypto !== 'undefined') Crypto.applyAdminCommand(cmd);
+    });
+  },
+
+  // === BOUNTY BOARD ===
+  listenBounties(callback) {
+    if (!this.isOnline()) return;
+    this.db.ref('bounties').on('value', snap => {
+      callback(snap.val() || {});
+    });
+  },
+
+  postBounty(id, data) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('bounties/' + id).set(data);
+  },
+
+  claimBounty(id) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('bounties/' + id).remove();
+  },
+
+  refundExpiredBounty(id, posterId, amount) {
+    if (!this.isOnline()) return;
+    this.db.ref('bounties/' + id).remove();
+    // Credit refund to poster via leaderboard credit queue
+    this.db.ref('bountyRefunds/' + posterId).push({ amount, bountyId: id, timestamp: Date.now() });
+  },
+
+  listenBountyRefunds(uid, callback) {
+    if (!this.isOnline()) return;
+    this.db.ref('bountyRefunds/' + uid).on('child_added', snap => {
+      const data = snap.val();
+      if (data) { callback(data); snap.ref.remove(); }
+    });
+  },
+
+  pushAdminStockCommand(cmd) {
+    if (!this.isOnline()) return;
+    this.db.ref('stockPrices/adminCommand').set({ ...cmd, ts: Date.now() })
+      .catch(err => console.error('Firebase adminStockCommand write error:', err));
+  },
+
+  pushAdminCryptoCommand(cmd) {
+    if (!this.isOnline()) return;
+    this.db.ref('cryptoPrices/adminCommand').set({ ...cmd, ts: Date.now() })
+      .catch(err => console.error('Firebase adminCryptoCommand write error:', err));
   },
 
   // === NAME REGISTRY ===

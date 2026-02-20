@@ -151,6 +151,7 @@ const Crash = {
     this.drawGraph(true);
     this.showResult('Crashed at ' + this.crashPoint.toFixed(2) + 'x \u2014 Lost ' + App.formatMoney(this.currentBet), 'lose');
     GameStats.record('crash', 'lose', this.currentBet);
+    if (typeof Stocks !== 'undefined') Stocks.onCasinoLoss(this.currentBet);
 
     this.history.unshift({ mult: parseFloat(this.crashPoint.toFixed(2)), crashed: true });
     if (this.history.length > 20) this.history.length = 20;

@@ -131,7 +131,8 @@ const Blackjack = {
   stand() {
     if (!this.gameActive) return;
 
-    while (this.handValue(this.dealerHand) < 17) {
+    const dealerStand = (typeof Loans !== 'undefined' && Loans.useRiggedDeck('blackjack')) ? 18 : 17;
+    while (this.handValue(this.dealerHand) < dealerStand) {
       this.dealerHand.push(this.drawCard());
     }
     this.renderHands(false);

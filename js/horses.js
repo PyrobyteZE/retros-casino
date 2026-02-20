@@ -213,6 +213,7 @@ const Horses = {
       resultEl.textContent = horse.name + ' wins! You lost ' + App.formatMoney(bet);
       resultEl.className = 'game-result lose';
       GameStats.record('horses', 'lose', bet);
+      if (typeof Stocks !== 'undefined') Stocks.onCasinoLoss(bet);
     }
 
     this.renderHorseButtons();

@@ -285,8 +285,11 @@ const CoinFlip = {
       const shouldWin = Rig.shouldWin();
       result = shouldWin ? choice : (choice === 'heads' ? 'tails' : 'heads');
     } else {
-      // Use lucky coin chance
-      const winChance = this.getWinChance() / 100;
+      // Use lucky coin chance (rigged coin adds +5%)
+      let winChance = this.getWinChance() / 100;
+      if (typeof Loans !== 'undefined' && Loans.useRiggedDeck('coinflip')) {
+        winChance = Math.min(0.95, winChance + 0.05);
+      }
       result = Math.random() < winChance ? choice : (choice === 'heads' ? 'tails' : 'heads');
     }
     const won = choice === result;
