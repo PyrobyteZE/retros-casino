@@ -84,6 +84,7 @@ const Stocks = {
     });
     setInterval(() => this._expireBounties(), 300000);
     this._restoreShorts();
+    if (typeof Companies !== 'undefined') Companies.init();
   },
 
   startTick() {
@@ -211,7 +212,26 @@ const Stocks = {
     }
 
     if (isAuthority) Firebase.pushStockPrices(this.prices.slice());
+    if (isAuthority && typeof Companies !== 'undefined') Companies.tickPrices();
     if (App.currentScreen === 'stocks') this.render();
+    this.updateTicker();
+  },
+
+  updateTicker() {
+    const el = document.getElementById('stock-ticker');
+    if (!el || el.classList.contains('hidden')) return;
+    const items = this.stocks.map((s, i) => {
+      const price = this.prices[i];
+      const hist = this.priceHistory[i];
+      const prev = hist.length >= 2 ? hist[hist.length - 2] : price;
+      const pct = ((price - prev) / prev * 100);
+      const dir = pct > 0.001 ? 'up' : pct < -0.001 ? 'dn' : 'flat';
+      const arrow = dir === 'up' ? '\u25B2' : dir === 'dn' ? '\u25BC' : '\u25A0';
+      const pctStr = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+      return `<span class="ticker-item ticker-${dir}">${s.symbol} $${price < 10 ? price.toFixed(2) : Math.round(price)} ${arrow}${pctStr}</span>`;
+    }).join('<span class="ticker-sep"> | </span>');
+    // Duplicate content for seamless looping animation
+    el.innerHTML = `<div class="ticker-track">${items}<span class="ticker-sep">&nbsp;&nbsp;&nbsp;</span>${items}</div>`;
   },
 
   // Funny SHARK interest-rate news

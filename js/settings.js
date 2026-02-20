@@ -23,7 +23,8 @@ const Settings = {
     numberFormat: 'standard',
     confirmBets: false,
     showStreaks: true,
-    fastAnimations: false
+    fastAnimations: false,
+    showStockTicker: false,
   },
 
   init() {
@@ -120,6 +121,10 @@ const Settings = {
     if (banner && !this.options.showStreaks) {
       banner.classList.add('hidden');
     }
+
+    // Stock ticker
+    const ticker = document.getElementById('stock-ticker');
+    if (ticker) ticker.classList.toggle('hidden', !this.options.showStockTicker);
   },
 
   // === FORMAT MONEY OVERRIDE ===
@@ -233,6 +238,14 @@ const Settings = {
             <input type="checkbox" ${this.options.fastAnimations ? 'checked' : ''} onchange="Settings.setOption('fastAnimations', this.checked)">
             <span class="toggle-slider"></span>
           </label>
+        </div>
+        <div class="settings-row">
+          <label>Stock Ticker:</label>
+          <label class="toggle-switch">
+            <input type="checkbox" ${this.options.showStockTicker ? 'checked' : ''} onchange="Settings.setOption('showStockTicker', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="rig-hint">Live price bar</span>
         </div>
       </div>
     `;

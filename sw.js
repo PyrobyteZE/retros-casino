@@ -1,4 +1,4 @@
-const CACHE_NAME = 'retros-casino-v24';
+const CACHE_NAME = 'retros-casino-v25';
 const ASSETS = [
   '/',
   '/index.html',
@@ -20,6 +20,7 @@ const ASSETS = [
   '/js/pets.js',
   '/js/stocks.js',
   '/js/crypto.js',
+  '/js/companies.js',
   '/js/firebase.js',
   '/js/admin.js',
   '/manifest.json'

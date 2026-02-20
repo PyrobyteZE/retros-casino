@@ -135,6 +135,8 @@ const Admin = {
   adminName: 'RetroByte',
   _consoleUnlocked: false,
 
+  activeTab: 'cheats',
+
   isAdmin() {
     return this.adminMode && (this._consoleUnlocked || (typeof Settings !== 'undefined' && Settings.profile.name === this.adminName));
   },
@@ -190,27 +192,271 @@ const Admin = {
   },
 
   open() {
-    document.getElementById('admin-balance').value = Math.floor(App.balance);
-    document.getElementById('admin-click-level').value = App.upgrades.clickValue || 0;
-    document.getElementById('admin-auto-level').value = App.upgrades.autoClicker || 0;
-    document.getElementById('admin-rebirth').value = App.rebirth || 0;
-    document.getElementById('admin-earned').value = Math.floor(App.totalEarned);
-    document.getElementById('admin-clicks').value = App.totalClicks;
-    document.getElementById('admin-debt').value = Math.floor(Loans.debt);
-    document.getElementById('admin-godmode').checked = this.godMode;
-    document.getElementById('admin-speed').value = this.speedMultiplier;
-    document.getElementById('admin-start-bal').value = this.startingBalance;
-    document.getElementById('rig-toggle').checked = Rig.enabled;
-    document.getElementById('rig-winrate').value = Rig.winRate;
-    document.getElementById('rig-winrate-display').textContent = Rig.winRate + '%';
     document.getElementById('admin-badge-toggle').textContent = this.badgeHidden ? 'Show Badge' : 'Hide Badge';
-    this.updateRigStatus();
-    this.renderHistory();
-    this.renderStockControls();
-    this.renderCryptoControls();
-    this.renderAdminLeaderboard();
+    this.setTab(this.activeTab);
     document.getElementById('admin-overlay').classList.add('open');
     document.getElementById('admin-overlay-backdrop').classList.add('open');
+  },
+
+  setTab(tab) {
+    this.activeTab = tab;
+    document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+    const content = document.getElementById('admin-tab-content');
+    if (!content) return;
+    if (tab === 'cheats') content.innerHTML = this._renderCheatsTab();
+    else if (tab === 'troll') content.innerHTML = this._renderTrollTab();
+    else if (tab === 'economy') content.innerHTML = this._renderEconomyTab();
+    else if (tab === 'player') content.innerHTML = this._renderPlayerTab();
+    else if (tab === 'market') content.innerHTML = this._renderMarketTab();
+    else if (tab === 'data') content.innerHTML = this._renderDataTab();
+    this._populateTabValues(tab);
+  },
+
+  _populateTabValues(tab) {
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+    const check = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val; };
+    if (tab === 'cheats') {
+      check('admin-godmode', this.godMode);
+      set('admin-speed', this.speedMultiplier);
+      set('admin-start-bal', this.startingBalance);
+      check('rig-toggle', Rig.enabled);
+      set('rig-winrate', Rig.winRate);
+      const rd = document.getElementById('rig-winrate-display');
+      if (rd) rd.textContent = Rig.winRate + '%';
+      this.updateRigStatus();
+    } else if (tab === 'economy') {
+      set('admin-balance', Math.floor(App.balance));
+      set('admin-debt', Math.floor(Loans.debt));
+    } else if (tab === 'player') {
+      set('admin-rebirth', App.rebirth || 0);
+      set('admin-click-level', App.upgrades.clickValue || 0);
+      set('admin-auto-level', App.upgrades.autoClicker || 0);
+      set('admin-earned', Math.floor(App.totalEarned));
+      set('admin-clicks', App.totalClicks);
+    } else if (tab === 'market') {
+      this.renderPlayerStockControls();
+      this.renderStockControls();
+      this.renderCryptoControls();
+    } else if (tab === 'data') {
+      this.renderHistory();
+      this.renderAdminLeaderboard();
+    }
+  },
+
+  _renderCheatsTab() {
+    return `
+      <div class="admin-section">
+        <h3>Cheats</h3>
+        <div class="admin-row">
+          <label>God Mode:</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="admin-godmode" onchange="Admin.toggleGodMode()">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="rig-hint">Bets cost $0</span>
+        </div>
+        <div class="admin-row">
+          <label>Speed Multi:</label>
+          <select id="admin-speed" onchange="Admin.setSpeed()">
+            <option value="1">1x</option>
+            <option value="2">2x</option>
+            <option value="5">5x</option>
+            <option value="10">10x</option>
+            <option value="50">50x</option>
+          </select>
+          <span class="rig-hint">Auto-clicker speed</span>
+        </div>
+        <div class="admin-actions" style="margin-top:8px">
+          <button class="admin-btn win-btn" onclick="Admin.unlockAll()">Max Upgrades</button>
+          <button class="admin-btn win-btn" onclick="Admin.setStartBal()">Set Start $</button>
+          <input type="number" id="admin-start-bal" value="0.02" style="width:80px">
+        </div>
+      </div>
+      <div class="admin-section rig-section">
+        <h3>Global Rig</h3>
+        <div id="rig-status" class="rig-status">Disabled</div>
+        <div class="admin-row">
+          <label>Enable Rig:</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="rig-toggle" onchange="Admin.toggleRig()">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="admin-row">
+          <label>Win Rate:</label>
+          <input type="range" id="rig-winrate" min="0" max="100" value="50" oninput="Admin.setWinRate()">
+          <span id="rig-winrate-display" class="rig-pct">50%</span>
+        </div>
+        <div class="admin-quick-money">
+          <button onclick="Admin.forceNextWin()" style="border-color:#00e676;color:#00e676">Force Next Win</button>
+          <button onclick="Admin.forceNextLose()" style="border-color:#ff5252;color:#ff5252">Force Next Lose</button>
+        </div>
+      </div>
+    `;
+  },
+
+  _renderTrollTab() {
+    return `
+      <div class="admin-section troll-section">
+        <h3>Troll Friends</h3>
+        <div class="admin-actions">
+          <button class="admin-btn troll-btn" onclick="Admin.trollFakeBalance()">Fake $0 Balance</button>
+          <button class="admin-btn troll-btn" onclick="Admin.trollFakeReset()">Fake Data Wipe</button>
+          <button class="admin-btn troll-btn" onclick="Admin.trollFlipScreen()">Flip Screen</button>
+          <button class="admin-btn troll-btn" onclick="Admin.trollShake()">Earthquake</button>
+          <button class="admin-btn troll-btn" onclick="Admin.trollRainbow()">Rainbow Mode</button>
+          <button class="admin-btn troll-btn" onclick="Admin.trollHideBalance()">Hide Balance</button>
+          <button class="admin-btn troll-btn" onclick="Admin.trollBlur()">Blur Screen</button>
+        </div>
+      </div>
+    `;
+  },
+
+  _renderEconomyTab() {
+    return `
+      <div class="admin-section">
+        <h3>Balance</h3>
+        <div class="admin-row">
+          <input type="number" id="admin-balance" placeholder="Amount">
+          <button onclick="Admin.setBalance()">Set</button>
+          <button onclick="Admin.addMoney()">Add</button>
+        </div>
+        <div class="admin-quick-money">
+          <button onclick="Admin.quickAdd(1000)">+$1K</button>
+          <button onclick="Admin.quickAdd(10000)">+$10K</button>
+          <button onclick="Admin.quickAdd(100000)">+$100K</button>
+          <button onclick="Admin.quickAdd(1000000)">+$1M</button>
+          <button onclick="Admin.quickAdd(1000000000)">+$1B</button>
+        </div>
+      </div>
+      <div class="admin-section">
+        <h3>Loan Shark</h3>
+        <div class="admin-row">
+          <label>Current Debt:</label>
+          <input type="number" id="admin-debt" min="0" value="0">
+          <button onclick="Loans.debt=+document.getElementById('admin-debt').value||0;Loans.updateUI();Loans.updateDebtDisplay()">Set</button>
+        </div>
+        <div class="admin-actions" style="margin-top:8px">
+          <button class="admin-btn win-btn" onclick="Loans.debt=0;Loans.loanTime=0;Loans.stopInterest();Loans.updateUI();Loans.updateDebtDisplay()">Clear All Debt</button>
+        </div>
+      </div>
+    `;
+  },
+
+  _renderPlayerTab() {
+    return `
+      <div class="admin-section">
+        <h3>Rebirth & Upgrades</h3>
+        <div class="admin-row">
+          <label>Rebirth Level:</label>
+          <input type="number" id="admin-rebirth" min="0" value="0">
+          <button onclick="Admin.setRebirth()">Set</button>
+        </div>
+        <div class="admin-row">
+          <label>Click Value Lv:</label>
+          <input type="number" id="admin-click-level" min="0" value="0">
+          <button onclick="Admin.setClickLevel()">Set</button>
+        </div>
+        <div class="admin-row">
+          <label>Auto Clicker Lv:</label>
+          <input type="number" id="admin-auto-level" min="0" value="0">
+          <button onclick="Admin.setAutoLevel()">Set</button>
+        </div>
+      </div>
+      <div class="admin-section">
+        <h3>Stats</h3>
+        <div class="admin-row">
+          <label>Total Earned:</label>
+          <input type="number" id="admin-earned" min="0">
+          <button onclick="Admin.setEarned()">Set</button>
+        </div>
+        <div class="admin-row">
+          <label>Total Clicks:</label>
+          <input type="number" id="admin-clicks" min="0">
+          <button onclick="Admin.setClicks()">Set</button>
+        </div>
+      </div>
+    `;
+  },
+
+  _renderMarketTab() {
+    return `
+      <div class="admin-section">
+        <h3>Player Stocks</h3>
+        <div id="admin-player-stock-controls" class="admin-stock-controls"></div>
+      </div>
+      <div class="admin-section">
+        <h3>Stock Market</h3>
+        <div class="admin-actions">
+          <button class="admin-btn win-btn" onclick="Admin.stocksBoom()">Bull Run (+100%)</button>
+          <button class="admin-btn danger" onclick="Admin.stocksCrash()">Market Crash (-50%)</button>
+          <button class="admin-btn win-btn" onclick="Admin.stocksGiveShares()">+100 All Shares</button>
+          <button class="admin-btn" onclick="Admin.stocksResetPrices()">Reset Prices</button>
+          <button class="admin-btn danger" onclick="Admin.stocksResetPortfolio()">Clear Portfolio</button>
+        </div>
+        <div id="admin-stock-controls" class="admin-stock-controls"></div>
+        <div class="admin-news-input" style="margin-top:10px">
+          <h4 style="color:var(--green);margin:0 0 6px">Custom News (all players see this)</h4>
+          <div class="admin-row">
+            <input type="text" id="admin-stock-news" placeholder="Breaking: CEO caught eating crayons..." maxlength="200" style="flex:1">
+            <label style="display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap">
+              <input type="checkbox" id="admin-stock-news-good"> Good?
+            </label>
+            <button class="admin-btn win-btn" onclick="Admin.sendStockNews()" style="min-width:60px">Send</button>
+          </div>
+        </div>
+      </div>
+      <div class="admin-section">
+        <h3>Crypto Mining</h3>
+        <div class="admin-actions">
+          <button class="admin-btn win-btn" onclick="Admin.cryptoPump()">Pump All (3x)</button>
+          <button class="admin-btn danger" onclick="Admin.cryptoDump()">Dump All (-70%)</button>
+          <button class="admin-btn win-btn" onclick="Admin.cryptoGiveCoins()">+10 BTC +100 ETH +100K DOGE</button>
+          <button class="admin-btn win-btn" onclick="Admin.cryptoMaxRigs()">Max All Rigs</button>
+          <button class="admin-btn win-btn" onclick="Admin.cryptoMaxUpgrades()">Max Upgrades + Cooling</button>
+          <button class="admin-btn" onclick="Admin.cryptoResetHeat()">Reset Heat</button>
+          <button class="admin-btn danger" onclick="Admin.cryptoResetAll()">Reset All Crypto</button>
+        </div>
+        <div id="admin-crypto-controls" class="admin-stock-controls"></div>
+      </div>
+    `;
+  },
+
+  _renderDataTab() {
+    return `
+      <div class="admin-section">
+        <h3>Properties</h3>
+        <div class="admin-actions">
+          <button class="admin-btn win-btn" onclick="Properties.maxAll()">Max All Properties</button>
+          <button class="admin-btn danger" onclick="Properties.resetAll()">Reset Properties</button>
+        </div>
+      </div>
+      <div class="admin-section">
+        <h3>Leaderboard</h3>
+        <div class="admin-actions">
+          <button class="admin-btn" onclick="Admin.refreshLeaderboard()">Refresh</button>
+          <button class="admin-btn danger" onclick="Admin.cleanDuplicateNames()">Clean Dupes</button>
+        </div>
+        <div id="admin-lb-list" class="admin-lb-list"></div>
+      </div>
+      <div class="admin-section">
+        <h3>Game History</h3>
+        <div id="admin-history" class="admin-history">No games played yet.</div>
+        <button class="admin-btn" onclick="Admin.clearHistory()" style="margin-top:8px">Clear History</button>
+      </div>
+      <div class="admin-section">
+        <h3>Save Data</h3>
+        <div class="admin-actions">
+          <button class="admin-btn save" onclick="Admin.forceSave()">Force Save</button>
+          <button class="admin-btn danger" onclick="Admin.resetAll()">Reset All Data</button>
+          <button class="admin-btn" onclick="Admin.exportData()">Export Save</button>
+          <button class="admin-btn" onclick="Admin.importData()">Import Save</button>
+        </div>
+        <textarea id="admin-data" rows="4" placeholder="Paste save data here for import..."></textarea>
+      </div>
+    `;
   },
 
   close() {
@@ -432,7 +678,8 @@ const Admin = {
 
   quickAdd(amount) {
     App.addBalance(amount);
-    document.getElementById('admin-balance').value = Math.floor(App.balance);
+    const el = document.getElementById('admin-balance');
+    if (el) el.value = Math.floor(App.balance);
   },
 
   // === Upgrades ===
@@ -471,6 +718,7 @@ const Admin = {
   // === Game History ===
   renderHistory() {
     const container = document.getElementById('admin-history');
+    if (!container) return;
     if (GameStats.history.length === 0) {
       container.innerHTML = '<span style="color:#888">No games played yet.</span>';
       return;
@@ -590,6 +838,62 @@ const Admin = {
     });
     html += '</div>';
     container.innerHTML = html;
+  },
+
+  // === Player Stock Admin ===
+  renderPlayerStockControls() {
+    const container = document.getElementById('admin-player-stock-controls');
+    if (!container) return;
+    if (typeof Companies === 'undefined' || !Object.keys(Companies._allPlayerStocks).length) {
+      container.innerHTML = '<span style="color:#888;font-size:13px">No player stocks online yet.</span>';
+      return;
+    }
+    let html = '<div class="admin-stock-grid">';
+    Object.values(Companies._allPlayerStocks).forEach(s => {
+      const sym = s.symbol;
+      const price = s.price;
+      html += `<div class="admin-stock-row">
+        <span class="admin-stock-sym">${sym}</span>
+        <span class="admin-stock-price">${App.formatMoney(price)}</span>
+        <div class="admin-stock-btns">
+          <button class="rig-btn lose" onclick="Admin.playerStockAdjust('${sym}',0.5)">-50%</button>
+          <button class="rig-btn lose" onclick="Admin.playerStockAdjust('${sym}',0.8)">-20%</button>
+          <button class="rig-btn win" onclick="Admin.playerStockAdjust('${sym}',1.25)">+25%</button>
+          <button class="rig-btn win" onclick="Admin.playerStockAdjust('${sym}',2)">+100%</button>
+        </div>
+        <div class="admin-stock-set">
+          <input type="number" id="admin-pstock-price-${sym}" value="${Math.round(price)}" min="1" style="width:70px">
+          <button onclick="Admin.playerStockSetPrice('${sym}')">Set</button>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+  },
+
+  playerStockAdjust(sym, mult) {
+    if (typeof Companies === 'undefined' || !Companies._allPlayerStocks[sym]) return;
+    const s = Companies._allPlayerStocks[sym];
+    const target = Math.max(0.01, s.price * mult);
+    s.price = target;
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.pushPlayerStockPrices({ [sym]: target });
+    }
+    this.renderPlayerStockControls();
+  },
+
+  playerStockSetPrice(sym) {
+    const input = document.getElementById('admin-pstock-price-' + sym);
+    if (!input) return;
+    const val = parseFloat(input.value);
+    if (isNaN(val) || val < 0.01) return;
+    if (typeof Companies !== 'undefined' && Companies._allPlayerStocks[sym]) {
+      Companies._allPlayerStocks[sym].price = val;
+    }
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.pushPlayerStockPrices({ [sym]: val });
+    }
+    this.renderPlayerStockControls();
   },
 
   // === Crypto Admin ===

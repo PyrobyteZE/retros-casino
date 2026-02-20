@@ -23,6 +23,9 @@
       <button id="settings-btn" onclick="App.showScreen('settings')" title="Settings">&#x2699;&#xFE0F;</button>
     </header>
 
+    <!-- Stock Ticker -->
+    <div id="stock-ticker" class="stock-ticker hidden"></div>
+
     <!-- Win Streak Banner -->
     <div id="streak-banner" class="hidden">
       <span id="streak-icon"></span>
@@ -214,6 +217,10 @@
           <div class="casino-card" onclick="App.showScreen('leaderboard')">
             <div class="casino-icon">&#x1F3C6;</div>
             <div class="casino-name">Leaderboard</div>
+          </div>
+          <div class="casino-card" onclick="App.showScreen('companies')">
+            <div class="casino-icon">&#x1F3E2;</div>
+            <div class="casino-name">Companies</div>
           </div>
           <div class="casino-card" onclick="App.showScreen('settings')">
             <div class="casino-icon">&#x2699;&#xFE0F;</div>
@@ -694,6 +701,17 @@
         </div>
       </section>
 
+      <!-- Player Companies -->
+      <section id="screen-companies" class="screen">
+        <div class="game-container">
+          <div class="company-tabs">
+            <button class="company-tab-btn active" data-tab="browse" onclick="Companies.setTab('browse')">Browse</button>
+            <button class="company-tab-btn" data-tab="manage" onclick="Companies.setTab('manage')">My Company</button>
+          </div>
+          <div id="companies-content"></div>
+        </div>
+      </section>
+
       <!-- Settings -->
       <section id="screen-settings" class="screen">
         <div class="settings-panel">
@@ -714,214 +732,16 @@
           <button class="admin-overlay-close" onclick="Admin.close()">&times;</button>
         </div>
       </div>
+      <div class="admin-tabs">
+        <button class="admin-tab-btn active" data-tab="cheats" onclick="Admin.setTab('cheats')">Cheats</button>
+        <button class="admin-tab-btn" data-tab="troll" onclick="Admin.setTab('troll')">Troll</button>
+        <button class="admin-tab-btn" data-tab="economy" onclick="Admin.setTab('economy')">Economy</button>
+        <button class="admin-tab-btn" data-tab="player" onclick="Admin.setTab('player')">Player</button>
+        <button class="admin-tab-btn" data-tab="market" onclick="Admin.setTab('market')">Market</button>
+        <button class="admin-tab-btn" data-tab="data" onclick="Admin.setTab('data')">Data</button>
+      </div>
       <div class="admin-overlay-body">
-        <div class="admin-panel">
-          <!-- Troll Mode -->
-          <div class="admin-section troll-section">
-            <h3>Troll Friends</h3>
-            <div class="admin-actions">
-              <button class="admin-btn troll-btn" onclick="Admin.trollFakeBalance()">Fake $0 Balance</button>
-              <button class="admin-btn troll-btn" onclick="Admin.trollFakeReset()">Fake Data Wipe</button>
-              <button class="admin-btn troll-btn" onclick="Admin.trollFlipScreen()">Flip Screen</button>
-              <button class="admin-btn troll-btn" onclick="Admin.trollShake()">Earthquake</button>
-              <button class="admin-btn troll-btn" onclick="Admin.trollRainbow()">Rainbow Mode</button>
-              <button class="admin-btn troll-btn" onclick="Admin.trollHideBalance()">Hide Balance</button>
-              <button class="admin-btn troll-btn" onclick="Admin.trollBlur()">Blur Screen</button>
-            </div>
-          </div>
-
-          <!-- God Mode & Speed -->
-          <div class="admin-section">
-            <h3>Cheats</h3>
-            <div class="admin-row">
-              <label>God Mode:</label>
-              <label class="toggle-switch">
-                <input type="checkbox" id="admin-godmode" onchange="Admin.toggleGodMode()">
-                <span class="toggle-slider"></span>
-              </label>
-              <span class="rig-hint">Bets cost $0</span>
-            </div>
-            <div class="admin-row">
-              <label>Speed Multi:</label>
-              <select id="admin-speed" onchange="Admin.setSpeed()">
-                <option value="1">1x</option>
-                <option value="2">2x</option>
-                <option value="5">5x</option>
-                <option value="10">10x</option>
-                <option value="50">50x</option>
-              </select>
-              <span class="rig-hint">Auto-clicker speed</span>
-            </div>
-            <div class="admin-actions" style="margin-top:8px">
-              <button class="admin-btn win-btn" onclick="Admin.unlockAll()">Max Upgrades</button>
-              <button class="admin-btn win-btn" onclick="Admin.setStartBal()">Set Start $</button>
-              <input type="number" id="admin-start-bal" value="0.02" style="width:80px">
-            </div>
-          </div>
-
-          <!-- Loan/Debt -->
-          <div class="admin-section">
-            <h3>Loan Shark</h3>
-            <div class="admin-row">
-              <label>Current Debt:</label>
-              <input type="number" id="admin-debt" min="0" value="0">
-              <button onclick="Loans.debt=+document.getElementById('admin-debt').value||0;Loans.updateUI();Loans.updateDebtDisplay()">Set</button>
-            </div>
-            <div class="admin-actions" style="margin-top:8px">
-              <button class="admin-btn win-btn" onclick="Loans.debt=0;Loans.loanTime=0;Loans.stopInterest();Loans.updateUI();Loans.updateDebtDisplay()">Clear All Debt</button>
-            </div>
-          </div>
-
-          <!-- Global Rig -->
-          <div class="admin-section rig-section">
-            <h3>Global Rig</h3>
-            <div id="rig-status" class="rig-status">Disabled</div>
-            <div class="admin-row">
-              <label>Enable Rig:</label>
-              <label class="toggle-switch">
-                <input type="checkbox" id="rig-toggle" onchange="Admin.toggleRig()">
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
-            <div class="admin-row">
-              <label>Win Rate:</label>
-              <input type="range" id="rig-winrate" min="0" max="100" value="50" oninput="Admin.setWinRate()">
-              <span id="rig-winrate-display" class="rig-pct">50%</span>
-            </div>
-            <div class="admin-quick-money">
-              <button onclick="Admin.forceNextWin()" style="border-color:#00e676;color:#00e676">Force Next Win</button>
-              <button onclick="Admin.forceNextLose()" style="border-color:#ff5252;color:#ff5252">Force Next Lose</button>
-            </div>
-          </div>
-
-          <!-- Balance -->
-          <div class="admin-section">
-            <h3>Balance</h3>
-            <div class="admin-row">
-              <input type="number" id="admin-balance" placeholder="Amount">
-              <button onclick="Admin.setBalance()">Set</button>
-              <button onclick="Admin.addMoney()">Add</button>
-            </div>
-            <div class="admin-quick-money">
-              <button onclick="Admin.quickAdd(1000)">+$1K</button>
-              <button onclick="Admin.quickAdd(10000)">+$10K</button>
-              <button onclick="Admin.quickAdd(100000)">+$100K</button>
-              <button onclick="Admin.quickAdd(1000000)">+$1M</button>
-              <button onclick="Admin.quickAdd(1000000000)">+$1B</button>
-            </div>
-          </div>
-
-          <!-- Rebirth & Upgrades -->
-          <div class="admin-section">
-            <h3>Rebirth & Upgrades</h3>
-            <div class="admin-row">
-              <label>Rebirth Level:</label>
-              <input type="number" id="admin-rebirth" min="0" value="0">
-              <button onclick="Admin.setRebirth()">Set</button>
-            </div>
-            <div class="admin-row">
-              <label>Click Value Lv:</label>
-              <input type="number" id="admin-click-level" min="0" value="0">
-              <button onclick="Admin.setClickLevel()">Set</button>
-            </div>
-            <div class="admin-row">
-              <label>Auto Clicker Lv:</label>
-              <input type="number" id="admin-auto-level" min="0" value="0">
-              <button onclick="Admin.setAutoLevel()">Set</button>
-            </div>
-          </div>
-
-          <!-- Stats -->
-          <div class="admin-section">
-            <h3>Stats</h3>
-            <div class="admin-row">
-              <label>Total Earned:</label>
-              <input type="number" id="admin-earned" min="0">
-              <button onclick="Admin.setEarned()">Set</button>
-            </div>
-            <div class="admin-row">
-              <label>Total Clicks:</label>
-              <input type="number" id="admin-clicks" min="0">
-              <button onclick="Admin.setClicks()">Set</button>
-            </div>
-          </div>
-
-          <!-- Properties -->
-          <div class="admin-section">
-            <h3>Properties</h3>
-            <div class="admin-actions">
-              <button class="admin-btn win-btn" onclick="Properties.maxAll()">Max All Properties</button>
-              <button class="admin-btn danger" onclick="Properties.resetAll()">Reset Properties</button>
-            </div>
-          </div>
-
-          <!-- Stocks -->
-          <div class="admin-section">
-            <h3>Stock Market</h3>
-            <div class="admin-actions">
-              <button class="admin-btn win-btn" onclick="Admin.stocksBoom()">Bull Run (+100%)</button>
-              <button class="admin-btn danger" onclick="Admin.stocksCrash()">Market Crash (-50%)</button>
-              <button class="admin-btn win-btn" onclick="Admin.stocksGiveShares()">+100 All Shares</button>
-              <button class="admin-btn" onclick="Admin.stocksResetPrices()">Reset Prices</button>
-              <button class="admin-btn danger" onclick="Admin.stocksResetPortfolio()">Clear Portfolio</button>
-            </div>
-            <div id="admin-stock-controls" class="admin-stock-controls"></div>
-            <div class="admin-news-input" style="margin-top:10px">
-              <h4 style="color:var(--green);margin:0 0 6px">Custom News (all players see this)</h4>
-              <div class="admin-row">
-                <input type="text" id="admin-stock-news" placeholder="Breaking: CEO caught eating crayons..." maxlength="200" style="flex:1">
-                <label style="display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap">
-                  <input type="checkbox" id="admin-stock-news-good"> Good?
-                </label>
-                <button class="admin-btn win-btn" onclick="Admin.sendStockNews()" style="min-width:60px">Send</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Crypto -->
-          <div class="admin-section">
-            <h3>Crypto Mining</h3>
-            <div class="admin-actions">
-              <button class="admin-btn win-btn" onclick="Admin.cryptoPump()">Pump All (3x)</button>
-              <button class="admin-btn danger" onclick="Admin.cryptoDump()">Dump All (-70%)</button>
-              <button class="admin-btn win-btn" onclick="Admin.cryptoGiveCoins()">+10 BTC +100 ETH +100K DOGE</button>
-              <button class="admin-btn win-btn" onclick="Admin.cryptoMaxRigs()">Max All Rigs</button>
-              <button class="admin-btn win-btn" onclick="Admin.cryptoMaxUpgrades()">Max Upgrades + Cooling</button>
-              <button class="admin-btn" onclick="Admin.cryptoResetHeat()">Reset Heat</button>
-              <button class="admin-btn danger" onclick="Admin.cryptoResetAll()">Reset All Crypto</button>
-            </div>
-            <div id="admin-crypto-controls" class="admin-stock-controls"></div>
-          </div>
-
-          <!-- Leaderboard -->
-          <div class="admin-section">
-            <h3>Leaderboard</h3>
-            <div class="admin-actions">
-              <button class="admin-btn" onclick="Admin.refreshLeaderboard()">Refresh</button>
-              <button class="admin-btn danger" onclick="Admin.cleanDuplicateNames()">Clean Dupes</button>
-            </div>
-            <div id="admin-lb-list" class="admin-lb-list"></div>
-          </div>
-
-          <!-- Game History -->
-          <div class="admin-section">
-            <h3>Game History</h3>
-            <div id="admin-history" class="admin-history">No games played yet.</div>
-            <button class="admin-btn" onclick="Admin.clearHistory()" style="margin-top:8px">Clear History</button>
-          </div>
-
-          <!-- Data -->
-          <div class="admin-section">
-            <h3>Data</h3>
-            <div class="admin-actions">
-              <button class="admin-btn save" onclick="Admin.forceSave()">Force Save</button>
-              <button class="admin-btn danger" onclick="Admin.resetAll()">Reset All Data</button>
-              <button class="admin-btn" onclick="Admin.exportData()">Export Save</button>
-              <button class="admin-btn" onclick="Admin.importData()">Import Save</button>
-            </div>
-            <textarea id="admin-data" rows="4" placeholder="Paste save data here for import..."></textarea>
-          </div>
-        </div>
+        <div id="admin-tab-content" class="admin-panel"></div>
       </div>
     </div>
 
@@ -972,7 +792,7 @@
     <div class="chat-header" onclick="Firebase.toggleChat()">
       <span>Live Chat</span>
       <span id="chat-status" class="chat-status chat-status-offline">Connecting...</span>
-      <span class="chat-toggle">&#x25BC;</span>
+      <span style="font-size:10px;color:var(--text-dim)">&#x25BC; tap to close</span>
     </div>
     <div class="chat-body">
       <div id="chat-messages" class="chat-messages"></div>
@@ -1008,6 +828,7 @@
   <script src="js/pets.js"></script>
   <script src="js/stocks.js"></script>
   <script src="js/crypto.js"></script>
+  <script src="js/companies.js"></script>
   <script src="js/firebase.js"></script>
   <script src="js/admin.js"></script>
 </body>

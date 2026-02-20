@@ -103,6 +103,7 @@ const App = {
       stocks: 'Stock Market',
       crypto: 'Crypto Mining',
       leaderboard: 'Leaderboard',
+      companies: 'Player Companies',
       settings: 'Settings'
     };
 
@@ -129,6 +130,7 @@ const App = {
     if (name === 'stocks') Stocks.init();
     if (name === 'crypto') Crypto.init();
     if (name === 'leaderboard') { if (typeof Firebase !== 'undefined') { Firebase.renderLeaderboard(); const badge = document.getElementById('lb-online-badge'); if (badge) { badge.textContent = Firebase.isOnline() ? 'Online' : 'Offline'; badge.className = 'lb-online-badge ' + (Firebase.isOnline() ? 'lb-badge-online' : ''); } } }
+    if (name === 'companies') { if (typeof Companies !== 'undefined') Companies.render(); }
     if (name === 'settings') Settings.render();
   },
 
@@ -151,6 +153,7 @@ const App = {
       pets: typeof Pets !== 'undefined' ? Pets.getSaveData() : null,
       stocks: typeof Stocks !== 'undefined' ? Stocks.getSaveData() : null,
       crypto: typeof Crypto !== 'undefined' ? Crypto.getSaveData() : null,
+      companies: typeof Companies !== 'undefined' ? Companies.getSaveData() : null,
       version: 7
     };
     localStorage.setItem('retros_casino_save', JSON.stringify(data));
@@ -185,6 +188,9 @@ const App = {
       }
       if (typeof Crypto !== 'undefined' && data.crypto) {
         Crypto.loadSaveData(data.crypto);
+      }
+      if (typeof Companies !== 'undefined' && data.companies) {
+        Companies.loadSaveData(data.companies);
       }
     } catch (e) {}
   },

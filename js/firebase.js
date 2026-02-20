@@ -39,6 +39,7 @@ const Firebase = {
   _cryptoAuthorityInterval: null,
   _lastStockCmdTs: 0,
   _lastCryptoCmdTs: 0,
+  _chatUnreadCount: 0,
 
   // === INIT ===
   init() {
@@ -445,27 +446,40 @@ const Firebase = {
   // === Chat Panel ===
   toggleChat() {
     const panel = document.getElementById('chat-panel');
-    if (panel) {
-      panel.classList.toggle('chat-open');
-      if (panel.classList.contains('chat-open')) {
-        this._clearChatUnread();
-      }
+    if (!panel) return;
+    const isOpen = panel.classList.toggle('chat-open');
+    if (isOpen) {
+      this._chatUnreadCount = 0;
+      this._updateChatBadge();
+      const msgs = document.getElementById('chat-messages');
+      if (msgs) msgs.scrollTop = msgs.scrollHeight;
     }
   },
 
   _showChatUnread() {
+    this._chatUnreadCount++;
+    this._updateChatBadge();
+  },
+
+  _updateChatBadge() {
     const btn = document.getElementById('chat-toggle-btn');
-    const header = document.querySelector('.chat-header');
-    if (btn && !btn.querySelector('.chat-unread-dot')) {
-      btn.insertAdjacentHTML('beforeend', '<span class="chat-unread-dot"></span>');
-    }
-    if (header && !header.querySelector('.chat-unread-dot')) {
-      const title = header.querySelector('span');
-      if (title) title.insertAdjacentHTML('afterend', '<span class="chat-unread-dot"></span>');
+    if (!btn) return;
+    let badge = btn.querySelector('.chat-badge-count');
+    if (this._chatUnreadCount > 0) {
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.className = 'chat-badge-count';
+        btn.appendChild(badge);
+      }
+      badge.textContent = this._chatUnreadCount > 99 ? '99+' : String(this._chatUnreadCount);
+    } else {
+      if (badge) badge.remove();
     }
   },
 
   _clearChatUnread() {
+    this._chatUnreadCount = 0;
+    this._updateChatBadge();
     document.querySelectorAll('.chat-unread-dot').forEach(el => el.remove());
   },
 
@@ -866,6 +880,39 @@ const Firebase = {
     if (!this.isOnline()) return;
     this.db.ref('cryptoPrices/adminCommand').set({ ...cmd, ts: Date.now() })
       .catch(err => console.error('Firebase adminCryptoCommand write error:', err));
+  },
+
+  // === PLAYER COMPANIES ===
+  listenPlayerStocks(callback) {
+    if (!this.isOnline()) return;
+    this.db.ref('companies').on('value', snap => {
+      callback(snap.val() || {});
+    });
+  },
+
+  listenPlayerStockPrices(callback) {
+    if (!this.isOnline()) return;
+    this.db.ref('playerStockPrices').on('value', snap => {
+      callback(snap.val() || {});
+    });
+  },
+
+  postCompany(uid, data) {
+    if (!this.isOnline()) return;
+    this.db.ref('companies/' + uid).set(data)
+      .catch(err => console.error('Firebase postCompany error:', err));
+  },
+
+  pushPlayerStockPrices(prices) {
+    if (!this.isOnline() || !this._isStockAuthority) return;
+    this.db.ref('playerStockPrices').update(prices)
+      .catch(err => console.error('Firebase playerStockPrices error:', err));
+  },
+
+  pushPlayerDividend(symbol, perShare, ownerUid) {
+    if (!this.isOnline()) return;
+    this.db.ref('playerDividends').push({ symbol, perShare, ownerUid, ts: Date.now() })
+      .catch(err => console.error('Firebase pushPlayerDividend error:', err));
   },
 
   // === NAME REGISTRY ===
