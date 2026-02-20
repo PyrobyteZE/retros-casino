@@ -127,7 +127,6 @@ const Admin = {
   tapTimer: null,
   adminMode: false,
   godMode: false,
-  trollMode: false,
   badgeHidden: false,
   speedMultiplier: 1,
   startingBalance: 0.02,
@@ -206,7 +205,6 @@ const Admin = {
     const content = document.getElementById('admin-tab-content');
     if (!content) return;
     if (tab === 'cheats') content.innerHTML = this._renderCheatsTab();
-    else if (tab === 'troll') content.innerHTML = this._renderTrollTab();
     else if (tab === 'economy') content.innerHTML = this._renderEconomyTab();
     else if (tab === 'player') content.innerHTML = this._renderPlayerTab();
     else if (tab === 'market') content.innerHTML = this._renderMarketTab();
@@ -298,20 +296,7 @@ const Admin = {
   },
 
   _renderTrollTab() {
-    return `
-      <div class="admin-section troll-section">
-        <h3>Troll Friends</h3>
-        <div class="admin-actions">
-          <button class="admin-btn troll-btn" onclick="Admin.trollFakeBalance()">Fake $0 Balance</button>
-          <button class="admin-btn troll-btn" onclick="Admin.trollFakeReset()">Fake Data Wipe</button>
-          <button class="admin-btn troll-btn" onclick="Admin.trollFlipScreen()">Flip Screen</button>
-          <button class="admin-btn troll-btn" onclick="Admin.trollShake()">Earthquake</button>
-          <button class="admin-btn troll-btn" onclick="Admin.trollRainbow()">Rainbow Mode</button>
-          <button class="admin-btn troll-btn" onclick="Admin.trollHideBalance()">Hide Balance</button>
-          <button class="admin-btn troll-btn" onclick="Admin.trollBlur()">Blur Screen</button>
-        </div>
-      </div>
-    `;
+    return '';
   },
 
   _renderEconomyTab() {
@@ -580,53 +565,6 @@ const Admin = {
   },
 
   refreshGameRig() {},
-
-  // === Troll Mode ===
-  toggleTroll() {
-    this.trollMode = !this.trollMode;
-    const btn = document.getElementById('admin-troll-toggle');
-    if (btn) btn.textContent = this.trollMode ? 'Troll: ON' : 'Troll: OFF';
-  },
-
-  trollFakeBalance() {
-    // Shows a fake $0.00 balance to scare friends
-    const el = document.getElementById('balance');
-    if (el) el.textContent = '0.00';
-    setTimeout(() => App.updateBalance(), 5000);
-  },
-
-  trollFlipScreen() {
-    document.getElementById('app').style.transform =
-      document.getElementById('app').style.transform === 'rotate(180deg)' ? '' : 'rotate(180deg)';
-  },
-
-  trollShake() {
-    const app = document.getElementById('app');
-    app.classList.add('troll-shake');
-    setTimeout(() => app.classList.remove('troll-shake'), 3000);
-  },
-
-  trollFakeReset() {
-    // Fake "data deleted" alert then restore
-    const el = document.getElementById('balance');
-    const real = el.textContent;
-    el.textContent = '0.00';
-    alert('ERROR: Save data corrupted! All progress lost.');
-    setTimeout(() => { el.textContent = real; }, 100);
-  },
-
-  trollRainbow() {
-    document.documentElement.classList.toggle('troll-rainbow');
-  },
-
-  trollHideBalance() {
-    document.getElementById('balance-display').classList.toggle('hidden');
-  },
-
-  trollBlur() {
-    const screens = document.getElementById('screens');
-    screens.style.filter = screens.style.filter === 'blur(8px)' ? '' : 'blur(8px)';
-  },
 
   // === Custom Stock News (synced to all players) ===
   _funnyFallbackNews: [

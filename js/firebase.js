@@ -762,7 +762,7 @@ const Firebase = {
       if (typeof Stocks !== 'undefined') {
         Stocks.applyServerPrices(data.prices);
       }
-    });
+    }, err => console.error('Firebase stockPrices/data read denied:', err.code));
     // Track authority changes
     this.db.ref('stockPrices/authority').on('value', snap => {
       const data = snap.val();
@@ -771,14 +771,14 @@ const Firebase = {
       } else {
         this._isStockAuthority = false;
       }
-    });
+    }, err => console.error('Firebase stockPrices/authority read denied:', err.code));
     // Admin commands — all tabs apply immediately regardless of authority
     this.db.ref('stockPrices/adminCommand').on('value', snap => {
       const cmd = snap.val();
       if (!cmd || !cmd.ts || cmd.ts <= this._lastStockCmdTs) return;
       this._lastStockCmdTs = cmd.ts;
       if (typeof Stocks !== 'undefined') Stocks.applyAdminCommand(cmd);
-    });
+    }, err => console.error('Firebase stockPrices/adminCommand read denied:', err.code));
   },
 
   // === CRYPTO PRICE SYNC ===
@@ -819,7 +819,7 @@ const Firebase = {
       if (typeof Crypto !== 'undefined') {
         Crypto.applyServerPrices(data.prices);
       }
-    });
+    }, err => console.error('Firebase cryptoPrices/data read denied:', err.code));
     this.db.ref('cryptoPrices/authority').on('value', snap => {
       const data = snap.val();
       if (data && data.sessionId === this._sessionId) {
@@ -827,14 +827,14 @@ const Firebase = {
       } else {
         this._isCryptoAuthority = false;
       }
-    });
+    }, err => console.error('Firebase cryptoPrices/authority read denied:', err.code));
     // Admin commands — all tabs apply immediately regardless of authority
     this.db.ref('cryptoPrices/adminCommand').on('value', snap => {
       const cmd = snap.val();
       if (!cmd || !cmd.ts || cmd.ts <= this._lastCryptoCmdTs) return;
       this._lastCryptoCmdTs = cmd.ts;
       if (typeof Crypto !== 'undefined') Crypto.applyAdminCommand(cmd);
-    });
+    }, err => console.error('Firebase cryptoPrices/adminCommand read denied:', err.code));
   },
 
   // === BOUNTY BOARD ===
@@ -887,14 +887,14 @@ const Firebase = {
     if (!this.isOnline()) return;
     this.db.ref('companies').on('value', snap => {
       callback(snap.val() || {});
-    });
+    }, err => console.warn('Firebase companies listen denied:', err.code));
   },
 
   listenPlayerStockPrices(callback) {
     if (!this.isOnline()) return;
     this.db.ref('playerStockPrices').on('value', snap => {
       callback(snap.val() || {});
-    });
+    }, err => console.warn('Firebase playerStockPrices listen denied:', err.code));
   },
 
   postCompany(uid, data) {
