@@ -40,6 +40,10 @@ const Stocks = {
   ATTACK_COOLDOWN_MS: 5 * 60 * 1000, // 5 minutes per stock
   ATTACK_REBIRTH_REQ: 5,             // rebirth level required
 
+  // Ticker JS animation
+  _tickerOffset: 0,
+  _tickerAnimFrame: null,
+
   // Short selling (R5+)
   _shorts: [],
 
@@ -55,6 +59,7 @@ const Stocks = {
         return arr;
       });
       this._priceTargets = this.stocks.map(() => null);
+      this._restoreShorts(); // ensure short timers start even when offline
       this.initialized = true;
     }
     this.startTick();
@@ -199,8 +204,39 @@ const Stocks = {
       changes[roilIdx] += this.prices[roilIdx] * retroPct * 0.50;
     }
 
-    // Apply all changes
+    // Apply all changes + mean reversion + high-price crash risk
     for (let i = 0; i < this.stocks.length; i++) {
+      const s = this.stocks[i];
+      const tgt = this._priceTargets[i];
+
+      // Only apply reversion/crash logic when no admin target is running
+      if (!tgt || tgt.stepsLeft <= 0) {
+        const ratio = this.prices[i] / s.basePrice;
+
+        // Gentle mean reversion toward basePrice (0.3% per 100% deviation per tick)
+        changes[i] -= this.prices[i] * (ratio - 1) * 0.003;
+
+        // High-price crash risk — skip LUNA (has its own trend system)
+        if (s.symbol !== 'LUNA' && ratio > 2.5) {
+          const crashChance = Math.min(0.15, (ratio - 2.5) * 0.015);
+          if (Math.random() < crashChance) {
+            const snapPct = 0.08 + Math.random() * 0.12; // 8–20% snap down
+            changes[i] -= this.prices[i] * snapPct;
+            if (ratio > 4) {
+              this._addNews(s.symbol + ': Overvalued \u2014 market correction incoming!', false);
+              if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+                Firebase.pushStockNews(s.symbol + ': Overvalued \u2014 market corrects hard!', false);
+              }
+            }
+          }
+        }
+
+        // Low-price recovery bounce when very depressed
+        if (s.symbol !== 'LUNA' && ratio < 0.25) {
+          changes[i] += this.prices[i] * 0.04;
+        }
+      }
+
       this.prices[i] = Math.max(1, this.prices[i] + changes[i]);
       this.priceHistory[i].push(this.prices[i]);
       if (this.priceHistory[i].length > 60) this.priceHistory[i].shift();
@@ -217,9 +253,41 @@ const Stocks = {
     this.updateTicker();
   },
 
+  _tickerFmtPrice(price) {
+    // Short compact format: $1.23, $999, $1.5K, $2.3M, etc.
+    if (price < 10)    return '$' + price.toFixed(2);
+    if (price < 1000)  return '$' + Math.round(price);
+    if (price < 1e6)   return '$' + (price / 1e3).toFixed(1) + 'K';
+    if (price < 1e9)   return '$' + (price / 1e6).toFixed(2) + 'M';
+    return '$' + (price / 1e9).toFixed(2) + 'B';
+  },
+
+  _startTickerAnim() {
+    if (this._tickerAnimFrame) return; // already running
+    const step = () => {
+      const el = document.getElementById('stock-ticker');
+      const track = el ? el.querySelector('.ticker-track') : null;
+      if (!track || !el || el.classList.contains('hidden')) {
+        this._tickerAnimFrame = null;
+        return;
+      }
+      // halfWidth = scrollable width of one copy
+      const halfWidth = track.scrollWidth / 2;
+      if (halfWidth > 0) {
+        this._tickerOffset += 0.5; // px per frame ≈ 30px/s at 60fps
+        if (this._tickerOffset >= halfWidth) this._tickerOffset -= halfWidth;
+        track.style.transform = `translateX(-${this._tickerOffset}px)`;
+      }
+      this._tickerAnimFrame = requestAnimationFrame(step);
+    };
+    this._tickerAnimFrame = requestAnimationFrame(step);
+  },
+
   updateTicker() {
     const el = document.getElementById('stock-ticker');
     if (!el || el.classList.contains('hidden')) return;
+
+    // Build items: system stocks + public player stocks
     const items = this.stocks.map((s, i) => {
       const price = this.prices[i];
       const hist = this.priceHistory[i];
@@ -228,9 +296,25 @@ const Stocks = {
       const dir = pct > 0.001 ? 'up' : pct < -0.001 ? 'dn' : 'flat';
       const arrow = dir === 'up' ? '\u25B2' : dir === 'dn' ? '\u25BC' : '\u25A0';
       const pctStr = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
-      return { text: `${s.symbol} $${price < 10 ? price.toFixed(2) : Math.round(price)} ${arrow}${pctStr}`, dir };
+      return { text: `${s.symbol} ${this._tickerFmtPrice(price)} ${arrow}${pctStr}`, dir };
     });
-    // Update existing spans in-place to preserve the CSS scroll animation
+
+    // Add public player stocks
+    if (typeof Companies !== 'undefined' && Companies._allPlayerStocks) {
+      for (const sym in Companies._allPlayerStocks) {
+        const s = Companies._allPlayerStocks[sym];
+        if (s.type !== 'public') continue;
+        const hist = s.history || [];
+        const prev = hist.length >= 2 ? hist[hist.length - 2] : s.price;
+        const pct = prev > 0 ? ((s.price - prev) / prev * 100) : 0;
+        const dir = pct > 0.001 ? 'up' : pct < -0.001 ? 'dn' : 'flat';
+        const arrow = dir === 'up' ? '\u25B2' : dir === 'dn' ? '\u25BC' : '\u25A0';
+        const pctStr = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+        items.push({ text: `${sym} ${this._tickerFmtPrice(s.price)} ${arrow}${pctStr} \u{1F464}`, dir });
+      }
+    }
+
+    // Update existing spans in-place — preserves scroll offset, no jump
     const existing = el.querySelectorAll('.ticker-item');
     if (existing.length === items.length * 2) {
       items.forEach((item, i) => {
@@ -239,13 +323,21 @@ const Stocks = {
         existing[i + items.length].textContent = item.text;
         existing[i + items.length].className = `ticker-item ticker-${item.dir}`;
       });
+      this._startTickerAnim();
       return;
     }
-    // First run or item count changed — build structure fresh
+
+    // First run or item count changed — cancel old anim, reset offset, build fresh
+    if (this._tickerAnimFrame) {
+      cancelAnimationFrame(this._tickerAnimFrame);
+      this._tickerAnimFrame = null;
+    }
+    this._tickerOffset = 0;
     const html = items.map(item =>
       `<span class="ticker-item ticker-${item.dir}">${item.text}</span>`
     ).join('<span class="ticker-sep"> | </span>');
     el.innerHTML = `<div class="ticker-track">${html}<span class="ticker-sep">&nbsp;&nbsp;&nbsp;</span>${html}</div>`;
+    this._startTickerAnim();
   },
 
   // Funny SHARK interest-rate news
@@ -329,14 +421,18 @@ const Stocks = {
       // ── JOY events ─────────────────────────────────────────────────────
       { type: 'joy_win',   text: 'JOY: Massive defense contract awarded!',       min:  0.15, max:  0.30, sym: 'JOY', good: true  },
       { type: 'joy_lose',  text: 'JOY: Defense contract cancelled mid-project!', min: -0.30, max: -0.20, sym: 'JOY', good: false },
-      // ── RETRO vs JOY rivalry ────────────────────────────────────────────
+      // ── RETRO vs JOY rivalry (RETRO founded by RetroByte) ──────────────────
       // retroPct/joyPct: affect RETRO & JOY; roilPct/joilPct: affect their oil subsidiaries
-      { type: 'rivalry_retro', text: 'RETRO poaches 3 JOY executives — JOY furious',                    retroPct:  0.12, joyPct: -0.09, roilPct:  0.08, joilPct: -0.06, good: true  },
-      { type: 'rivalry_joy',   text: 'JOY lands contract RETRO was chasing — RETRO blindsided',         retroPct: -0.10, joyPct:  0.14, roilPct: -0.07, joilPct:  0.10, good: false },
-      { type: 'rivalry_drama', text: 'RETRO vs JOY CEOs argue on livestream — both stocks swing',       retroPct:  0.08, joyPct: -0.08, roilPct:  0.05, joilPct: -0.05, good: true  },
-      { type: 'rivalry_suit',  text: 'JOY sues RETRO over stolen algorithm — RETRO denies everything',  retroPct: -0.12, joyPct:  0.07, roilPct: -0.08, joilPct:  0.05, good: false },
-      { type: 'oil_war',       text: 'ROIL vs JOIL: Retro Oil underbids JoyCorp Oil on pipeline deal',  retroPct:  0.04, joyPct: -0.04, roilPct:  0.18, joilPct: -0.14, good: true  },
-      { type: 'oil_war2',      text: 'JOIL secures exclusive Gulf rights — ROIL loses drilling permit',  retroPct: -0.03, joyPct:  0.03, roilPct: -0.16, joilPct:  0.20, good: false },
+      { type: 'rivalry_retro', text: 'RETRO poaches 3 JOY executives — JOY furious',                                retroPct:  0.12, joyPct: -0.09, roilPct:  0.08, joilPct: -0.06, good: true  },
+      { type: 'rivalry_joy',   text: 'JOY lands contract RETRO was chasing — RETRO blindsided',                     retroPct: -0.10, joyPct:  0.14, roilPct: -0.07, joilPct:  0.10, good: false },
+      { type: 'rivalry_drama', text: 'RETRO vs JOY CEOs argue on livestream — both stocks swing',                   retroPct:  0.08, joyPct: -0.08, roilPct:  0.05, joilPct: -0.05, good: true  },
+      { type: 'rivalry_suit',  text: 'JOY sues RETRO over stolen algorithm — RETRO denies everything',              retroPct: -0.12, joyPct:  0.07, roilPct: -0.08, joilPct:  0.05, good: false },
+      { type: 'oil_war',       text: 'ROIL vs JOIL: Retro Oil underbids JoyCorp Oil on pipeline deal',              retroPct:  0.04, joyPct: -0.04, roilPct:  0.18, joilPct: -0.14, good: true  },
+      { type: 'oil_war2',      text: 'JOIL secures exclusive Gulf rights — ROIL loses drilling permit',              retroPct: -0.03, joyPct:  0.03, roilPct: -0.16, joilPct:  0.20, good: false },
+      { type: 'retro_rb1',     text: 'RETRO: RetroByte makes surprise earnings call — investors call it "unhinged but compelling"', retroPct: 0.15, joyPct: -0.05, roilPct: 0.10, joilPct: -0.03, good: true  },
+      { type: 'retro_rb2',     text: 'RETRO: CEO RetroByte challenges JOY CEO to a duel on the trading floor',      retroPct:  0.10, joyPct:  0.10, roilPct:  0.06, joilPct:  0.06, good: true  },
+      { type: 'retro_rb3',     text: 'RETRO: RetroByte unveils "Project Neon" — details classified, stock surges anyway', retroPct: 0.20, joyPct: -0.06, roilPct: 0.12, joilPct: -0.04, good: true  },
+      { type: 'retro_rb4',     text: 'RETRO: RetroByte spotted at SEC hearing eating a sandwich, unperturbed',      retroPct: -0.08, joyPct:  0.05, roilPct: -0.05, joilPct:  0.03, good: false },
       // ── JOIL events ─────────────────────────────────────────────────────
       { type: 'joil_spill',  text: 'JOIL: Spill discovered to be "mostly gravy," investigation ongoing', sym: 'JOIL', min: -0.25, max: -0.10, good: false },
       { type: 'joil_drill',  text: 'JOIL: Drill crew accidentally hit a Minecraft server',               sym: 'JOIL', min: -0.20, max: -0.08, good: false },
@@ -349,12 +445,17 @@ const Stocks = {
       { type: 'roil_deal',   text: 'ROIL: Long-term supply deal signed — RETRO Corp shares the news proudly',sym: 'ROIL', min:  0.12, max:  0.25, good: true  },
       { type: 'roil_dry',    text: 'ROIL: Three dry wells in a row — team blames "bad energy"',              sym: 'ROIL', min: -0.18, max: -0.08, good: false },
       { type: 'roil_retro',  text: 'ROIL: RETRO Corp increases stake in subsidiary — vote of confidence',    sym: 'ROIL', min:  0.10, max:  0.20, good: true  },
-      // ── LUNA events ─────────────────────────────────────────────────────
-      { type: 'luna_moon',   text: 'LUNA: CEO sends all-hands memo consisting entirely of 🌕 emojis',    sym: 'LUNA', min:  0.40, max:  0.80, good: true  },
-      { type: 'luna_crash',  text: 'LUNA: Entire board quits to "go live in the woods"',                 sym: 'LUNA', min: -0.70, max: -0.35, good: false },
-      { type: 'luna_flip',   text: 'LUNA: Stock direction set by coin flip — somehow legal',             sym: 'LUNA', min: -0.50, max:  0.50, good: true  },
-      { type: 'luna_seer',   text: 'LUNA: New CFO is a psychic — investors cautiously optimistic',       sym: 'LUNA', min:  0.30, max:  0.70, good: true  },
-      { type: 'luna_void',   text: 'LUNA: CEO says stock is "vibing in the abyss" — price reacts',      sym: 'LUNA', min: -0.60, max: -0.20, good: false },
+      // ── LUNA events (CEO is a cat; entire company run by cats) ─────────────
+      { type: 'luna_nap',    text: 'LUNA: CEO refuses board meeting — was napping on keyboard',          sym: 'LUNA', min: -0.50, max:  0.50, good: true  },
+      { type: 'luna_mrrp',   text: "LUNA: All-hands memo sent at 3AM contained only 'mrrp' — HR investigating", sym: 'LUNA', min: -0.30, max:  0.60, good: true  },
+      { type: 'luna_desk',   text: "LUNA: CFO knocked quarterly report off desk. 'Was in the way,' sources confirm.", sym: 'LUNA', min: -0.45, max: -0.10, good: false },
+      { type: 'luna_meow',   text: 'LUNA: Board of Directors meows in unison — analysts interpret as bullish', sym: 'LUNA', min:  0.35, max:  0.75, good: true  },
+      { type: 'luna_laser',  text: 'LUNA: CEO chases laser pointer for 40 minutes; markets react accordingly', sym: 'LUNA', min: -0.60, max:  0.60, good: true  },
+      { type: 'luna_headcount', text: 'LUNA: Company headcount: 12 cats, 0 humans — investors reportedly fine with this', sym: 'LUNA', min:  0.20, max:  0.55, good: true  },
+      { type: 'luna_box',    text: "LUNA: CEO spotted sitting in empty cardboard box labeled 'office'",  sym: 'LUNA', min: -0.25, max:  0.40, good: true  },
+      { type: 'luna_yarn',   text: 'LUNA: Stock direction set by batting a ball of yarn — somehow legal', sym: 'LUNA', min: -0.55, max:  0.55, good: true  },
+      { type: 'luna_water',  text: 'LUNA: Entire C-suite knocked their water glasses off the table. Simultaneously.', sym: 'LUNA', min: -0.40, max: -0.15, good: false },
+      { type: 'luna_memo',   text: 'LUNA: CEO sends all-hands memo consisting entirely of 🐱 emojis',   sym: 'LUNA', min:  0.40, max:  0.80, good: true  },
       // ── SHARK funny events ───────────────────────────────────────────────
       { type: 'shark_hike',  text: 'SHARK: Rate hike approved after CEO "rolled a 6" on a dice',         sym: 'SHARK', min:  0.08, max:  0.20, good: true  },
       { type: 'shark_cut',   text: 'SHARK: Rates slashed — CFO cried during earnings call, board panicked', sym: 'SHARK', min: -0.18, max: -0.06, good: false },
@@ -406,6 +507,15 @@ const Stocks = {
   _addNews(text, good) {
     this.newsHistory.unshift({ text, good, time: Date.now() });
     if (this.newsHistory.length > 20) this.newsHistory.pop();
+    if (typeof Settings !== 'undefined' && Settings.options.newsPopups) {
+      const toast = document.createElement('div');
+      toast.className = 'insider-tip-toast';
+      toast.textContent = (good ? '📈 ' : '📉 ') + text;
+      toast.style.background = good ? 'var(--green-dark)' : '#c0392b';
+      toast.style.color = '#fff';
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 4500);
+    }
   },
 
   // === Admin Gradual Price Control ===
@@ -468,6 +578,25 @@ const Stocks = {
     }
   },
 
+  // === Market influence helpers ===
+  // Impact: small % nudge based on trade value relative to stock size (capped at 8%)
+  _calcTradeImpact(idx, tradeValue) {
+    const baseSize = this.stocks[idx].basePrice * 800;
+    return Math.min(0.08, tradeValue / baseSize);
+  },
+
+  _applyTradeInfluence(idx, dir, impactPct) {
+    if (impactPct < 0.0005) return;
+    const newTarget = Math.max(1, this.prices[idx] * (1 + dir * impactPct));
+    // Accumulate with existing target if present
+    const existing = this._priceTargets[idx];
+    const target = existing ? (existing.target + newTarget) / 2 : newTarget;
+    this._priceTargets[idx] = { target, stepsLeft: 8 };
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.pushTradeInfluence(this.stocks[idx].symbol, dir, impactPct);
+    }
+  },
+
   // === Trading ===
   buy(symbol, amount) {
     const idx = this.stocks.findIndex(s => s.symbol === symbol);
@@ -486,6 +615,9 @@ const Stocks = {
     const totalCost = h.avgCost * h.shares + cost;
     h.shares += amount;
     h.avgCost = totalCost / h.shares;
+
+    // Market influence: buying pushes price up slightly
+    this._applyTradeInfluence(idx, 1, this._calcTradeImpact(idx, cost));
 
     App.save();
     this.render();
@@ -508,6 +640,9 @@ const Stocks = {
     if (this.holdings[symbol].shares <= 0.0001) {
       delete this.holdings[symbol];
     }
+
+    // Market influence: selling pushes price down slightly
+    this._applyTradeInfluence(idx, -1, this._calcTradeImpact(idx, revenue));
 
     App.save();
     this.render();
@@ -688,9 +823,12 @@ const Stocks = {
     else if (this.activeTab === 'news') this._renderNews(container);
     else if (this.activeTab === 'shorts') this._renderShorts(container);
     else if (this.activeTab === 'bounties') this._renderBounties(container);
+    else if (this.activeTab === 'players') { if (typeof Companies !== 'undefined') Companies._renderBrowse(container); else container.innerHTML = ''; }
+    else if (this.activeTab === 'company') { if (typeof Companies !== 'undefined') Companies._renderManage(container); else container.innerHTML = ''; }
   },
 
   _renderMarket(container) {
+    // System stocks
     let html = '<div class="stock-grid">';
     this.stocks.forEach((s, i) => {
       const price = this.prices[i];
@@ -727,12 +865,82 @@ const Stocks = {
       </div>`;
     });
     html += '</div>';
+
+    // Player stocks section
+    if (typeof Companies !== 'undefined') {
+      const esc = str => Companies._esc(str);
+      const publicPlayerStocks = Object.values(Companies._allPlayerStocks)
+        .filter(s => s.type === 'public' && !s._bankruptDeclared);
+
+      if (publicPlayerStocks.length > 0) {
+        html += '<div class="player-stocks-market-header">Player Companies</div><div class="stock-grid">';
+        publicPlayerStocks.forEach(s => {
+          const hist = s.history || [];
+          const prev = hist.length >= 2 ? hist[hist.length - 2] : s.price;
+          const pct = prev > 0 ? ((s.price - prev) / prev * 100) : 0;
+          const isUp = pct >= 0;
+          const ownedShares = (Companies._holdings[s.symbol] || {}).shares || 0;
+          html += `<div class="stock-card">
+            <div class="stock-card-header">
+              <div class="stock-symbol">${esc(s.symbol)}</div>
+              <div class="player-stock-badge">PLAYER</div>
+            </div>
+            <div class="stock-name">${esc(s.name)}</div>
+            <div style="font-size:11px;color:var(--text-dim)">by ${esc(s.ownerName)}</div>
+            <div class="stock-price">${App.formatMoney(s.price)}</div>
+            <div class="stock-change ${isUp ? 'stock-up' : 'stock-down'}">${isUp ? '+' : ''}${pct.toFixed(2)}%</div>
+            <canvas id="spark-p-${esc(s.symbol)}" class="stock-sparkline" width="80" height="30"></canvas>
+            <div class="stock-actions">
+              <button class="stock-buy-btn" onclick="Companies.promptBuy('${s.symbol}')">Buy</button>
+              <button class="stock-sell-btn" onclick="Companies.promptSell('${s.symbol}')" ${ownedShares > 0 ? '' : 'disabled'}>Sell</button>
+            </div>
+          </div>`;
+        });
+        html += '</div>';
+      }
+
+      // Distressed assets
+      const bankruptList = Object.values(Companies._bankruptCompanies || {});
+      if (bankruptList.length > 0) {
+        html += '<div class="player-stocks-market-header" style="color:#e74c3c">&#x1F534; Distressed Assets</div><div class="stock-grid">';
+        bankruptList.forEach(b => {
+          if (!b || !b.ticker) return;
+          const isOwner = typeof Firebase !== 'undefined' && Firebase.uid === b.originalOwnerUid;
+          const elapsed = Date.now() - (b.bankruptAt || 0);
+          const remaining = Math.max(0, Math.ceil((24 * 3600000 - elapsed) / 3600000));
+          html += `<div class="stock-card bankrupt-card">
+            <div class="stock-card-header">
+              <div class="stock-symbol">${esc(b.ticker)}</div>
+              <div class="distressed-badge">BANKRUPT</div>
+            </div>
+            <div class="stock-name">${esc(b.name || b.ticker)}</div>
+            <div style="font-size:11px;color:var(--text-dim)">Owner: ${esc(b.originalOwnerName || '?')}</div>
+            <div class="stock-price" style="color:#e74c3c">${App.formatMoney(b.debtCost)}</div>
+            <div style="font-size:11px;color:var(--text-dim)">${remaining}h left</div>
+            <div class="stock-actions">
+              <button class="stock-buy-btn" style="background:#c0392b;border-color:#c0392b" onclick="Companies.bailOut('${b.ticker}')">
+                ${isOwner ? 'Bail Out' : 'Acquire'}
+              </button>
+            </div>
+          </div>`;
+        });
+        html += '</div>';
+      }
+    }
+
     container.innerHTML = html;
 
-    // Draw sparklines after DOM update
+    // Draw system sparklines
     this.stocks.forEach((s, i) => {
       this.drawSparkline('spark-' + s.symbol, this.priceHistory[i]);
     });
+
+    // Draw player sparklines
+    if (typeof Companies !== 'undefined') {
+      Object.values(Companies._allPlayerStocks)
+        .filter(s => s.type === 'public' && !s._bankruptDeclared)
+        .forEach(s => this.drawSparkline('spark-p-' + s.symbol, s.history || []));
+    }
   },
 
   _renderPortfolio(container) {

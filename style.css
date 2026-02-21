@@ -3580,6 +3580,31 @@ html[data-platform="desktop"] #screen-pets .game-container {
   color: #000;
 }
 
+.lb-tabs {
+  display: flex;
+  overflow-x: auto;
+  gap: 4px;
+  padding: 8px 16px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--bg3);
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.lb-tabs::-webkit-scrollbar { display: none; }
+.lb-tab-btn {
+  background: var(--bg3);
+  border: none;
+  color: var(--text-dim);
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.lb-tab-btn.active { background: var(--gold); color: #000; }
+
 .lb-list {
   display: flex;
   flex-direction: column;
@@ -3831,6 +3856,162 @@ html[data-platform="desktop"] #screen-pets .game-container {
 }
 
 .chat-toggle-btn:active { transform: scale(0.9); }
+
+/* ====== DM / FRIENDS PANEL ====== */
+
+.dm-toggle-btn {
+  position: fixed;
+  bottom: 56px;
+  right: 68px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--bg3);
+  border: 2px solid var(--green);
+  font-size: 18px;
+  cursor: pointer;
+  z-index: 499;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+.dm-toggle-btn:active { transform: scale(0.9); }
+
+.dm-panel {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  width: 100%;
+  max-width: 420px;
+  height: 70vh;
+  background: var(--bg2);
+  border-top: 2px solid var(--green);
+  border-radius: 16px 16px 0 0;
+  z-index: 501;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(-50%) translateY(100%);
+  transition: transform 0.3s;
+}
+.dm-panel.dm-open {
+  transform: translateX(-50%) translateY(0);
+}
+
+.dm-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--green);
+  border-bottom: 1px solid var(--bg3);
+  flex-shrink: 0;
+}
+
+.dm-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 2px 6px;
+  line-height: 1;
+}
+
+.dm-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.dm-section-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  padding: 8px 14px 4px;
+  border-bottom: 1px solid var(--bg3);
+}
+
+.dm-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  gap: 8px;
+}
+.dm-row:last-child { border-bottom: none; }
+
+.dm-avatar {
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.dm-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dm-unread-badge {
+  display: inline-block;
+  background: var(--green);
+  color: #000;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 1px 6px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.dm-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.dm-btn {
+  background: var(--bg3);
+  border: 1px solid var(--bg3);
+  color: var(--text);
+  font-size: 14px;
+  border-radius: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.dm-btn:active { opacity: 0.7; }
+.dm-accept { border-color: var(--green); color: var(--green); }
+.dm-decline { border-color: var(--red); color: var(--red); }
+
+.dm-back-btn {
+  background: none;
+  border: none;
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 14px 4px;
+  cursor: pointer;
+  text-align: left;
+  flex-shrink: 0;
+}
+
+.dm-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 14px;
+  padding: 24px;
+  line-height: 1.6;
+}
 
 /* ====== PET MARKET ====== */
 
@@ -5062,20 +5243,14 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
 
 .ticker-track {
   display: inline-block;
-  animation: ticker-scroll 40s linear infinite;
+  will-change: transform;
 }
-.ticker-track:hover { animation-play-state: paused; }
 
 .ticker-item { margin: 0 14px; }
 .ticker-up { color: var(--green); }
 .ticker-dn { color: var(--red); }
 .ticker-flat { color: var(--text-dim); }
 .ticker-sep { color: var(--bg3); margin: 0 2px; }
-
-@keyframes ticker-scroll {
-  0%   { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
-}
 
 /* ====== PLAYER COMPANIES ====== */
 .companies-panel {
@@ -5254,3 +5429,85 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   cursor: pointer;
 }
 .add-stock-btn:hover { border-color: var(--green); color: var(--green); }
+
+/* Player stocks in market / browse tabs */
+.player-stocks-market-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  padding: 12px 4px 6px;
+}
+.player-stock-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(0,230,118,0.15);
+  color: var(--green);
+  border-radius: 4px;
+  padding: 2px 5px;
+  margin-left: 4px;
+}
+
+/* Bankrupt / distressed cards */
+.bankrupt-card {
+  background: rgba(192,57,43,0.10);
+  border: 1px solid #c0392b !important;
+}
+.distressed-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(192,57,43,0.2);
+  color: #e74c3c;
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+
+/* Sell section inside company manage tab */
+.company-sale-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bg3);
+}
+
+/* Slot upgrade wrapper */
+.company-upgrade-section {
+  margin-top: 8px;
+}
+
+/* Per-company upgrade rows */
+.company-upgrades-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bg3);
+}
+.company-upgrade-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--bg3);
+}
+.company-upgrade-row:last-child { border-bottom: none; }
+.upgrade-level-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--bg3);
+  color: var(--text-dim);
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+.upgrade-maxed {
+  background: rgba(255,193,7,0.2);
+  color: var(--gold);
+}
+
+/* Insider intel panel */
+.company-insider-panel {
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: rgba(0,188,212,0.08);
+  border: 1px solid rgba(0,188,212,0.25);
+  border-radius: 8px;
+  font-size: 12px;
+}

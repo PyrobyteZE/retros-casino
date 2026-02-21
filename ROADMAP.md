@@ -19,10 +19,11 @@
 
 ## v1.2 - PvP & Social (DONE)
 - [x] **PvP Coin Flip** — challenge other players, wager money
-- [x] **Friends system** — send/accept friend requests, notifications
-- [x] **Direct Messaging** — private chat between players
+- [x] **Friends system** — send/accept friend requests, toast notifications, remove friend
+- [x] **Direct Messaging** — private DM threads; unread badge per friend; 👥 panel with friends list + DM thread view
 - [x] **Leaderboard redesign** — podium cards, category tabs, online dots
 - [x] **Leaderboard dedup** — admin cleanup, client-side deduplication
+- [x] **Clickable names** — tap any name in chat or leaderboard to view profile, add friend, or open DM
 - [ ] **Rob Players** — target another player's properties/crime businesses
 - [ ] **Defend System** — spend money on security upgrades
 - [ ] **Hit List** — bounty board
@@ -58,6 +59,35 @@
   - Loans survive rebirth (stored in Firebase)
   - Payment notifications via toast
 
+## v1.6 - Player Companies (DONE)
+- [x] **Found a Company** — pay $1M to register a company with a unique ticker
+- [x] **Multiple stocks per company** — up to 3 stocks (pay to unlock more)
+- [x] **Public/Private toggle** — go public to list stocks for other players to trade
+- [x] **Dividends** — issue per-share payouts to all shareholders (owner pays)
+- [x] **Player stocks in Market tab** — public player stocks shown below system stocks with PLAYER badge
+- [x] **Player stocks in ticker** — scrolling ticker includes public player stocks
+- [x] **Trade influence** — buying/selling player stocks nudges prices like system stocks
+- [x] **Multiple companies per player** — unlock up to 3 company slots ($5M / $15M upgrades)
+- [x] **Company Upgrades** — per-company purchaseable upgrades:
+  - ⚡ Volatile Engine (Lv5) — rolling dice for outsized moves, tilted upward at high levels
+  - 📈 Bull Propaganda (Lv5) — small upward drift each tick, compounds over time
+  - 🛡️ Market Resilience (Lv3) — soft price floor, cushions crash severity
+  - 💰 Dividend Yield (Lv3) — multiplies dividend payouts (up to 2.5x at Lv3)
+  - 🔍 Insider Network (Lv3) — see buy/sell pressure on your own stocks before market reacts
+- [x] **Bankruptcy system** — stocks crashed below $0.10 for 5 ticks → company declared bankrupt
+  - Appears as "Distressed Asset" in Players tab and Market tab
+  - Original owner can Bail Out / Reclaim; other players can Acquire
+  - Acquiring bankrupt companies bypasses slot limits
+  - Auto-expires after 24 hours
+- [x] **Sell Company** — list your company for sale; other players can buy it
+  - Sale receipt automatically credited to seller via Firebase listener
+- [x] **Mean reversion** — all stocks (system + player) gently pull back toward base price
+  - High-price crash risk: price > 2.5× base triggers escalating snap-down chance
+  - Low-price recovery: price < 0.25× base gets upward bounce
+- [x] **Coordinated sell crash** — 2+ players selling heavy in 20s window triggers 25–35% panic crash
+  - Broadcasts "PANIC SELL" news event to all players
+- [x] **Rebirth compatibility** — player stock holdings reset on rebirth; owned companies + upgrades survive
+
 ## v2.0 - Full Multiplayer
 - [ ] Real-time multiplayer poker tables
 - [ ] Live dealer blackjack
@@ -72,3 +102,7 @@
 - [ ] Seasonal events (Halloween heist, Christmas jackpot)
 - [ ] More casino games: Poker, Baccarat, Keno, Wheel of Fortune
 - [ ] Sound effects & music
+- [ ] Company wars — rival companies can sabotage each other's stock prices
+- [ ] Stock options / derivatives trading
+- [ ] Company mergers — two players merge companies into one
+- [ ] IPO events — company goes public with a splash, players rush to buy in

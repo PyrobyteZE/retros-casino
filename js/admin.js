@@ -370,6 +370,10 @@ const Admin = {
     return `
       <div class="admin-section">
         <h3>Player Stocks</h3>
+        <div class="admin-actions">
+          <button class="admin-btn win-btn" onclick="Admin.playerStocksBoom()">Player Boom (+100%)</button>
+          <button class="admin-btn danger" onclick="Admin.playerStocksCrash()">Player Crash (-50%)</button>
+        </div>
         <div id="admin-player-stock-controls" class="admin-stock-controls"></div>
       </div>
       <div class="admin-section">
@@ -811,12 +815,9 @@ const Admin = {
 
   playerStockAdjust(sym, mult) {
     if (typeof Companies === 'undefined' || !Companies._allPlayerStocks[sym]) return;
-    const s = Companies._allPlayerStocks[sym];
-    const target = Math.max(0.01, s.price * mult);
-    s.price = target;
-    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
-      Firebase.pushPlayerStockPrices({ [sym]: target });
-    }
+    const cmd = { type: 'adjust', sym, mult };
+    Companies.applyAdminCommand(cmd);
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminPlayerStockCommand(cmd);
     this.renderPlayerStockControls();
   },
 
@@ -825,13 +826,30 @@ const Admin = {
     if (!input) return;
     const val = parseFloat(input.value);
     if (isNaN(val) || val < 0.01) return;
-    if (typeof Companies !== 'undefined' && Companies._allPlayerStocks[sym]) {
-      Companies._allPlayerStocks[sym].price = val;
-    }
-    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
-      Firebase.pushPlayerStockPrices({ [sym]: val });
-    }
+    const cmd = { type: 'set', sym, target: val };
+    if (typeof Companies !== 'undefined') Companies.applyAdminCommand(cmd);
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminPlayerStockCommand(cmd);
     this.renderPlayerStockControls();
+  },
+
+  playerStocksBoom() {
+    if (typeof Companies === 'undefined') return;
+    const cmd = { type: 'boom' };
+    Companies.applyAdminCommand(cmd);
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminPlayerStockCommand(cmd);
+    const msg = '\u{1F4C8} Player company stocks surging! Investors piling in!';
+    if (typeof Stocks !== 'undefined') Stocks._addNews(msg, true);
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushStockNews(msg, true);
+  },
+
+  playerStocksCrash() {
+    if (typeof Companies === 'undefined') return;
+    const cmd = { type: 'crash' };
+    Companies.applyAdminCommand(cmd);
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminPlayerStockCommand(cmd);
+    const msg = '\u{1F4C9} Player company stocks in freefall! Mass sell-off detected!';
+    if (typeof Stocks !== 'undefined') Stocks._addNews(msg, false);
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushStockNews(msg, false);
   },
 
   // === Crypto Admin ===

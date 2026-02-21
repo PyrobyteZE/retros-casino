@@ -218,7 +218,7 @@
             <div class="casino-icon">&#x1F3C6;</div>
             <div class="casino-name">Leaderboard</div>
           </div>
-          <div class="casino-card" onclick="App.showScreen('companies')">
+          <div class="casino-card" onclick="App.showScreen('stocks'); setTimeout(()=>Stocks.setTab('players'),50)">
             <div class="casino-icon">&#x1F3E2;</div>
             <div class="casino-name">Companies</div>
           </div>
@@ -672,6 +672,8 @@
             <button class="stock-tab-btn active" data-tab="market" onclick="Stocks.setTab('market')">Market</button>
             <button class="stock-tab-btn" data-tab="portfolio" onclick="Stocks.setTab('portfolio')">Portfolio</button>
             <button class="stock-tab-btn" data-tab="news" onclick="Stocks.setTab('news')">News</button>
+            <button class="stock-tab-btn" data-tab="players" onclick="Stocks.setTab('players')">Players</button>
+            <button class="stock-tab-btn" data-tab="company" onclick="Stocks.setTab('company')">Company</button>
             <button class="stock-tab-btn stock-tab-r5 hidden" data-tab="shorts" onclick="Stocks.setTab('shorts')">Shorts</button>
             <button class="stock-tab-btn stock-tab-r5 hidden" data-tab="bounties" onclick="Stocks.setTab('bounties')">Bounties</button>
           </div>
@@ -804,6 +806,9 @@
 
   <!-- Chat Toggle Button -->
   <button id="chat-toggle-btn" class="chat-toggle-btn" onclick="Firebase.toggleChat()">&#x1F4AC;</button>
+
+  <!-- DM / Friends Toggle Button -->
+  <button id="dm-toggle-btn" class="dm-toggle-btn" onclick="Firebase.toggleDmPanel()">&#x1F465;</button>
 
   <!-- Firebase CDN (optional - only loads if configured) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>

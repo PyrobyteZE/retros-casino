@@ -39,7 +39,19 @@ const Firebase = {
   _cryptoAuthorityInterval: null,
   _lastStockCmdTs: 0,
   _lastCryptoCmdTs: 0,
+  _lastPlayerStockCmdTs: 0,
+  _lastTradeInfluenceTs: {},
   _chatUnreadCount: 0,
+  _lbTab: 'earned',
+  // Friends & DMs
+  _friends: {},
+  _friendRequests: {},
+  _dmMessages: {},
+  _dmUnread: {},
+  _dmListeners: {},
+  _activeDmUid: null,
+  _activeDmId: null,
+  _dmPanelOpen: false,
 
   // === INIT ===
   init() {
@@ -150,6 +162,10 @@ const Firebase = {
     // Initial push after auth (no throttle on first push)
     this.lastLeaderboardPush = 0;
     this.pushLeaderboard();
+    // Friends & DMs
+    this._listenFriends();
+    this._listenFriendRequests();
+    this._listenDmUnread();
     // Init Firebase-dependent features in other modules
     if (typeof Stocks !== 'undefined') Stocks._initFirebaseFeatures();
     if (typeof Loans !== 'undefined' && Loans._counterLoan && Loans._counterLoan.amount > 0) {
@@ -211,6 +227,10 @@ const Firebase = {
       rebirths: App.rebirth,
       vipLevel: App.rebirth,
       petCount: typeof Pets !== 'undefined' ? Pets.owned.filter(o => o).length : 0,
+      gamesWon: App.stats ? App.stats.gamesWon : 0,
+      gamesLost: App.stats ? App.stats.gamesLost : 0,
+      totalDebtPaid: typeof Loans !== 'undefined' ? (Loans._totalPaid || 0) : 0,
+      currentDebt: typeof Loans !== 'undefined' ? Loans.debt : 0,
       timestamp: firebase.database.ServerValue.TIMESTAMP,
     };
     this.db.ref('leaderboard/' + this.uid).set(data).then(() => {
@@ -381,6 +401,11 @@ const Firebase = {
   },
 
   // === RENDERING ===
+  setLbTab(tab) {
+    this._lbTab = tab;
+    this.renderLeaderboard();
+  },
+
   renderLeaderboard() {
     const container = document.getElementById('leaderboard-content');
     if (!container) return;
@@ -390,13 +415,41 @@ const Firebase = {
       return;
     }
 
+    // Tab bar
+    const tabs = [
+      { id: 'earned',   label: 'Earned' },
+      { id: 'balance',  label: 'Balance' },
+      { id: 'rebirths', label: 'Rebirths' },
+      { id: 'debt',     label: 'Most Debt' },
+      { id: 'paid',     label: 'Debt Paid' },
+      { id: 'wins',     label: 'Wins' },
+    ];
+    const tabHtml = `<div class="lb-tabs">${tabs.map(t =>
+      `<button class="lb-tab-btn${this._lbTab === t.id ? ' active' : ''}" onclick="Firebase.setLbTab('${t.id}')">${t.label}</button>`
+    ).join('')}</div>`;
+
     if (this.leaderboardData.length === 0) {
-      container.innerHTML = '<div class="lb-empty">No players yet. Play to join!</div>';
+      container.innerHTML = tabHtml + '<div class="lb-empty">No players yet. Play to join!</div>';
       return;
     }
 
-    let html = '<div class="lb-list">';
-    this.leaderboardData.forEach((entry, i) => {
+    // Sort by active tab
+    const sortKey = { earned: 'totalEarned', balance: 'balance', rebirths: 'rebirths', debt: 'currentDebt', paid: 'totalDebtPaid', wins: 'gamesWon' }[this._lbTab] || 'totalEarned';
+    const sorted = [...this.leaderboardData].sort((a, b) => (b[sortKey] || 0) - (a[sortKey] || 0));
+
+    // Stat column label/value per tab
+    const statLabel = { earned: 'Earned', balance: 'Balance', rebirths: 'Rebirths', debt: 'Debt', paid: 'Paid Off', wins: 'Wins' }[this._lbTab];
+    const getStatVal = (entry) => {
+      if (this._lbTab === 'rebirths') return 'R' + (entry.rebirths || 0);
+      if (this._lbTab === 'wins') return (entry.gamesWon || 0).toLocaleString();
+      if (this._lbTab === 'debt') return App.formatMoney(entry.currentDebt || 0);
+      if (this._lbTab === 'paid') return App.formatMoney(entry.totalDebtPaid || 0);
+      if (this._lbTab === 'balance') return App.formatMoney(entry.balance || 0);
+      return App.formatMoney(entry.totalEarned || 0);
+    };
+
+    let html = tabHtml + '<div class="lb-list">';
+    sorted.forEach((entry, i) => {
       const isMe = entry.uid === this.uid;
       const rank = i + 1;
       const medal = rank === 1 ? '\u{1F947}' : rank === 2 ? '\u{1F948}' : rank === 3 ? '\u{1F949}' : '#' + rank;
@@ -404,7 +457,7 @@ const Firebase = {
         <span class="lb-rank">${medal}</span>
         <span class="lb-avatar">${entry.avatar || ''}</span>
         <span class="lb-name">${this._escapeHtml(entry.name || 'Player')}</span>
-        <span class="lb-earned">${App.formatMoney(entry.totalEarned || 0)}</span>
+        <span class="lb-earned">${getStatVal(entry)}</span>
         <span class="lb-rebirths">R${entry.rebirths || 0}</span>
       </div>`;
     });
@@ -424,6 +477,19 @@ const Firebase = {
       document.getElementById('app').appendChild(modal);
     }
 
+    const isMe = uid === this.uid;
+    const isFriend = !!this._friends[uid];
+
+    let actionBtns = '';
+    if (!isMe) {
+      if (isFriend) {
+        actionBtns = `<button class="game-btn" onclick="Firebase.closeProfile();Firebase.openDM('${uid}')" style="background:var(--green-dark)">💬 Message</button>`;
+      } else {
+        actionBtns = `<button class="game-btn" onclick="Firebase.sendFriendRequest('${uid}')" style="margin-right:6px">+ Add Friend</button>
+          <button class="game-btn" onclick="Firebase.closeProfile();Firebase.openDM('${uid}')" style="background:var(--green-dark)">💬 Message</button>`;
+      }
+    }
+
     modal.innerHTML = `<div class="profile-modal-content">
       <div class="profile-modal-avatar">${entry.avatar || '\u{1F3B2}'}</div>
       <div class="profile-modal-name">${this._escapeHtml(entry.name || 'Player')}</div>
@@ -433,7 +499,8 @@ const Firebase = {
         <div class="profile-stat"><span class="stat-label">Rebirths</span><span>${entry.rebirths || 0}</span></div>
         <div class="profile-stat"><span class="stat-label">Pets</span><span>${entry.petCount || 0}</span></div>
       </div>
-      <button class="game-btn" onclick="Firebase.closeProfile()" style="margin-top:12px">Close</button>
+      ${actionBtns ? `<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;justify-content:center">${actionBtns}</div>` : ''}
+      <button class="game-btn" onclick="Firebase.closeProfile()" style="margin-top:8px;background:var(--bg3);color:var(--text-dim)">Close</button>
     </div>`;
     modal.classList.remove('hidden');
   },
@@ -500,9 +567,12 @@ const Firebase = {
         // Name is registered to a different uid — possible impersonation
         namePrefix = '<span class="chat-unverified" title="Unverified name">[?] </span>';
       }
+      const clickName = (!isMe && m.uid)
+        ? `onclick="Firebase.showProfile('${m.uid}')" style="cursor:pointer"`
+        : '';
       return `<div class="chat-msg ${isMe ? 'chat-me' : ''}">
         <span class="chat-avatar">${m.avatar || ''}</span>
-        <span class="chat-name">${namePrefix}${this._escapeHtml(m.name || 'Player')}</span>
+        <span class="chat-name" ${clickName}>${namePrefix}${this._escapeHtml(m.name || 'Player')}</span>
         <span class="chat-text">${this._escapeHtml(m.text || '')}</span>
       </div>`;
     }).join('');
@@ -786,6 +856,65 @@ const Firebase = {
         if (isAdminTab && !this._isStockAuthority) this._tryClaimStockAuthority();
       }
     }, err => console.error('Firebase stockPrices/adminCommand read denied:', err.code));
+    // Player stock admin commands — authority or admin tab applies them
+    this.db.ref('playerStockPrices/adminCommand').on('value', snap => {
+      const cmd = snap.val();
+      if (!cmd || !cmd.ts || cmd.ts <= (this._lastPlayerStockCmdTs || 0)) return;
+      this._lastPlayerStockCmdTs = cmd.ts;
+      const isAdminTab = typeof Admin !== 'undefined' && Admin.isAdmin();
+      if (typeof Companies !== 'undefined' && (this._isStockAuthority || isAdminTab)) {
+        Companies.applyAdminCommand(cmd);
+        if (isAdminTab && !this._isStockAuthority) this._tryClaimStockAuthority();
+      }
+    }, err => console.error('Firebase playerStockPrices/adminCommand read denied:', err.code));
+
+    // Trade influence — authority applies incoming trade nudges from all players
+    this.db.ref('tradeInfluence').on('child_changed', snap => {
+      const sym = snap.key;
+      const data = snap.val();
+      if (!data || !data.ts) return;
+      const lastTs = this._lastTradeInfluenceTs[sym] || 0;
+      if (data.ts <= lastTs) return;
+      this._lastTradeInfluenceTs[sym] = data.ts;
+
+      // Apply to system stocks (authority only — they push prices)
+      if (this._isStockAuthority && typeof Stocks !== 'undefined') {
+        const idx = Stocks.stocks.findIndex(s => s.symbol === sym);
+        if (idx >= 0) {
+          const price = Stocks.prices[idx];
+          // Coordinated dump detection: sell pressure > 15% → panic crash
+          if (data.dir < 0 && data.pct > 0.15) {
+            const panicDrop = 0.25 + Math.random() * 0.10; // 25–35% crash
+            const panicTarget = Math.max(1, price * (1 - panicDrop));
+            Stocks._priceTargets[idx] = { target: panicTarget, stepsLeft: 10 };
+            const msg = '\u{1F4C9} PANIC SELL: ' + sym + ' \u2014 coordinated dump! Price in freefall!';
+            Stocks._addNews(msg, false);
+            if (this.isOnline()) this.pushStockNews(msg, false);
+          } else {
+            const newTarget = Math.max(1, price * (1 + data.dir * data.pct));
+            const existing = Stocks._priceTargets[idx];
+            Stocks._priceTargets[idx] = { target: existing ? (existing.target + newTarget) / 2 : newTarget, stepsLeft: 8 };
+          }
+        }
+      }
+      // Apply to player stocks (always — Companies authority handles push)
+      if (typeof Companies !== 'undefined' && Companies._allPlayerStocks[sym]) {
+        const s = Companies._allPlayerStocks[sym];
+        // Coordinated dump on player stock
+        if (data.dir < 0 && data.pct > 0.15) {
+          const panicDrop = 0.25 + Math.random() * 0.10;
+          const panicTarget = Math.max(0.01, s.price * (1 - panicDrop));
+          Companies._playerStockTargets[sym] = { target: panicTarget, stepsLeft: 10 };
+          const panicMsg = '\u{1F4C9} PANIC SELL: ' + sym + ' \u2014 coordinated dump! Price in freefall!';
+          if (typeof Stocks !== 'undefined') Stocks._addNews(panicMsg, false);
+          if (this.isOnline()) this.pushStockNews(panicMsg, false);
+        } else {
+          const newTarget = Math.max(0.01, s.price * (1 + data.dir * data.pct));
+          const existing = Companies._playerStockTargets[sym];
+          Companies._playerStockTargets[sym] = { target: existing ? (existing.target + newTarget) / 2 : newTarget, stepsLeft: 8 };
+        }
+      }
+    });
   },
 
   // === CRYPTO PRICE SYNC ===
@@ -891,6 +1020,28 @@ const Firebase = {
       .catch(err => console.error('Firebase adminStockCommand write error:', err));
   },
 
+  pushAdminPlayerStockCommand(cmd) {
+    if (!this.isOnline()) return;
+    this._tryClaimStockAuthority();
+    this.db.ref('playerStockPrices/adminCommand').set({ ...cmd, ts: Date.now() })
+      .catch(err => console.error('Firebase adminPlayerStockCommand write error:', err));
+  },
+
+  // Push a trade influence event so all clients' stock authority picks it up
+  pushTradeInfluence(sym, dir, pct) {
+    if (!this.isOnline()) return;
+    const ref = this.db.ref(`tradeInfluence/${sym}`);
+    ref.transaction(curr => {
+      const now = Date.now();
+      if (!curr || now - (curr.ts || 0) > 20000) {
+        return { dir, pct, ts: now };
+      }
+      // Accumulate: same-direction adds, opposite-direction reduces; cap raised to 0.30
+      const combinedPct = Math.min(0.30, (curr.pct || 0) + pct);
+      return { dir: curr.dir === dir ? dir : (combinedPct > 0 ? dir : -dir), pct: combinedPct, ts: now };
+    }).catch(err => console.error('Firebase tradeInfluence write error:', err));
+  },
+
   pushAdminCryptoCommand(cmd) {
     if (!this.isOnline()) return;
     this._tryClaimCryptoAuthority();
@@ -929,6 +1080,82 @@ const Firebase = {
     if (!this.isOnline()) return;
     this.db.ref('playerDividends').push({ symbol, perShare, ownerUid, ts: Date.now() })
       .catch(err => console.error('Firebase pushPlayerDividend error:', err));
+  },
+
+  // === BANKRUPTCY ===
+  declareBankruptcy(ticker, companyData, debtCost, ownerUid, ownerName) {
+    if (!this.isOnline()) return;
+    this.db.ref('bankruptCompanies/' + ticker).set({
+      ticker,
+      name: companyData.name || ticker,
+      debtCost,
+      bankruptAt: Date.now(),
+      originalOwnerUid: ownerUid,
+      originalOwnerName: ownerName || 'Player',
+      stocks: companyData.stocks || [],
+      mainIdx: companyData.mainIdx || 0,
+      foundedAt: companyData.foundedAt || 0,
+    }).catch(err => console.error('Firebase declareBankruptcy error:', err));
+  },
+
+  listenBankruptCompanies(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('bankruptCompanies').on('value',
+      snap => cb(snap.val() || {}),
+      err => console.warn('Firebase bankruptCompanies listen denied:', err.code)
+    );
+  },
+
+  bailOutCompany(ticker) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('bankruptCompanies/' + ticker).remove()
+      .catch(err => console.error('Firebase bailOutCompany error:', err));
+  },
+
+  // === COMPANY SALES ===
+  listCompanyForSale(ticker, company, salePrice, ownerName, ownerUid) {
+    if (!this.isOnline()) return;
+    this.db.ref('companySales/' + ticker).set({
+      ticker,
+      name: company.name || ticker,
+      company,
+      salePrice,
+      ownerUid,
+      ownerName: ownerName || 'Player',
+      listedAt: Date.now(),
+    }).catch(err => console.error('Firebase listCompanyForSale error:', err));
+  },
+
+  cancelCompanySale(ticker) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('companySales/' + ticker).remove()
+      .catch(err => console.error('Firebase cancelCompanySale error:', err));
+  },
+
+  listenCompanySales(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('companySales').on('value',
+      snap => cb(snap.val() || {}),
+      err => console.warn('Firebase companySales listen denied:', err.code)
+    );
+  },
+
+  // Remove listing and credit seller; buyer's Firebase record is updated by _pushToFirebase()
+  acquireListedCompany(sellerUid, buyerUid, buyerName, company, salePrice, ticker) {
+    if (!this.isOnline()) return;
+    this.db.ref('companySales/' + ticker).remove()
+      .then(() => this.db.ref('companySaleReceipts/' + sellerUid).push({
+        amount: salePrice, ts: Date.now(),
+      }))
+      .catch(err => console.error('Firebase acquireListedCompany error:', err));
+  },
+
+  listenSaleReceipts(uid, cb) {
+    if (!this.isOnline() || !uid) return;
+    this.db.ref('companySaleReceipts/' + uid).on('child_added', snap => {
+      const data = snap.val();
+      if (data) { cb(data); snap.ref.remove(); }
+    }, err => console.warn('Firebase saleReceipts listen denied:', err.code));
   },
 
   // === NAME REGISTRY ===
@@ -1078,6 +1305,306 @@ const Firebase = {
         this.db.ref('accounts/' + nameLower + '/save').set(save).catch(() => {});
       }
     }).catch(() => {});
+  },
+
+  // === FRIENDS ===
+  _listenFriends() {
+    if (!this.isOnline()) return;
+    this.db.ref('friends/' + this.uid).on('value', snap => {
+      this._friends = snap.val() || {};
+      this._renderDmPanel();
+      this._updateDmBadge();
+    });
+  },
+
+  _listenFriendRequests() {
+    if (!this.isOnline()) return;
+    this.db.ref('friendRequests/' + this.uid).on('value', snap => {
+      const prev = Object.keys(this._friendRequests).length;
+      this._friendRequests = snap.val() || {};
+      const curr = Object.keys(this._friendRequests).length;
+      this._renderDmPanel();
+      this._updateDmBadge();
+      // Toast notification for new incoming requests
+      if (curr > prev) {
+        const newReqs = Object.values(this._friendRequests);
+        const latest = newReqs[newReqs.length - 1];
+        if (latest) {
+          const toast = document.createElement('div');
+          toast.className = 'insider-tip-toast';
+          toast.textContent = '\u{1F465} ' + (latest.name || 'Player') + ' sent you a friend request!';
+          document.body.appendChild(toast);
+          setTimeout(() => toast.remove(), 5000);
+        }
+      }
+    });
+  },
+
+  sendFriendRequest(targetUid) {
+    if (!this.isOnline() || !targetUid || targetUid === this.uid) return;
+    if (this._friends[targetUid]) { alert('Already friends!'); return; }
+    const name = typeof Settings !== 'undefined' ? Settings.profile.name : 'Player';
+    const avatar = typeof Settings !== 'undefined' ? Settings.avatars[Settings.profile.avatar] : '';
+    const targetEntry = this.leaderboardData.find(e => e.uid === targetUid);
+    this.db.ref('friendRequests/' + targetUid + '/' + this.uid)
+      .set({ name, avatar, ts: Date.now() })
+      .then(() => {
+        alert('Friend request sent to ' + (targetEntry?.name || 'Player') + '!');
+        this.closeProfile();
+      })
+      .catch(err => alert('Failed: ' + err.message));
+  },
+
+  acceptFriendRequest(senderUid) {
+    if (!this.isOnline()) return;
+    const req = this._friendRequests[senderUid];
+    if (!req) return;
+    const myName = typeof Settings !== 'undefined' ? Settings.profile.name : 'Player';
+    const myAvatar = typeof Settings !== 'undefined' ? Settings.avatars[Settings.profile.avatar] : '';
+    const updates = {};
+    updates['friends/' + this.uid + '/' + senderUid] = { name: req.name, avatar: req.avatar, ts: Date.now() };
+    updates['friends/' + senderUid + '/' + this.uid] = { name: myName, avatar: myAvatar, ts: Date.now() };
+    updates['friendRequests/' + this.uid + '/' + senderUid] = null;
+    this.db.ref().update(updates).catch(err => console.error('acceptFriendRequest error:', err));
+  },
+
+  declineFriendRequest(senderUid) {
+    if (!this.isOnline()) return;
+    this.db.ref('friendRequests/' + this.uid + '/' + senderUid).remove().catch(() => {});
+  },
+
+  removeFriend(friendUid) {
+    if (!this.isOnline()) return;
+    if (!confirm('Remove friend?')) return;
+    this.db.ref('friends/' + this.uid + '/' + friendUid).remove().catch(() => {});
+    this.db.ref('friends/' + friendUid + '/' + this.uid).remove().catch(() => {});
+    // Close DM thread if open with this person
+    if (this._activeDmUid === friendUid) { this._activeDmUid = null; this._activeDmId = null; }
+    this._renderDmPanel();
+  },
+
+  // === DIRECT MESSAGES ===
+  _getDmId(uid1, uid2) {
+    return [uid1, uid2].sort().join('_');
+  },
+
+  openDM(targetUid) {
+    if (!this.isOnline() || !targetUid) return;
+    const friend = this._friends[targetUid] || this.leaderboardData.find(e => e.uid === targetUid);
+    this._activeDmUid = targetUid;
+    this._activeDmId = this._getDmId(this.uid, targetUid);
+    if (!this._dmMessages[this._activeDmId]) this._dmMessages[this._activeDmId] = [];
+
+    // Start listening to this thread if not already
+    if (!this._dmListeners[this._activeDmId]) {
+      const ref = this.db.ref('dms/' + this._activeDmId).orderByChild('ts').limitToLast(50);
+      this._dmListeners[this._activeDmId] = true;
+      ref.on('value', snap => {
+        const data = snap.val() || {};
+        this._dmMessages[this._activeDmId] = Object.values(data).sort((a, b) => a.ts - b.ts);
+        if (this._activeDmId === this._getDmId(this.uid, this._activeDmUid || '')) {
+          this._renderDmThread();
+        }
+      }, err => console.warn('DM listen error:', err.code));
+    }
+
+    this._markDmRead(targetUid);
+    this._showDmPanel();
+    this._renderDmThread();
+  },
+
+  _listenDmUnread() {
+    if (!this.isOnline()) return;
+    this.db.ref('dmUnread/' + this.uid).on('value', snap => {
+      const data = snap.val() || {};
+      for (const uid in data) {
+        if (uid !== this._activeDmUid) {
+          this._dmUnread[uid] = data[uid] || 0;
+        }
+      }
+      this._updateDmBadge();
+      this._renderDmPanel();
+      // Toast for new DM
+      const total = Object.values(this._dmUnread).reduce((s, v) => s + (v || 0), 0);
+      if (total > 0 && !this._dmPanelOpen) {
+        this._updateDmBadge();
+      }
+    });
+  },
+
+  _markDmRead(otherUid) {
+    if (!this.isOnline()) return;
+    this._dmUnread[otherUid] = 0;
+    this._updateDmBadge();
+    this.db.ref('dmUnread/' + this.uid + '/' + otherUid).remove().catch(() => {});
+  },
+
+  sendDM() {
+    if (!this.isOnline() || !this._activeDmUid || !this._activeDmId) return;
+    const input = document.getElementById('dm-input');
+    if (!input) return;
+    const text = input.value.trim().slice(0, 200);
+    if (!text) return;
+    const now = Date.now();
+    // 2-second rate limit
+    if (now - (this._lastDmSent || 0) < 2000) return;
+    this._lastDmSent = now;
+    input.value = '';
+    const name = typeof Settings !== 'undefined' ? Settings.profile.name : 'Player';
+    const avatar = typeof Settings !== 'undefined' ? Settings.avatars[Settings.profile.avatar] : '';
+    const msg = { uid: this.uid, name, avatar, text, ts: now };
+    this.db.ref('dms/' + this._activeDmId).push(msg).catch(err => console.error('sendDM error:', err));
+    // Increment unread for recipient
+    this.db.ref('dmUnread/' + this._activeDmUid + '/' + this.uid)
+      .transaction(val => (val || 0) + 1).catch(() => {});
+  },
+
+  // === DM PANEL UI ===
+  _getDmPanel() {
+    let panel = document.getElementById('dm-panel');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'dm-panel';
+      panel.className = 'dm-panel';
+      panel.innerHTML = `
+        <div class="dm-panel-header">
+          <span id="dm-panel-title">Friends &amp; DMs</span>
+          <button class="dm-close-btn" onclick="Firebase.closeDmPanel()">\u2715</button>
+        </div>
+        <div id="dm-panel-body" class="dm-panel-body"></div>
+      `;
+      document.getElementById('app').appendChild(panel);
+    }
+    return panel;
+  },
+
+  _showDmPanel() {
+    const panel = this._getDmPanel();
+    panel.classList.add('dm-open');
+    this._dmPanelOpen = true;
+  },
+
+  toggleDmPanel() {
+    const panel = this._getDmPanel();
+    const isOpen = panel.classList.toggle('dm-open');
+    this._dmPanelOpen = isOpen;
+    if (isOpen) {
+      if (this._activeDmUid) {
+        this._renderDmThread();
+      } else {
+        this._renderDmPanel();
+      }
+    }
+  },
+
+  closeDmPanel() {
+    const panel = document.getElementById('dm-panel');
+    if (panel) { panel.classList.remove('dm-open'); this._dmPanelOpen = false; }
+  },
+
+  showFriendsList() {
+    this._activeDmUid = null;
+    this._activeDmId = null;
+    this._renderDmPanel();
+  },
+
+  _updateDmBadge() {
+    const btn = document.getElementById('dm-toggle-btn');
+    if (!btn) return;
+    const total = Object.keys(this._friendRequests).length
+      + Object.values(this._dmUnread).reduce((s, v) => s + (v || 0), 0);
+    let badge = btn.querySelector('.chat-badge-count');
+    if (total > 0) {
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.className = 'chat-badge-count';
+        btn.appendChild(badge);
+      }
+      badge.textContent = total > 99 ? '99+' : String(total);
+    } else if (badge) {
+      badge.remove();
+    }
+  },
+
+  _renderDmPanel() {
+    if (!this._dmPanelOpen || this._activeDmUid) return;
+    const body = document.getElementById('dm-panel-body');
+    const title = document.getElementById('dm-panel-title');
+    if (!body) return;
+    if (title) title.textContent = 'Friends \u0026 DMs';
+
+    const reqUids = Object.keys(this._friendRequests);
+    const friendUids = Object.keys(this._friends);
+    let html = '';
+
+    if (reqUids.length) {
+      html += '<div class="dm-section-header">\u{1F4E8} Friend Requests</div>';
+      reqUids.forEach(uid => {
+        const r = this._friendRequests[uid];
+        html += `<div class="dm-row">
+          <span class="dm-avatar">${r.avatar || '\u{1F3B2}'}</span>
+          <span class="dm-name">${this._escapeHtml(r.name || 'Player')}</span>
+          <div class="dm-actions">
+            <button class="dm-btn dm-accept" onclick="Firebase.acceptFriendRequest('${uid}')" title="Accept">\u2713</button>
+            <button class="dm-btn dm-decline" onclick="Firebase.declineFriendRequest('${uid}')" title="Decline">\u2715</button>
+          </div>
+        </div>`;
+      });
+    }
+
+    if (friendUids.length) {
+      html += '<div class="dm-section-header">\u{1F465} Friends</div>';
+      friendUids.forEach(uid => {
+        const f = this._friends[uid];
+        const unread = this._dmUnread[uid] || 0;
+        const unreadBadge = unread > 0 ? `<span class="dm-unread-badge">${unread}</span>` : '';
+        html += `<div class="dm-row">
+          <span class="dm-avatar">${f.avatar || '\u{1F3B2}'}</span>
+          <span class="dm-name">${this._escapeHtml(f.name || 'Player')}${unreadBadge}</span>
+          <div class="dm-actions">
+            <button class="dm-btn" onclick="Firebase.openDM('${uid}')" title="Message">\u{1F4AC}</button>
+            <button class="dm-btn dm-decline" onclick="Firebase.removeFriend('${uid}')" title="Remove">\u2715</button>
+          </div>
+        </div>`;
+      });
+    } else if (!reqUids.length) {
+      html += '<div class="dm-empty">No friends yet.<br>Tap a player\'s name in the leaderboard or chat to add them!</div>';
+    }
+
+    body.innerHTML = html;
+  },
+
+  _renderDmThread() {
+    if (!this._dmPanelOpen) return;
+    const body = document.getElementById('dm-panel-body');
+    const title = document.getElementById('dm-panel-title');
+    if (!body) return;
+    const uid = this._activeDmUid;
+    const friend = this._friends[uid] || this.leaderboardData.find(e => e.uid === uid);
+    const name = friend?.name || 'Player';
+    const avatar = friend?.avatar || '\u{1F3B2}';
+    if (title) title.textContent = avatar + ' ' + name;
+
+    const msgs = this._dmMessages[this._activeDmId] || [];
+    const msgsHtml = msgs.map(m => {
+      const isMe = m.uid === this.uid;
+      return `<div class="chat-msg ${isMe ? 'chat-me' : ''}">
+        <span class="chat-avatar">${m.avatar || ''}</span>
+        <span class="chat-name">${this._escapeHtml(m.name || 'Player')}</span>
+        <span class="chat-text">${this._escapeHtml(m.text || '')}</span>
+      </div>`;
+    }).join('');
+
+    body.innerHTML = `
+      <button class="dm-back-btn" onclick="Firebase.showFriendsList()">\u2190 Back</button>
+      <div id="dm-messages" class="chat-messages">${msgsHtml || '<div class="chat-empty">No messages yet. Say hi!</div>'}</div>
+      <div class="chat-input-row">
+        <input type="text" id="dm-input" maxlength="200" placeholder="Message ${this._escapeHtml(name)}..." onkeydown="if(event.key==='Enter')Firebase.sendDM()">
+        <button onclick="Firebase.sendDM()">Send</button>
+      </div>
+    `;
+    const el = document.getElementById('dm-messages');
+    if (el) el.scrollTop = el.scrollHeight;
   },
 
   _escapeHtml(text) {
