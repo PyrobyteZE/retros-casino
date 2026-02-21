@@ -207,9 +207,11 @@ const Roulette = {
     if (totalWin > 0) {
       this.showResult(numStr + ' ' + color.toUpperCase() + ' \u2014 Won ' + App.formatMoney(totalWin) + '!', 'win');
       GameStats.record('roulette', 'win', totalWin - this.totalBet);
+      App.recordWin();
     } else {
       this.showResult(numStr + ' ' + color.toUpperCase() + ' \u2014 Lost ' + App.formatMoney(this.totalBet), 'lose');
       GameStats.record('roulette', 'lose', this.totalBet);
+      App.recordLoss();
     }
 
     this.history.unshift({ num: resultNum, color });

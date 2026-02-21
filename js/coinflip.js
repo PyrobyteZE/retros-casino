@@ -312,6 +312,7 @@ const CoinFlip = {
         App.addBalance(winnings);
         this.showResult('Won ' + App.formatMoney(winnings) + '!', 'win');
         GameStats.record('coinflip', 'win', winnings - bet);
+        App.recordWin();
         this.addHistory(result, true, winnings - bet);
         // Easter egg: track win streak
         this._cfWinStreak = (this._cfWinStreak || 0) + 1;
@@ -319,6 +320,7 @@ const CoinFlip = {
       } else {
         this.showResult('Lost ' + App.formatMoney(bet), 'lose');
         GameStats.record('coinflip', 'lose', bet);
+        App.recordLoss();
         this.addHistory(result, false, bet);
         this._cfWinStreak = 0;
         if (typeof Pets !== 'undefined') {

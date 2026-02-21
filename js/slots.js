@@ -188,9 +188,11 @@ const Slots = {
         App.addBalance(payout);
         this.showResult('Won ' + App.formatMoney(payout) + '!', 'win');
         GameStats.record('slots', 'win', payout - totalBet);
+        App.recordWin();
       } else {
         this.showResult('No win', 'lose');
         GameStats.record('slots', 'lose', totalBet);
+        App.recordLoss();
       }
 
       this.spinning = false;

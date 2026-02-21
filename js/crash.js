@@ -125,6 +125,7 @@ const Crash = {
     const cashoutMult = this.multiplier.toFixed(2);
     this.showResult('Cashed out at ' + cashoutMult + 'x \u2014 Won ' + App.formatMoney(winnings), 'win');
     GameStats.record('crash', 'win', winnings - this.currentBet);
+    App.recordWin();
 
     this.history.unshift({ mult: parseFloat(cashoutMult), crashed: false });
     if (this.history.length > 20) this.history.length = 20;
@@ -151,6 +152,7 @@ const Crash = {
     this.drawGraph(true);
     this.showResult('Crashed at ' + this.crashPoint.toFixed(2) + 'x \u2014 Lost ' + App.formatMoney(this.currentBet), 'lose');
     GameStats.record('crash', 'lose', this.currentBet);
+    App.recordLoss();
     if (typeof Stocks !== 'undefined') Stocks.onCasinoLoss(this.currentBet);
 
     this.history.unshift({ mult: parseFloat(this.crashPoint.toFixed(2)), crashed: true });

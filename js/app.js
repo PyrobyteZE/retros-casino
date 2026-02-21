@@ -5,6 +5,7 @@ const App = {
   totalClicks: 0,
   upgrades: { clickValue: 0, autoClicker: 0, luckyClick: 0, critClick: 0, autoBet: 0 },
   rebirth: 0,
+  stats: { gamesWon: 0, gamesLost: 0 },
   currentScreen: 'home',
   screenHistory: [],
 
@@ -65,6 +66,9 @@ const App = {
     if (amount > 0) this.totalEarned = this.safeAdd(this.totalEarned, amount);
     this.updateBalance();
   },
+
+  recordWin() { this.stats.gamesWon++; },
+  recordLoss() { this.stats.gamesLost++; },
 
   // Rounds to 2 decimal places to prevent floating point accumulation
   safeAdd(a, b) {
@@ -147,6 +151,7 @@ const App = {
       totalClicks: this.totalClicks,
       upgrades: this.upgrades,
       rebirth: this.rebirth,
+      stats: this.stats,
       loans: typeof Loans !== 'undefined' ? Loans.getSaveData() : null,
       properties: typeof Properties !== 'undefined' ? Properties.getSaveData() : null,
       crime: typeof Crime !== 'undefined' ? Crime.getSaveData() : null,
@@ -170,6 +175,7 @@ const App = {
       this.totalClicks = data.totalClicks || 0;
       this.upgrades = data.upgrades || { clickValue: 0, autoClicker: 0, luckyClick: 0, critClick: 0, autoBet: 0 };
       this.rebirth = data.rebirth || 0;
+      this.stats = data.stats || { gamesWon: 0, gamesLost: 0 };
       if (typeof Loans !== 'undefined') {
         if (data.loans) Loans.loadSaveData(data.loans);
         else { Loans.debt = data.debt || 0; Loans.loanTime = data.loanTime || 0; } // legacy

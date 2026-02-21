@@ -140,8 +140,11 @@ const Clicker = {
       '• Properties & Crime buildings\n' +
       '• Stock portfolio & crypto rigs\n' +
       '• Loans & debt\n' +
+      '• Your player stock holdings (shares owned)\n' +
       (unstoredPets > 0 ? '• ' + unstoredPets + ' ACTIVE PETS WILL BE LOST!\n' : '') +
-      '\nPets in storage will be kept.\n\n' +
+      '\nKEPT through rebirth:\n' +
+      '• Your owned companies & their upgrades\n' +
+      '• Pets in storage\n\n' +
       'You will get:\n' +
       '• 1.5x earnings multiplier (stacks)\n' +
       '• 10% cheaper upgrades\n' +
@@ -196,6 +199,12 @@ const Clicker = {
       Crypto.upgrades = { cpu: 0, gpu: 0, overclock: 0 };
       Crypto.cooling = Crypto.coolingUpgrades.map(() => false);
       Crypto.heat = 0;
+    }
+
+    // Reset player stock holdings but keep owned companies + upgrades + slots
+    if (typeof Companies !== 'undefined') {
+      Companies._holdings = {};
+      Companies._saveLocal();
     }
 
     // Reset pets (storage survives)

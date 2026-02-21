@@ -285,9 +285,10 @@ const Plinko = {
           this.showResult(ball.mult + 'x \u2014 ' + (winnings > 0 ? 'Won ' + App.formatMoney(winnings) : 'Lost'), result);
         }
 
-        if (isWin) GameStats.record('plinko', 'win', net);
+        if (isWin) { GameStats.record('plinko', 'win', net); App.recordWin(); }
         else {
           GameStats.record('plinko', 'lose', ball.bet - winnings);
+          App.recordLoss();
           if (typeof Stocks !== 'undefined') Stocks.onCasinoLoss(ball.bet - winnings);
         }
 

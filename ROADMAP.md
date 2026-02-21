@@ -88,6 +88,16 @@
   - Broadcasts "PANIC SELL" news event to all players
 - [x] **Rebirth compatibility** — player stock holdings reset on rebirth; owned companies + upgrades survive
 
+## v1.7 - Fixes & Polish (DONE)
+- [x] **Persistent game stats** — wins/losses tracked and saved across all 8 casino games; feeds leaderboard "Wins" tab correctly
+- [x] **Loans: totalDebtPaid persists** — debt paid off stat now survives page reloads; fixes leaderboard "Debt Paid" tab
+- [x] **Counter-loan cap raised** — max lend-to-shark increased from $50K → $1B (late-game viable)
+- [x] **News Popups toggle** — settings option to enable/disable breaking news alerts
+- [x] **Rebirth dialog** — clearly lists what resets (stock holdings) vs what survives (companies + upgrades)
+- [x] **Admin panel live prices** — player stock prices update in real-time while market tab is open
+- [x] **Admin boom/crash news** — global news event broadcast when admin manipulates player stocks
+- [x] **Panic sell news** — coordinated dump on player stocks fires "PANIC SELL" news to all players
+
 ## v2.0 - Full Multiplayer
 - [ ] Real-time multiplayer poker tables
 - [ ] Live dealer blackjack

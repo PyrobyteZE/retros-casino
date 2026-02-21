@@ -167,11 +167,13 @@ const Blackjack = {
         App.addBalance(payout);
         this.showResult((isBlackjack ? 'Blackjack! ' : '') + 'Won ' + App.formatMoney(payout), 'win');
         GameStats.record('blackjack', 'win', payout - this.currentBet);
+        App.recordWin();
         break;
       }
       case 'lose':
         this.showResult('Dealer wins. Lost ' + App.formatMoney(this.currentBet), 'lose');
         GameStats.record('blackjack', 'lose', this.currentBet);
+        App.recordLoss();
         break;
       case 'push':
         App.addBalance(this.currentBet);

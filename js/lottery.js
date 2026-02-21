@@ -165,10 +165,12 @@ const Lottery = {
       resultEl.textContent = 'You won ' + App.formatMoney(finalPrize) + '!';
       resultEl.className = 'game-result win';
       GameStats.record('lottery', 'win', finalPrize);
+      App.recordWin();
     } else {
       resultEl.textContent = 'No match - better luck next time!';
       resultEl.className = 'game-result lose';
       GameStats.record('lottery', 'lose', cost);
+      App.recordLoss();
     }
   }
 };

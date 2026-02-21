@@ -1053,7 +1053,7 @@ const Loans = {
   // ============ COUNTER-LOAN (R5+) ============
 
   lendToShark(amount) {
-    const maxLend = 50000;
+    const maxLend = 1_000_000_000;
     if ((App.rebirth || 0) < 5) { alert('Requires Rebirth 5'); return; }
     if (!amount || amount < 1) { alert('Enter a valid amount.'); return; }
     if (amount > maxLend) { alert('Max lend: ' + App.formatMoney(maxLend)); return; }
@@ -1240,6 +1240,7 @@ const Loans = {
       negotiatorPurchased: this._negotiatorPurchased,
       interestReduction: this._interestReduction,
       riggedDecks: this._riggedDecks,
+      totalDebtPaid: this._totalPaid || 0,
     };
   },
 
@@ -1262,5 +1263,6 @@ const Loans = {
     if (data.negotiatorPurchased) this._negotiatorPurchased = true;
     if (data.interestReduction) this._interestReduction = data.interestReduction;
     if (data.riggedDecks) this._riggedDecks = Object.assign(this._riggedDecks, data.riggedDecks);
+    if (data.totalDebtPaid) this._totalPaid = data.totalDebtPaid;
   },
 };

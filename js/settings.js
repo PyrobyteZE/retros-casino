@@ -25,6 +25,7 @@ const Settings = {
     showStreaks: true,
     fastAnimations: false,
     showStockTicker: false,
+    newsPopups: false,
   },
 
   init() {
@@ -246,6 +247,14 @@ const Settings = {
             <span class="toggle-slider"></span>
           </label>
           <span class="rig-hint">Live price bar</span>
+        </div>
+        <div class="settings-row">
+          <label>News Popups:</label>
+          <label class="toggle-switch">
+            <input type="checkbox" ${this.options.newsPopups ? 'checked' : ''} onchange="Settings.setOption('newsPopups', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="rig-hint">Breaking news alerts</span>
         </div>
       </div>
     `;
