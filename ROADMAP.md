@@ -124,6 +124,26 @@
   - 🍔 Food, 💊 Pharma, 🕵️ Crime, ✨ Vibes-Based (no linked stock)
   - Nudge ±0.3%/tick max; won't push system stocks above 8× base via industry alone
 
+## v1.9 - Company Properties & World Prices (DONE)
+- [x] **40 purchaseable properties** — 4 tiers per industry (progressive costs $80K → $20M)
+  - ⛽ Energy: Gas Station, Oil Rig, Fusion Reactor, Dyson Sphere Segment
+  - 💻 Tech: Server Rack, Data Center, AI Cluster, Quantum Core
+  - 🎮 Entertainment: Arcade Cabinet, Movie Studio, Theme Park, Global Media Empire
+  - 🦈 Finance: ATM Network, Hedge Fund, Investment Bank, Central Bank Seat
+  - 🚀 Space: Satellite Link, Launch Pad, Orbital Station, Mars Colony
+  - 🍔 Food: Food Truck, Restaurant Chain, Megafarm, Global Food Corp
+  - 🪖 Military: Arms Depot, Weapons Factory, Defense Contractor HQ, Black Site
+  - 💊 Pharma: Lab Bench, Clinical Trial Wing, Biotech Campus, Patent Monopoly
+  - 🕵️ Crime: Shell Company, Money Laundromat, Smuggling Ring, Shadow Syndicate
+  - ✨ Vibes: Good Energy Crystal, Vibe Consultancy, Manifestation Campus, The Vibes Dimension
+- [x] **World price multiplier** — property income scales 0.3×–2.0× based on linked system stocks
+  - Energy scales with JOIL & ROIL; Tech with RETRO; Entertainment/Military with JOY
+  - Finance with SHARK; Space with LUNA; others fixed at 1.0×
+- [x] **Income split slider** — 0–100% personal vs reinvest per company
+  - Personal portion credited to owner's balance every 5 seconds
+  - Reinvest portion micro-boosts the company's main stock price (stock authority)
+- [x] **Properties UI** in company Manage tab — 2-column grid, world price indicator (green/red)
+
 ## v2.0 - Full Multiplayer
 - [ ] Real-time multiplayer poker tables
 - [ ] Live dealer blackjack
