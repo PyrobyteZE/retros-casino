@@ -98,6 +98,32 @@
 - [x] **Admin boom/crash news** — global news event broadcast when admin manipulates player stocks
 - [x] **Panic sell news** — coordinated dump on player stocks fires "PANIC SELL" news to all players
 
+## v1.8 - Company Wars & Market Chaos (DONE)
+- [x] **Company Scandals** — authority randomly triggers funny scandals on public stocks (18 templates)
+  - Drops price 15–30%, broadcasts news to all players
+  - Owner can pay to suppress the scandal (cost scales with base price)
+  - 5-minute cooldown per stock to prevent spam
+- [x] **Competitor & Sabotage system** — set rival companies, pay to sabotage their stocks
+  - 65% success: target stocks crash 20–40%
+  - 35% fail: your own main stock drops 10–20% and target is notified
+  - RIVAL badge shown on competitor cards in Browse tab
+- [x] **Remove Stock from Company** — owner can delete individual stocks (with optional shareholder refund)
+- [x] **Admin: Purge player** — admin can wipe a player's Firebase data from the leaderboard
+- [x] **Mania events** — rare 0.2–0.3% chance per tick for explosive price spikes (+300–1100%)
+  - Both system and player stocks eligible
+  - Coordinated pump (buy pressure > 15%) also broadcasts boom news
+- [x] **Mania cooldowns** — 120s cooldown per stock after a mania event; prevents stacking
+- [x] **Hard price caps** — system stocks capped at 15× base; player stocks at 20× base
+  - Automatically sets a recovery target when cap is hit
+- [x] **Industry picker** — companies now declare an industry on founding:
+  - ⛽ Energy → nudges JOIL & ROIL
+  - 💻 Technology → nudges RETRO
+  - 🎮 Entertainment / 🪖 Military → nudges JOY
+  - 🦈 Finance → nudges SHARK
+  - 🚀 Space → nudges LUNA
+  - 🍔 Food, 💊 Pharma, 🕵️ Crime, ✨ Vibes-Based (no linked stock)
+  - Nudge ±0.3%/tick max; won't push system stocks above 8× base via industry alone
+
 ## v2.0 - Full Multiplayer
 - [ ] Real-time multiplayer poker tables
 - [ ] Live dealer blackjack
