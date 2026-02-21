@@ -23,7 +23,12 @@ const App = {
     this.load();
     this.updateBalance();
     this.startAutoSave();
+    // beforeunload is unreliable on mobile PWA; pagehide + visibilitychange cover it
     window.addEventListener('beforeunload', () => this.save());
+    window.addEventListener('pagehide', () => this.save());
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') this.save();
+    });
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -162,7 +167,10 @@ const App = {
       version: 7
     };
     localStorage.setItem('retros_casino_save', JSON.stringify(data));
-    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushLeaderboard();
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.pushLeaderboard();
+      Firebase.pushCloudSave();
+    }
   },
 
   load() {
@@ -202,6 +210,7 @@ const App = {
   },
 
   startAutoSave() {
+    if (this._autoSaveTimer) clearInterval(this._autoSaveTimer);
     const interval = (typeof Settings !== 'undefined') ? Settings.options.autoSaveInterval * 1000 : 30000;
     this._autoSaveTimer = setInterval(() => this.save(), interval);
   }

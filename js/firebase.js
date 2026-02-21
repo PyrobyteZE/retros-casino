@@ -124,6 +124,8 @@ const Firebase = {
       // Refresh name registry every 5 min
       setInterval(() => this._fetchRegisteredNames(), 300000);
       this._fetchRegisteredNames();
+      // Cloud save: restore if localStorage is empty, then push current save
+      this._initCloudSave();
     }).catch(err => {
       this.online = false;
       this.connectionState = 'disconnected';
@@ -246,8 +248,17 @@ const Firebase = {
     const ref = this.db.ref('leaderboard').orderByChild('totalEarned').limitToLast(50);
     this.leaderboardListener = ref.on('value', snap => {
       const data = snap.val() || {};
-      this.leaderboardData = Object.entries(data)
-        .map(([uid, d]) => ({ uid, ...d }))
+      const entries = Object.entries(data).map(([uid, d]) => ({ uid, ...d }));
+      // Dedup by name: keep highest totalEarned per name (stale UIDs from cache clears)
+      const byName = {};
+      entries.forEach(e => {
+        const key = (e.name || '').toLowerCase();
+        if (!key || key === 'player') { byName[e.uid] = e; return; }
+        if (!byName[key] || (e.totalEarned || 0) > (byName[key].totalEarned || 0)) {
+          byName[key] = e;
+        }
+      });
+      this.leaderboardData = Object.values(byName)
         .sort((a, b) => (b.totalEarned || 0) - (a.totalEarned || 0));
       console.log('Firebase: leaderboard updated,', this.leaderboardData.length, 'players');
       if (App.currentScreen === 'leaderboard') this.renderLeaderboard();
@@ -1305,6 +1316,50 @@ const Firebase = {
         this.db.ref('accounts/' + nameLower + '/save').set(save).catch(() => {});
       }
     }).catch(() => {});
+  },
+
+  // === CLOUD SAVE ===
+  _lastCloudSave: 0,
+
+  _initCloudSave() {
+    if (!this.isOnline()) return;
+    const hasLocal = !!localStorage.getItem('retros_casino_save');
+    if (!hasLocal) {
+      // No local save — try to restore from cloud
+      this.db.ref('cloudSaves/' + this.uid).once('value', snap => {
+        const save = snap.val();
+        if (save && save.data) {
+          localStorage.setItem('retros_casino_save', save.data);
+          if (typeof App !== 'undefined') {
+            App.load();
+            App.updateBalance();
+            if (typeof Clicker !== 'undefined') { Clicker.startAutoClicker(); Clicker.updateStats(); Clicker.renderUpgrades(); }
+          }
+          const toast = document.createElement('div');
+          toast.className = 'insider-tip-toast';
+          toast.textContent = '\u2601\uFE0F Save restored from cloud!';
+          document.body.appendChild(toast);
+          setTimeout(() => toast.remove(), 4000);
+          console.log('Firebase: cloud save restored');
+        }
+        // Push current state to cloud after load (or immediately if nothing was restored)
+        setTimeout(() => this.pushCloudSave(), 2000);
+      }).catch(() => {});
+    } else {
+      // Has local save — push it to cloud within 5s of sign-in
+      setTimeout(() => this.pushCloudSave(), 5000);
+    }
+  },
+
+  pushCloudSave() {
+    if (!this.isOnline()) return;
+    const now = Date.now();
+    if (now - this._lastCloudSave < 55000) return; // max once per 55s
+    this._lastCloudSave = now;
+    const data = localStorage.getItem('retros_casino_save');
+    if (!data) return;
+    this.db.ref('cloudSaves/' + this.uid).set({ data, savedAt: now })
+      .catch(err => console.warn('Firebase cloudSave write error:', err.code));
   },
 
   // === FRIENDS ===
