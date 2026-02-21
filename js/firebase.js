@@ -1832,6 +1832,35 @@ const Firebase = {
     }).catch(err => console.error('adminRemoveStock error:', err));
   },
 
+  // === ADMIN SET COMPANY PERSONALITY ===
+  adminSetCompanyPersonality(ownerUid, ticker, newPersonality) {
+    if (!this.isOnline()) return Promise.resolve();
+    const PD = { standard: { basePrice: 100, vol: 0.05 }, extreme: { basePrice: 100, vol: 0.18 }, penny: { basePrice: 0.50, vol: 0.25 } };
+    const pd = PD[newPersonality] || PD.standard;
+    return this.db.ref('companies/' + ownerUid).once('value').then(snap => {
+      const data = snap.val();
+      if (!data) return;
+      const companies = data.companies || (data.stocks ? [data] : []);
+      let changed = false;
+      companies.forEach(c => {
+        if (c.ticker !== ticker) return;
+        const oldPersonality = c.personality || 'standard';
+        c.personality = newPersonality;
+        (c.stocks || []).forEach(s => {
+          s.vol = pd.vol;
+          if (newPersonality === 'penny') {
+            s.basePrice = pd.basePrice; // reset to $0.50
+          } else if (oldPersonality === 'penny' || (s.basePrice || 100) < pd.basePrice) {
+            s.basePrice = pd.basePrice; // lift to at least $100
+          }
+        });
+        changed = true;
+      });
+      if (!changed) return;
+      return this.db.ref('companies/' + ownerUid).update({ companies });
+    }).catch(err => console.error('adminSetCompanyPersonality error:', err));
+  },
+
   // === ADMIN MANAGEMENT ===
   _listenAdmins() {
     if (!this.isOnline()) return;

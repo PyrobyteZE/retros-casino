@@ -244,6 +244,7 @@ const Admin = {
       this.renderHistory();
       this.renderAdminLeaderboard();
       this.renderAdminsSection();
+      this.renderPersonalitySection();
       this.renderPlayerStockRemoveSection();
     }
   },
@@ -426,6 +427,10 @@ const Admin = {
           <button class="admin-btn win-btn" onclick="Properties.maxAll()">Max All Properties</button>
           <button class="admin-btn danger" onclick="Properties.resetAll()">Reset Properties</button>
         </div>
+      </div>
+      <div class="admin-section">
+        <h3>Change Company Personality</h3>
+        <div id="admin-personality-section"></div>
       </div>
       <div class="admin-section">
         <h3>Remove Player Stock</h3>
@@ -1160,6 +1165,59 @@ const Admin = {
   revokeAdmin(uid, name) {
     if (!confirm(`Revoke admin from ${name || uid.slice(0,6)}?`)) return;
     Firebase.revokeAdmin(uid);
+  },
+
+  // === CHANGE COMPANY PERSONALITY ===
+  renderPersonalitySection() {
+    const container = document.getElementById('admin-personality-section');
+    if (!container) return;
+    const stocks = typeof Companies !== 'undefined' ? Companies._allPlayerStocks : {};
+    const companies = new Map();
+    for (const sym in stocks) {
+      const s = stocks[sym];
+      if (s.companyTicker && !companies.has(s.companyTicker)) {
+        companies.set(s.companyTicker, {
+          ticker: s.companyTicker,
+          name: s.companyName || s.companyTicker,
+          ownerUid: s.ownerUid,
+          ownerName: s.ownerName || 'Unknown',
+          personality: s.companyPersonality || 'standard',
+        });
+      }
+    }
+    if (!companies.size) {
+      container.innerHTML = '<div style="font-size:12px;color:var(--text-dim)">No player companies found.</div>';
+      return;
+    }
+    const opts = [...companies.values()].map(c =>
+      `<option value="${c.ticker}|${c.ownerUid}">[${c.ticker}] ${c.name} — ${c.ownerName} (${c.personality})</option>`
+    ).join('');
+    container.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <select id="admin-personality-company" style="padding:6px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:13px">${opts}</select>
+        <div style="display:flex;gap:6px">
+          <select id="admin-personality-value" style="flex:1;padding:6px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:13px">
+            <option value="standard">📊 Standard</option>
+            <option value="extreme">🌋 Extreme</option>
+            <option value="penny">🪙 Penny</option>
+          </select>
+          <button class="admin-btn win-btn" onclick="Admin.changeCompanyPersonality()" style="white-space:nowrap">Apply</button>
+        </div>
+      </div>`;
+  },
+
+  changeCompanyPersonality() {
+    const compSel = document.getElementById('admin-personality-company');
+    const pSel = document.getElementById('admin-personality-value');
+    if (!compSel || !pSel || !compSel.value) return;
+    const [ticker, ownerUid] = compSel.value.split('|');
+    const newPersonality = pSel.value;
+    if (!confirm(`Change [${ticker}] personality to ${newPersonality}?`)) return;
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
+    Firebase.adminSetCompanyPersonality(ownerUid, ticker, newPersonality).then(() => {
+      this.renderPersonalitySection();
+      this.renderPlayerStockControls();
+    });
   },
 
   // === REMOVE PLAYER STOCK ===
