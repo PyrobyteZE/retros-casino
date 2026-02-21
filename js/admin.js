@@ -786,6 +786,9 @@ const Admin = {
   renderPlayerStockControls() {
     const container = document.getElementById('admin-player-stock-controls');
     if (!container) return;
+    // Don't wipe price inputs while admin is typing a custom value
+    const focused = document.activeElement;
+    if (focused && focused.id && focused.id.startsWith('admin-pstock-price-')) return;
     if (typeof Companies === 'undefined' || !Object.keys(Companies._allPlayerStocks).length) {
       container.innerHTML = '<span style="color:#888;font-size:13px">No player stocks online yet.</span>';
       return;
