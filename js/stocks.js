@@ -8,7 +8,7 @@ const Stocks = {
     { symbol: 'PIXEL', name: 'Pixel Media',     basePrice: 30,   volatility: 0.04, sector: 'Media'     },
     // SHARK: price tracks loan debt + interest — not traded at random, driven by Loans state
     { symbol: 'SHARK', name: 'Shark Loans Inc', basePrice: 150,  volatility: 0.015,sector: 'Finance'   },
-    { symbol: 'BLAZE', name: 'Blaze Foods',     basePrice: 40,   volatility: 0.02, sector: 'Consumer'  },
+    { symbol: 'GOOSE', name: 'Goose Foods',     basePrice: 40,   volatility: 0.02, sector: 'Consumer'  },
     { symbol: 'MOON',  name: 'MoonCoin Inc',    basePrice: 10,   volatility: 0.15, sector: 'Crypto'    },
     { symbol: 'JOY',   name: 'JoyCorp Defense', basePrice: 500,  volatility: 0.03, sector: 'Defense'   },
     // NEW: Luna Inc — chaotic long-swing stock, amplified when RETRO is down

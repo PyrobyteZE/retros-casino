@@ -148,6 +148,8 @@ const Companies = {
   _scandals: {},           // { [symbol]: { text, ownerUid, firedAt, suppressed } }
   _scandalCooldowns: {},   // { [symbol]: timestamp } — prevent spam
   _competitors: {},        // { [theirUid]: { name, ticker, setAt } }
+  _shareOffers: {},        // { [offerId]: offer } — incoming private share offers
+  _peakHolds: {},          // { [sym]: ticksLeft } — plateau counter before hard-cap decay
   activeTab: 'browse',
 
   // Scandal text templates ('{n}' replaced with company name)
@@ -185,10 +187,17 @@ const Companies = {
       Firebase.listenStockDeletions(data => this._onStockDeletion(data));
       Firebase.listenCompetitors(data => { this._competitors = data || {}; this._triggerRender(); });
       Firebase.listenSabotageNotifications(notif => this._onSabotageNotification(notif));
+      Firebase.listenShareOffers(Firebase.uid, data => {
+        this._shareOffers = data || {};
+        this._triggerRender();
+      });
       Firebase.listenSaleReceipts(Firebase.uid, receipt => {
         App.addBalance(receipt.amount);
         App.save();
-        Toast.show('\u{1F3E2} Company sold! +' + App.formatMoney(receipt.amount) + ' received.', 'var(--green-dark)', 5000);
+        const msg = receipt.type === 'shares'
+          ? '\u{1F4C8} Shares sold! +' + App.formatMoney(receipt.amount) + (receipt.symbol ? ' for ' + receipt.symbol : '') + ' received.'
+          : '\u{1F3E2} Company sold! +' + App.formatMoney(receipt.amount) + ' received.';
+        Toast.show(msg, 'var(--green-dark)', 5000);
       });
     }
   },
@@ -397,11 +406,27 @@ const Companies = {
           : personality === 'extreme' ? effectiveBase * 15
           : effectiveBase * 10;
 
-        // --- Hard price cap: snap back when exceeded ---
-        if (s.price > hardCap) {
-          this._playerStockTargets[sym] = { target: hardCap * 0.7, stepsLeft: 8 };
-          this._playerManiaCooldowns[sym] = Date.now();
-          s.price = Math.max(0.01, s.price + s.price * (Math.random() - 0.5) * 2 * vol);
+        // --- Hard price cap: plateau then gradual decay ---
+        // Stock holds near the cap for ~20 ticks (~40s), then decays over 50 ticks (~100s)
+        if (s.price > hardCap || this._peakHolds[sym] !== undefined) {
+          const holdLeft = this._peakHolds[sym];
+          if (holdLeft === undefined) {
+            // First cap hit: begin plateau
+            this._peakHolds[sym] = 20;
+            this._playerManiaCooldowns[sym] = Date.now();
+          }
+          if ((this._peakHolds[sym] || 0) > 0) {
+            // Holding near cap: gentle wobble, keep price in [85%–102%] of hardCap
+            this._peakHolds[sym]--;
+            const w = s.price * (Math.random() - 0.5) * 2 * vol * 0.25;
+            s.price = Math.max(hardCap * 0.85, Math.min(hardCap * 1.02, s.price + w));
+          } else {
+            // Plateau expired: start 50-step gradual decay toward 55% of cap
+            delete this._peakHolds[sym];
+            this._playerStockTargets[sym] = { target: hardCap * 0.55, stepsLeft: 50 };
+            this._playerManiaCooldowns[sym] = Date.now();
+            s.price = Math.max(0.01, s.price + s.price * (Math.random() - 0.5) * 2 * vol);
+          }
           const resLv2 = upg.resilience || 0;
           if (resLv2 > 0) { const fl = effectiveBase * 0.05 * resLv2; if (s.price < fl) s.price = fl; }
           updates[sym] = s.price;
@@ -1134,6 +1159,91 @@ const Companies = {
     this._triggerRender();
   },
 
+  // === PRIVATE SHARE OFFERS ===
+  offerShares(cIdx, sIdx) {
+    const c = this._companies[cIdx];
+    if (!c || !c.stocks[sIdx]) return;
+    const s = c.stocks[sIdx];
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) { alert('Must be online to send offers.'); return; }
+    const myUid = Firebase.uid;
+    const players = (Firebase.leaderboardData || []).filter(p => p.uid !== myUid);
+    if (!players.length) { alert('No other players found. They need to have logged in at least once.'); return; }
+    const opts = players.map(p => `<option value="${this._esc(p.uid)}">${this._esc(p.name || 'Player')}</option>`).join('');
+    const curPrice = s.price < 10 ? s.price.toFixed(2) : Math.round(s.price);
+    const html = `<div class="stock-trade-modal">
+      <div class="stock-trade-title">Offer ${this._esc(s.symbol)} Shares</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">Private deal \u2014 only the recipient sees this offer</div>
+      <div style="margin-bottom:8px">
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:3px">Send to</div>
+        <select id="offer-to" style="width:100%;padding:8px;background:var(--bg2);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:14px">${opts}</select>
+      </div>
+      <div style="margin-bottom:8px">
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:3px">Quantity (shares)</div>
+        <input type="number" id="offer-qty" min="0.0001" step="any" placeholder="e.g. 10" style="width:100%;padding:8px;box-sizing:border-box;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:14px">
+      </div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:3px">Price per share ($) <span style="color:var(--text-dim)">(market: $${curPrice})</span></div>
+        <input type="number" id="offer-pps" min="0.01" step="any" placeholder="${curPrice}" style="width:100%;padding:8px;box-sizing:border-box;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:14px">
+      </div>
+      <div class="stock-trade-buttons">
+        <button class="stock-trade-btn" onclick="Companies._sendOffer(${cIdx},${sIdx})">Send Offer</button>
+      </div>
+      <button class="stock-trade-cancel" onclick="Stocks.closeModal()">Cancel</button>
+    </div>`;
+    Stocks._showModal(html);
+  },
+
+  _sendOffer(cIdx, sIdx) {
+    const c = this._companies[cIdx];
+    if (!c || !c.stocks[sIdx]) return;
+    const s = c.stocks[sIdx];
+    const recipientUid = document.getElementById('offer-to')?.value;
+    const qty = parseFloat(document.getElementById('offer-qty')?.value);
+    const pps = parseFloat(document.getElementById('offer-pps')?.value);
+    if (!recipientUid) { alert('Select a recipient.'); return; }
+    if (isNaN(qty) || qty <= 0) { alert('Enter a valid quantity.'); return; }
+    if (isNaN(pps) || pps <= 0) { alert('Enter a valid price per share.'); return; }
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    if (!myUid) return;
+    const recipientEntry = (Firebase.leaderboardData || []).find(p => p.uid === recipientUid);
+    const recipientName = recipientEntry ? (recipientEntry.name || 'Player') : 'Player';
+    Firebase.sendShareOffer(recipientUid, {
+      symbol: s.symbol, stockName: s.name, companyName: c.name, ticker: c.ticker,
+      qty, pricePerShare: pps, totalCost: qty * pps,
+      fromUid: myUid, fromName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Player',
+      sentAt: Date.now(),
+    });
+    Stocks.closeModal();
+    Toast.show('\u{1F4E8} Offer sent to ' + this._esc(recipientName) + '!', '', 3500);
+  },
+
+  acceptShareOffer(offerId) {
+    const offer = this._shareOffers[offerId];
+    if (!offer) return;
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    if (!myUid) return;
+    if (App.balance < offer.totalCost) { alert('Not enough funds. Need ' + App.formatMoney(offer.totalCost)); return; }
+    if (!confirm('Buy ' + offer.qty + 'x ' + offer.symbol + ' from ' + this._esc(offer.fromName || 'Player') + ' for ' + App.formatMoney(offer.totalCost) + '?')) return;
+    App.addBalance(-offer.totalCost);
+    if (!this._holdings[offer.symbol]) this._holdings[offer.symbol] = { shares: 0, avgCost: 0 };
+    const h = this._holdings[offer.symbol];
+    h.avgCost = (h.shares * h.avgCost + offer.totalCost) / (h.shares + offer.qty);
+    h.shares += offer.qty;
+    this._saveLocal();
+    App.save();
+    // Credit the seller
+    Firebase.db.ref('companySaleReceipts/' + offer.fromUid).push({ amount: offer.totalCost, ts: Date.now(), type: 'shares', symbol: offer.symbol });
+    Firebase.removeShareOffer(myUid, offerId);
+    Toast.show('\u2705 Bought ' + offer.qty + 'x ' + offer.symbol + ' for ' + App.formatMoney(offer.totalCost), 'var(--green-dark)', 4000);
+    this._triggerRender();
+  },
+
+  declineShareOffer(offerId) {
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    if (!myUid) return;
+    Firebase.removeShareOffer(myUid, offerId);
+  },
+
   // === FIREBASE PUSH ===
   _pushToFirebase() {
     if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
@@ -1316,6 +1426,28 @@ const Companies = {
     const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
     let html = '';
 
+    // Incoming private share offers
+    const pendingOffers = Object.entries(this._shareOffers || {});
+    if (pendingOffers.length > 0) {
+      html += `<div class="company-manage-section" style="margin-bottom:10px;border-color:var(--gold)">
+        <h3 style="color:var(--gold)">\u{1F4E8} Incoming Share Offers</h3>
+        <div style="display:flex;flex-direction:column;gap:6px">`;
+      pendingOffers.forEach(([offerId, offer]) => {
+        html += `<div class="company-stock-row" style="align-items:flex-start">
+          <div style="flex:1;min-width:0">
+            <span class="csr-sym">${this._esc(offer.symbol)}</span>
+            <div style="font-size:12px;color:var(--text-dim)">${offer.qty} shares &times; ${App.formatMoney(offer.pricePerShare)} = <strong>${App.formatMoney(offer.totalCost)}</strong></div>
+            <div style="font-size:11px;color:var(--text-dim)">from ${this._esc(offer.fromName || 'Player')}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+            <button class="csr-toggle-btn" style="color:var(--green);border-color:var(--green);font-size:11px" onclick="Companies.acceptShareOffer('${offerId}')">Accept</button>
+            <button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);font-size:11px" onclick="Companies.declineShareOffer('${offerId}')">Decline</button>
+          </div>
+        </div>`;
+      });
+      html += `</div></div>`;
+    }
+
     // Each existing company
     this._companies.forEach((c, cIdx) => {
       const listing = this._companyListings[c.ticker];
@@ -1352,6 +1484,7 @@ const Companies = {
             ${!isMain ? `<button class="csr-toggle-btn" onclick="Companies.setMainStock(${cIdx},${sIdx})" style="font-size:10px">Set Main</button>` : ''}
             <button class="csr-toggle-btn" onclick="Companies.issueDividend(${cIdx},${sIdx})" style="color:var(--gold);border-color:var(--gold)" title="Pay cash per-share to all holders.">Dividend \u{2139}\uFE0F</button>
             ${c.stocks.length > 1 ? `<button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);font-size:10px" onclick="Companies.removeStock(${cIdx},${sIdx})">Remove</button>` : ''}
+            ${s.type === 'private' ? `<button class="csr-toggle-btn" style="font-size:10px;color:var(--gold);border-color:var(--gold)" onclick="Companies.offerShares(${cIdx},${sIdx})">Offer Shares</button>` : ''}
           </div>
         </div>`;
       });

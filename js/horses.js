@@ -2,7 +2,7 @@ const Horses = {
   horses: [
     { name: 'Thunder',  emoji: '🟥', color: '#ff5252', odds: 2.0 },
     { name: 'Shadow',   emoji: '🟦', color: '#448aff', odds: 3.0 },
-    { name: 'Blaze',    emoji: '🟧', color: '#ff9100', odds: 4.0 },
+    { name: 'Goose',    emoji: '🟧', color: '#ff9100', odds: 4.0 },
     { name: 'Storm',    emoji: '🟩', color: '#00e676', odds: 6.0 },
     { name: 'Lucky',    emoji: '🟪', color: '#ce93d8', odds: 10.0 },
     { name: 'Phantom',  emoji: '⬜', color: '#e0e0e0', odds: 15.0 }

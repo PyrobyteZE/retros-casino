@@ -1881,4 +1881,21 @@ const Firebase = {
     this.db.ref('admins/' + uid).remove()
       .catch(err => console.error('revokeAdmin error:', err));
   },
+
+  // === PRIVATE SHARE OFFERS ===
+  sendShareOffer(recipientUid, offer) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('privateShareOffers/' + recipientUid).push(offer)
+      .catch(err => console.error('sendShareOffer error:', err));
+  },
+
+  listenShareOffers(uid, cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('privateShareOffers/' + uid).on('value', snap => cb(snap.val() || {}));
+  },
+
+  removeShareOffer(recipientUid, offerId) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('privateShareOffers/' + recipientUid + '/' + offerId).remove();
+  },
 };
