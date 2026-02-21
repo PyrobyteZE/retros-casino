@@ -797,6 +797,11 @@ const Companies = {
       ...Object.keys(this._bankruptCompanies), // reserved until bankruptcy expires
     ]);
     if (allTickers.has(ticker)) { alert('Ticker "' + ticker + '" is already taken.'); return; }
+    // Prevent duplicate company names (case-insensitive)
+    const allNames = new Set(
+      Object.values(this._allPlayerStocks).map(s => (s.companyName || '').toLowerCase())
+    );
+    if (allNames.has(name.toLowerCase())) { alert('A company named "' + name + '" already exists.'); return; }
 
     App.balance -= this.FOUND_COST;
     App.updateBalance();
@@ -831,6 +836,7 @@ const Companies = {
     const allTickers = new Set([
       ...(typeof Stocks !== 'undefined' ? Stocks.stocks.map(s => s.symbol) : []),
       ...Object.keys(this._allPlayerStocks),
+      ...Object.keys(this._bankruptCompanies),
       ...this._companies.flatMap(co => co.stocks ? co.stocks.map(s => s.symbol) : []),
     ]);
     if (allTickers.has(sym)) { alert('Ticker "' + sym + '" is already taken.'); return; }

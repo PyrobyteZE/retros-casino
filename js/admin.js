@@ -244,6 +244,7 @@ const Admin = {
       this.renderHistory();
       this.renderAdminLeaderboard();
       this.renderAdminsSection();
+      this.renderPlayerStockRemoveSection();
     }
   },
 
@@ -425,6 +426,10 @@ const Admin = {
           <button class="admin-btn win-btn" onclick="Properties.maxAll()">Max All Properties</button>
           <button class="admin-btn danger" onclick="Properties.resetAll()">Reset Properties</button>
         </div>
+      </div>
+      <div class="admin-section">
+        <h3>Remove Player Stock</h3>
+        <div id="admin-remove-stock-list"></div>
       </div>
       <div class="admin-section">
         <h3>Manage Admins</h3>
@@ -1155,6 +1160,42 @@ const Admin = {
   revokeAdmin(uid, name) {
     if (!confirm(`Revoke admin from ${name || uid.slice(0,6)}?`)) return;
     Firebase.revokeAdmin(uid);
+  },
+
+  // === REMOVE PLAYER STOCK ===
+  renderPlayerStockRemoveSection() {
+    const container = document.getElementById('admin-remove-stock-list');
+    if (!container) return;
+    const stocks = typeof Companies !== 'undefined' ? Companies._allPlayerStocks : {};
+    const entries = Object.values(stocks);
+    if (!entries.length) {
+      container.innerHTML = '<div style="font-size:12px;color:var(--text-dim)">No player stocks found.</div>';
+      return;
+    }
+    const opts = entries.map(s =>
+      `<option value="${s.symbol}|${s.ownerUid}">${s.symbol} — ${s.companyName || ''} (${s.ownerName || 'Unknown'})</option>`
+    ).join('');
+    container.innerHTML = `
+      <div style="display:flex;gap:6px">
+        <select id="admin-remove-stock-select" style="flex:1;padding:6px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:13px">
+          ${opts}
+        </select>
+        <button class="admin-btn danger" onclick="Admin.removePlayerStock()" style="white-space:nowrap">Remove</button>
+      </div>`;
+  },
+
+  removePlayerStock() {
+    const sel = document.getElementById('admin-remove-stock-select');
+    if (!sel || !sel.value) return;
+    const [sym, ownerUid] = sel.value.split('|');
+    const s = typeof Companies !== 'undefined' && Companies._allPlayerStocks[sym];
+    const label = s ? `${sym} (${s.companyName || ''} by ${s.ownerName || 'Unknown'})` : sym;
+    if (!confirm(`Force-remove stock ${label}?\n\nThis will delist it immediately with no refund.`)) return;
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
+    Firebase.adminRemoveStock(sym, ownerUid).then(() => {
+      this.renderPlayerStockRemoveSection();
+      if (typeof Admin !== 'undefined' && Admin.activeTab === 'market') Admin.renderPlayerStockControls();
+    });
   },
 
   cleanDuplicateNames() {

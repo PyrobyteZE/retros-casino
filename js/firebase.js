@@ -1816,6 +1816,30 @@ const Firebase = {
       .catch(err => console.error('removePlayerStockPrices error:', err));
   },
 
+  // === ADMIN FORCE-REMOVE PLAYER STOCK ===
+  adminRemoveStock(sym, ownerUid) {
+    if (!this.isOnline()) return Promise.resolve();
+    // 1. Signal all clients to drop holdings (no refund)
+    this.pushStockDeletion(sym, 0, false);
+    // 2. Remove price data
+    this.removePlayerStockPrices([sym]);
+    // 3. Remove stock from owner's company data in Firebase
+    return this.db.ref('companies/' + ownerUid).once('value').then(snap => {
+      const data = snap.val();
+      if (!data) return;
+      const companies = data.companies || (data.stocks ? [data] : []);
+      let changed = false;
+      companies.forEach(c => {
+        if (!c.stocks) return;
+        const idx = c.stocks.findIndex(s => s.symbol === sym);
+        if (idx >= 0) { c.stocks.splice(idx, 1); changed = true; }
+        if ((c.mainIdx || 0) >= c.stocks.length) c.mainIdx = 0;
+      });
+      if (!changed) return;
+      return this.db.ref('companies/' + ownerUid).update({ companies });
+    }).catch(err => console.error('adminRemoveStock error:', err));
+  },
+
   // === ADMIN MANAGEMENT ===
   _listenAdmins() {
     if (!this.isOnline()) return;
