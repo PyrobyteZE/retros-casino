@@ -829,7 +829,13 @@ const Stocks = {
     else if (this.activeTab === 'news') this._renderNews(container);
     else if (this.activeTab === 'bounties') this._renderBounties(container);
     else if (this.activeTab === 'players') { if (typeof Companies !== 'undefined') Companies._renderBrowse(container); else container.innerHTML = ''; }
-    else if (this.activeTab === 'company') { if (typeof Companies !== 'undefined') Companies._renderManage(container); else container.innerHTML = ''; }
+    else if (this.activeTab === 'company') {
+      // Skip re-render while user is typing in an input to preserve form state
+      const focused = document.activeElement;
+      const userTyping = focused && (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA');
+      if (!userTyping && typeof Companies !== 'undefined') Companies._renderManage(container);
+      else if (!userTyping) container.innerHTML = '';
+    }
   },
 
   _renderMarket(container) {

@@ -909,8 +909,11 @@ const Companies = {
     const container = document.getElementById('companies-content');
     if (!container) return;
 
+    // Don't wipe the manage form while user is typing
+    const focused = document.activeElement;
+    const userTyping = focused && (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA');
     if (this.activeTab === 'browse') this._renderBrowse(container);
-    else this._renderManage(container);
+    else if (!userTyping) this._renderManage(container);
   },
 
   _renderBrowse(container) {
