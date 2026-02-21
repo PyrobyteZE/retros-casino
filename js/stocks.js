@@ -44,9 +44,6 @@ const Stocks = {
   _tickerOffset: 0,
   _tickerAnimFrame: null,
 
-  // Short selling (R5+)
-  _shorts: [],
-
   // Bounty board (R5+)
   _bounties: {},       // live data from Firebase
 
@@ -59,7 +56,6 @@ const Stocks = {
         return arr;
       });
       this._priceTargets = this.stocks.map(() => null);
-      this._restoreShorts(); // ensure short timers start even when offline
       this.initialized = true;
     }
     this.startTick();
@@ -88,7 +84,6 @@ const Stocks = {
       setTimeout(() => toast.remove(), 4000);
     });
     setInterval(() => this._expireBounties(), 300000);
-    this._restoreShorts();
     if (typeof Companies !== 'undefined') Companies.init();
   },
 
@@ -821,22 +816,21 @@ const Stocks = {
     if (this.activeTab === 'market') this._renderMarket(container);
     else if (this.activeTab === 'portfolio') this._renderPortfolio(container);
     else if (this.activeTab === 'news') this._renderNews(container);
-    else if (this.activeTab === 'shorts') this._renderShorts(container);
     else if (this.activeTab === 'bounties') this._renderBounties(container);
     else if (this.activeTab === 'players') { if (typeof Companies !== 'undefined') Companies._renderBrowse(container); else container.innerHTML = ''; }
     else if (this.activeTab === 'company') { if (typeof Companies !== 'undefined') Companies._renderManage(container); else container.innerHTML = ''; }
   },
 
   _renderMarket(container) {
-    // System stocks
+    const esc = str => typeof Companies !== 'undefined' ? Companies._esc(str) : str;
     let html = '<div class="stock-grid">';
+
+    // System stocks
     this.stocks.forEach((s, i) => {
       const price = this.prices[i];
       const prev = this.priceHistory[i].length >= 2 ? this.priceHistory[i][this.priceHistory[i].length - 2] : price;
-      const changePct = ((price - prev) / prev * 100);
       const dayChange = ((price - s.basePrice) / s.basePrice * 100);
       const isUp = dayChange >= 0;
-
       const luckyShares = s.symbol === 'LUCKY' && this.holdings['LUCKY'] ? this.holdings['LUCKY'].shares : 0;
       const cutPct = luckyShares > 0 ? Math.min(0.05, luckyShares / 100 * 0.001) : 0;
       const luckyBadge = s.symbol === 'LUCKY' && luckyShares > 0 && (App.rebirth || 0) >= 5
@@ -856,25 +850,20 @@ const Stocks = {
           <button class="stock-buy-btn" onclick="Stocks.promptBuy('${s.symbol}')">Buy</button>
           <button class="stock-sell-btn" onclick="Stocks.promptSell('${s.symbol}')" ${this.holdings[s.symbol] ? '' : 'disabled'}>Sell</button>
           ${(App.rebirth || 0) >= this.ATTACK_REBIRTH_REQ
-              ? `<button class="stock-attack-btn" onclick="Stocks.promptAttack('${s.symbol}')" title="Market Sabotage">🎯</button>`
+              ? `<button class="stock-attack-btn" onclick="Stocks.promptAttack('${s.symbol}')" title="Market Sabotage">\u{1F3AF}</button>`
               : (App.rebirth || 0) >= 3
-                ? `<button class="stock-attack-btn stock-attack-locked" disabled title="Unlocks at VIP 5">🔒</button>`
+                ? `<button class="stock-attack-btn stock-attack-locked" disabled title="Unlocks at VIP 5">\u{1F512}</button>`
                 : ''
             }
         </div>
       </div>`;
     });
-    html += '</div>';
 
-    // Player stocks section
+    // Public player stocks — same card style, inline with system stocks
     if (typeof Companies !== 'undefined') {
-      const esc = str => Companies._esc(str);
-      const publicPlayerStocks = Object.values(Companies._allPlayerStocks)
-        .filter(s => s.type === 'public' && !s._bankruptDeclared);
-
-      if (publicPlayerStocks.length > 0) {
-        html += '<div class="player-stocks-market-header">Player Companies</div><div class="stock-grid">';
-        publicPlayerStocks.forEach(s => {
+      Object.values(Companies._allPlayerStocks)
+        .filter(s => s.type === 'public' && !s._bankruptDeclared)
+        .forEach(s => {
           const hist = s.history || [];
           const prev = hist.length >= 2 ? hist[hist.length - 2] : s.price;
           const pct = prev > 0 ? ((s.price - prev) / prev * 100) : 0;
@@ -886,7 +875,7 @@ const Stocks = {
               <div class="player-stock-badge">PLAYER</div>
             </div>
             <div class="stock-name">${esc(s.name)}</div>
-            <div style="font-size:11px;color:var(--text-dim)">by ${esc(s.ownerName)}</div>
+            <div style="font-size:11px;color:var(--text-dim);margin-bottom:2px">by ${esc(s.ownerName)}</div>
             <div class="stock-price">${App.formatMoney(s.price)}</div>
             <div class="stock-change ${isUp ? 'stock-up' : 'stock-down'}">${isUp ? '+' : ''}${pct.toFixed(2)}%</div>
             <canvas id="spark-p-${esc(s.symbol)}" class="stock-sparkline" width="80" height="30"></canvas>
@@ -896,10 +885,12 @@ const Stocks = {
             </div>
           </div>`;
         });
-        html += '</div>';
-      }
+    }
 
-      // Distressed assets
+    html += '</div>';
+
+    // Distressed assets — separate section below the main grid
+    if (typeof Companies !== 'undefined') {
       const bankruptList = Object.values(Companies._bankruptCompanies || {});
       if (bankruptList.length > 0) {
         html += '<div class="player-stocks-market-header" style="color:#e74c3c">&#x1F534; Distressed Assets</div><div class="stock-grid">';
@@ -930,12 +921,8 @@ const Stocks = {
 
     container.innerHTML = html;
 
-    // Draw system sparklines
-    this.stocks.forEach((s, i) => {
-      this.drawSparkline('spark-' + s.symbol, this.priceHistory[i]);
-    });
-
-    // Draw player sparklines
+    // Draw all sparklines
+    this.stocks.forEach((s, i) => this.drawSparkline('spark-' + s.symbol, this.priceHistory[i]));
     if (typeof Companies !== 'undefined') {
       Object.values(Companies._allPlayerStocks)
         .filter(s => s.type === 'public' && !s._bankruptDeclared)
@@ -1002,178 +989,6 @@ const Stocks = {
     });
     html += '</div>';
     container.innerHTML = html;
-  },
-
-  // === Short Selling (R5+) ===
-
-  openShortModal(idx) {
-    if ((App.rebirth || 0) < 5) return;
-    const s = this.stocks[idx];
-    const price = this.prices[idx];
-    const html = `<div class="stock-trade-modal">
-      <div class="stock-trade-title">\u{1F4C9} Short Sell — ${s.symbol}</div>
-      <div class="attack-info">
-        <div>Current price: <strong>${App.formatMoney(price)}</strong></div>
-        <div style="margin-top:6px;font-size:12px;color:var(--text-dim)">Bet on price direction within a time window</div>
-      </div>
-      <div style="margin:10px 0">
-        <div class="short-direction-row">
-          <button id="short-dir-up" class="short-dir-btn short-dir-active" onclick="Stocks._selectShortDir('up')">&#x2B06; Up</button>
-          <button id="short-dir-down" class="short-dir-btn" onclick="Stocks._selectShortDir('down')">&#x2B07; Down</button>
-        </div>
-        <div class="short-window-row">
-          <button id="short-w-30" class="short-win-btn short-win-active" onclick="Stocks._selectShortWindow(30)">30s (1.5x)</button>
-          <button id="short-w-120" class="short-win-btn" onclick="Stocks._selectShortWindow(120)">2m (2x)</button>
-          <button id="short-w-300" class="short-win-btn" onclick="Stocks._selectShortWindow(300)">5m (3x)</button>
-        </div>
-        <div class="stock-trade-custom-amount">
-          <label>Bet: $</label>
-          <input type="number" id="short-bet-input" placeholder="Amount" min="1">
-        </div>
-      </div>
-      <button class="stock-trade-btn stock-buy-btn" onclick="Stocks._confirmShort(${idx})">Place Short</button>
-      <button class="stock-trade-cancel" onclick="Stocks.closeModal()">Cancel</button>
-    </div>`;
-    this._shortDir = 'up';
-    this._shortWindow = 30;
-    this._showModal(html);
-  },
-
-  _selectShortDir(dir) {
-    this._shortDir = dir;
-    document.querySelectorAll('.short-dir-btn').forEach(b => b.classList.remove('short-dir-active'));
-    const btn = document.getElementById('short-dir-' + dir);
-    if (btn) btn.classList.add('short-dir-active');
-  },
-
-  _selectShortWindow(sec) {
-    this._shortWindow = sec;
-    document.querySelectorAll('.short-win-btn').forEach(b => b.classList.remove('short-win-active'));
-    const map = { 30: 'short-w-30', 120: 'short-w-120', 300: 'short-w-300' };
-    const btn = document.getElementById(map[sec]);
-    if (btn) btn.classList.add('short-win-active');
-  },
-
-  _confirmShort(idx) {
-    const bet = parseFloat(document.getElementById('short-bet-input')?.value) || 0;
-    if (bet < 1) { alert('Enter a bet amount.'); return; }
-    if (bet > App.balance) { alert('Not enough balance.'); return; }
-    this.placeShort(idx, this._shortDir || 'up', this._shortWindow || 30, bet);
-    this.closeModal();
-  },
-
-  placeShort(idx, direction, windowSec, bet) {
-    if ((App.rebirth || 0) < 5) return;
-    if (bet > App.balance) return;
-    const payouts = { 30: 1.5, 120: 2.0, 300: 3.0 };
-    const payout = payouts[windowSec] || 1.5;
-    const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
-    App.addBalance(-bet);
-    const entry = {
-      id, symbol: this.stocks[idx].symbol, idx,
-      direction, window: windowSec, betAmount: bet,
-      entryPrice: this.prices[idx], resolveAt: Date.now() + windowSec * 1000, payout,
-    };
-    this._shorts.push(entry);
-    App.save();
-    const timer = setTimeout(() => this._resolveShort(id), windowSec * 1000);
-    this._shortTimers = this._shortTimers || {};
-    this._shortTimers[id] = timer;
-    if (App.currentScreen === 'stocks' && this.activeTab === 'shorts') this.render();
-  },
-
-  _resolveShort(id) {
-    const idx = this._shorts.findIndex(s => s.id === id);
-    if (idx < 0) return;
-    const short = this._shorts[idx];
-    this._shorts.splice(idx, 1);
-    const currentPrice = this.prices[short.idx];
-    const priceWentUp = currentPrice > short.entryPrice;
-    const won = (short.direction === 'up' && priceWentUp) || (short.direction === 'down' && !priceWentUp);
-    const toast = document.createElement('div');
-    toast.className = 'insider-tip-toast';
-    if (won) {
-      const payout = Math.round(short.betAmount * short.payout * 100) / 100;
-      App.addBalance(payout);
-      toast.textContent = `\u{1F4C8} Short won! ${short.symbol} ${short.direction === 'up' ? '&#x2B06;' : '&#x2B07;'} +${App.formatMoney(payout)}`;
-      toast.style.background = 'var(--green)';
-    } else {
-      toast.textContent = `\u{1F4C9} Short lost. ${short.symbol} went ${priceWentUp ? 'up' : 'down'}, you bet ${short.direction}`;
-      toast.style.background = 'var(--red)';
-    }
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 4000);
-    App.save();
-    if (App.currentScreen === 'stocks' && this.activeTab === 'shorts') this.render();
-  },
-
-  _restoreShorts() {
-    const now = Date.now();
-    this._shortTimers = this._shortTimers || {};
-    this._shorts = this._shorts.filter(s => {
-      if (s.resolveAt <= now) {
-        // Already expired — resolve immediately
-        setTimeout(() => this._resolveShort(s.id), 100);
-        return true; // keep in array, _resolveShort will remove it
-      }
-      const remaining = s.resolveAt - now;
-      this._shortTimers[s.id] = setTimeout(() => this._resolveShort(s.id), remaining);
-      return true;
-    });
-  },
-
-  _renderShorts(container) {
-    const r5 = (App.rebirth || 0) >= 5;
-    if (!r5) {
-      container.innerHTML = '<div class="stock-empty">\u{1F512} Short Selling unlocks at Rebirth 5</div>';
-      return;
-    }
-
-    let html = '<div class="shorts-header"><button class="stock-buy-btn" style="margin:8px 0" onclick="Stocks._openShortSelectModal()">+ New Short</button></div>';
-    if (this._shorts.length === 0) {
-      html += '<div class="stock-empty">No active shorts. Pick a stock and bet on its direction!</div>';
-    } else {
-      html += '<div class="shorts-list">';
-      const now = Date.now();
-      this._shorts.forEach(s => {
-        const remaining = Math.max(0, Math.ceil((s.resolveAt - now) / 1000));
-        const currentPrice = this.prices[s.idx] || s.entryPrice;
-        const pl = s.direction === 'up'
-          ? (currentPrice > s.entryPrice ? '+' : '') + ((currentPrice - s.entryPrice) / s.entryPrice * 100).toFixed(1) + '%'
-          : (currentPrice < s.entryPrice ? '+' : '') + ((s.entryPrice - currentPrice) / s.entryPrice * 100).toFixed(1) + '%';
-        const isUp = s.direction === 'up';
-        const m = Math.floor(remaining / 60), sec = remaining % 60;
-        html += `<div class="short-card short-${isUp ? 'up' : 'down'}">
-          <div class="short-card-header">
-            <span class="short-symbol">${s.symbol}</span>
-            <span class="short-dir-badge">${isUp ? '&#x2B06; UP' : '&#x2B07; DOWN'}</span>
-            <span class="short-timer">${m}:${sec.toString().padStart(2,'0')}</span>
-          </div>
-          <div class="short-card-body">
-            <span>Entry: ${App.formatMoney(s.entryPrice)}</span>
-            <span>Now: ${App.formatMoney(currentPrice)}</span>
-            <span class="short-profit ${s.direction === 'up' ? (currentPrice >= s.entryPrice ? 'stock-up' : 'stock-down') : (currentPrice <= s.entryPrice ? 'stock-up' : 'stock-down')}">${pl}</span>
-          </div>
-          <div class="short-card-footer">
-            <span>Bet: ${App.formatMoney(s.betAmount)}</span>
-            <span>Payout: ${s.payout}x = ${App.formatMoney(s.betAmount * s.payout)}</span>
-          </div>
-        </div>`;
-      });
-      html += '</div>';
-    }
-    container.innerHTML = html;
-  },
-
-  _openShortSelectModal() {
-    const html = `<div class="stock-trade-modal">
-      <div class="stock-trade-title">\u{1F4C9} New Short — Select Stock</div>
-      <div class="short-stock-list">
-        ${this.stocks.map((s, i) => `<button class="stock-trade-btn" style="margin:3px 0" onclick="Stocks.openShortModal(${i});Stocks.closeModal()">${s.symbol} — ${App.formatMoney(this.prices[i])}</button>`).join('')}
-      </div>
-      <button class="stock-trade-cancel" onclick="Stocks.closeModal()">Cancel</button>
-    </div>`;
-    this._showModal(html);
   },
 
   // === Bounty Board (R5+) ===
@@ -1454,7 +1269,6 @@ const Stocks = {
       totalProfit: this.totalProfit,
       newsHistory: this.newsHistory.slice(0, 10),
       attackCooldowns: Object.assign({}, this._attackCooldowns),
-      shorts: this._shorts.map(s => Object.assign({}, s)),
     };
   },
 
@@ -1485,7 +1299,6 @@ const Stocks = {
         }
       }
     }
-    if (data.shorts) this._shorts = data.shorts;
     this.initialized = true;
   },
 };

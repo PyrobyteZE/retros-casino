@@ -5048,66 +5048,6 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
 }
 .stock-attack-locked:hover { background: transparent; color: var(--text-dim); }
 
-/* ===== SHORT SELLING ===== */
-.short-direction-row, .short-window-row {
-  display: flex;
-  gap: 8px;
-  margin: 8px 0;
-}
-.short-dir-btn {
-  flex: 1;
-  padding: 8px;
-  border-radius: 8px;
-  border: 2px solid var(--bg3);
-  background: var(--bg2);
-  color: var(--text);
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.short-dir-btn.short-dir-active { border-color: var(--green); color: var(--green); background: color-mix(in srgb, var(--green) 10%, transparent); }
-.short-win-btn {
-  flex: 1;
-  padding: 6px;
-  border-radius: 6px;
-  border: 1px solid var(--bg3);
-  background: var(--bg2);
-  color: var(--text-dim);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.short-win-btn.short-win-active { border-color: var(--green); color: var(--green); }
-.shorts-list { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; }
-.short-card {
-  border-radius: 10px;
-  border: 2px solid;
-  padding: 10px 12px;
-  background: var(--bg2);
-}
-.short-card.short-up { border-color: #00e676; }
-.short-card.short-down { border-color: #ff5252; }
-.short-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.short-symbol { font-weight: 800; font-size: 15px; }
-.short-dir-badge {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: var(--bg3);
-}
-.short-card.short-up .short-dir-badge { color: #00e676; }
-.short-card.short-down .short-dir-badge { color: #ff5252; }
-.short-timer { margin-left: auto; font-size: 13px; font-family: monospace; font-weight: 700; color: var(--gold); }
-.short-card-body, .short-card-footer {
-  display: flex;
-  gap: 12px;
-  font-size: 12px;
-  color: var(--text-dim);
-  margin-bottom: 4px;
-}
-.short-profit { font-weight: 700; margin-left: auto; }
-.short-stock-list { display: flex; flex-direction: column; gap: 4px; max-height: 300px; overflow-y: auto; }
 
 /* ===== BOUNTY BOARD ===== */
 .bounty-list { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; }

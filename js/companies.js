@@ -241,8 +241,11 @@ const Companies = {
   _triggerRender() {
     const inStocks = App.currentScreen === 'stocks' && typeof Stocks !== 'undefined' &&
       (Stocks.activeTab === 'players' || Stocks.activeTab === 'company' || Stocks.activeTab === 'market');
-    if (inStocks) Stocks.render();
-    else if (App.currentScreen === 'companies') this.render();
+    // Don't wipe the company form while user is typing in an input/textarea
+    const focusedEl = document.activeElement;
+    const userTyping = focusedEl && (focusedEl.tagName === 'INPUT' || focusedEl.tagName === 'TEXTAREA');
+    if (inStocks && !userTyping) Stocks.render();
+    else if (App.currentScreen === 'companies' && !userTyping) this.render();
     if (typeof Stocks !== 'undefined') Stocks.updateTicker();
     // Keep admin market tab live while it's open
     if (typeof Admin !== 'undefined' && Admin.adminMode && Admin.activeTab === 'market') {
@@ -403,6 +406,23 @@ const Companies = {
     this._triggerRender();
   },
 
+  // === DELETE COMPANY ===
+  deleteCompany(cIdx) {
+    const c = this._companies[cIdx];
+    if (!c) return;
+    if (!confirm(`Delete "${c.name}" (${c.ticker})? This permanently removes the company and all its stocks.`)) return;
+    // Clean up Firebase: cancel sale listing + remove stock price entries
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.cancelCompanySale(c.ticker);
+      const symbols = (c.stocks || []).map(s => s.symbol);
+      if (symbols.length) Firebase.removePlayerStockPrices(symbols);
+    }
+    this._companies.splice(cIdx, 1);
+    this._saveLocal();
+    this._pushToFirebase();
+    this._triggerRender();
+  },
+
   // === FOUND COMPANY ===
   foundCompany() {
     if (this._companies.length >= this._companySlots) {
@@ -425,6 +445,7 @@ const Companies = {
     const allTickers = new Set([
       ...(typeof Stocks !== 'undefined' ? Stocks.stocks.map(s => s.symbol) : []),
       ...Object.keys(this._allPlayerStocks),
+      ...Object.keys(this._bankruptCompanies), // reserved until bankruptcy expires
     ]);
     if (allTickers.has(ticker)) { alert('Ticker "' + ticker + '" is already taken.'); return; }
 
@@ -925,6 +946,10 @@ const Companies = {
         </div>`;
       }
       html += `</div></div>`;
+
+      html += `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bg3);text-align:center">
+        <button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);font-size:12px" onclick="Companies.deleteCompany(${cIdx})">&#x1F5D1; Delete Company</button>
+      </div>`;
 
       html += `</div></div>`;
     });

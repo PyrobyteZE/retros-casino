@@ -257,6 +257,13 @@ const Settings = {
           <span class="rig-hint">Breaking news alerts</span>
         </div>
       </div>
+
+      <!-- Danger Zone -->
+      <div class="settings-section">
+        <h3 style="color:var(--red)">Danger Zone</h3>
+        <p class="settings-hint">Remove your public data from the leaderboard, cloud save, and company listings. Your local game save is not affected. Costs $5M.</p>
+        <button class="settings-btn" style="background:var(--red);border-color:var(--red);color:#fff" onclick="Settings.deleteSelfData()">Remove Public Data — ${App.formatMoney(5_000_000)}</button>
+      </div>
     `;
   },
 
@@ -299,6 +306,17 @@ const Settings = {
     } else {
       alert('Login failed: ' + result.error);
     }
+  },
+
+  async deleteSelfData() {
+    const cost = 5_000_000;
+    if (App.balance < cost) { alert('You need ' + App.formatMoney(cost) + ' to remove your public data.'); return; }
+    if (!confirm('Remove your public data from the leaderboard, cloud save, and company listings?\n\nCosts ' + App.formatMoney(cost) + '. Your local game is NOT deleted.')) return;
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) { alert('Must be online to remove public data.'); return; }
+    App.addBalance(-cost);
+    App.save();
+    await Firebase.deleteSelfData();
+    alert('Public data removed successfully.');
   },
 
   // === SAVE / LOAD ===

@@ -1667,4 +1667,61 @@ const Firebase = {
     div.textContent = text;
     return div.innerHTML;
   },
+
+  // === PLAYER DELETE ===
+  // Remove all public data for the calling player (costs $5M in-game, enforced by caller)
+  deleteSelfData() {
+    const uid = this.uid;
+    if (!uid || !this.isOnline()) return Promise.resolve();
+    const db = this.db;
+    return Promise.all([
+      db.ref('leaderboard/' + uid).remove(),
+      db.ref('accounts/' + uid).remove(),
+      db.ref('cloudSaves/' + uid).remove(),
+      db.ref('presence/' + uid).remove(),
+      db.ref('companies/' + uid).remove(),
+      db.ref('companySales').orderByChild('ownerUid').equalTo(uid).once('value').then(snap => {
+        const upd = {};
+        snap.forEach(c => { upd[c.key] = null; });
+        return Object.keys(upd).length ? db.ref('companySales').update(upd) : Promise.resolve();
+      }),
+      db.ref('bankruptCompanies').orderByChild('originalOwnerUid').equalTo(uid).once('value').then(snap => {
+        const upd = {};
+        snap.forEach(c => { upd[c.key] = null; });
+        return Object.keys(upd).length ? db.ref('bankruptCompanies').update(upd) : Promise.resolve();
+      }),
+      db.ref('friends/' + uid).remove(),
+      db.ref('friendRequests/' + uid).remove(),
+      db.ref('dmUnread/' + uid).remove(),
+    ]).catch(err => console.error('deleteSelfData error:', err));
+  },
+
+  // Admin: wipe all public data for any player by uid
+  deletePlayerData(uid) {
+    if (!uid || !this.isOnline()) return Promise.resolve();
+    const db = this.db;
+    return Promise.all([
+      db.ref('leaderboard/' + uid).remove(),
+      db.ref('accounts/' + uid).remove(),
+      db.ref('cloudSaves/' + uid).remove(),
+      db.ref('presence/' + uid).remove(),
+      db.ref('companies/' + uid).remove(),
+      db.ref('friends/' + uid).remove(),
+      db.ref('friendRequests/' + uid).remove(),
+      db.ref('companySales').orderByChild('ownerUid').equalTo(uid).once('value').then(snap => {
+        const upd = {};
+        snap.forEach(c => { upd[c.key] = null; });
+        return Object.keys(upd).length ? db.ref('companySales').update(upd) : Promise.resolve();
+      }),
+    ]).catch(err => console.error('deletePlayerData error:', err));
+  },
+
+  // Clean up stale player stock prices for deleted symbols
+  removePlayerStockPrices(symbols) {
+    if (!this.isOnline() || !symbols || !symbols.length) return;
+    const upd = {};
+    symbols.forEach(sym => { upd[sym] = null; });
+    this.db.ref('playerStockPrices').update(upd)
+      .catch(err => console.error('removePlayerStockPrices error:', err));
+  },
 };

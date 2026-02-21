@@ -1043,7 +1043,8 @@ const Admin = {
       `<div class="admin-lb-row">
         <span class="admin-lb-name">${e.name || 'Player'} <span class="admin-lb-uid">(${(e.uid || '').slice(0,6)})</span></span>
         <span class="admin-lb-earned">${App.formatMoney(e.totalEarned || 0)}</span>
-        <button class="admin-btn danger admin-lb-del" onclick="Admin.deleteLeaderboardEntry('${e.uid}')">Delete</button>
+        <button class="admin-btn danger admin-lb-del" onclick="Admin.deleteLeaderboardEntry('${e.uid}')" title="Remove from leaderboard only">LB</button>
+        <button class="admin-btn danger admin-lb-del" onclick="Admin.purgePlayer('${e.uid}','${(e.name||'Player').replace(/'/g,"\\'")}')" title="Delete all player data">Purge</button>
       </div>`
     ).join('');
   },
@@ -1062,6 +1063,17 @@ const Admin = {
   refreshLeaderboard() {
     if (typeof Firebase !== 'undefined') Firebase.renderLeaderboard();
     this.renderAdminLeaderboard();
+  },
+
+  purgePlayer(uid, name) {
+    if (!confirm(`Purge ALL data for "${name}" (${uid.slice(0,6)})?\n\nThis removes their leaderboard entry, cloud save, companies, and account. Cannot be undone.`)) return;
+    if (typeof Firebase === 'undefined' || !Firebase.db) return;
+    Firebase.deletePlayerData(uid).then(() => {
+      Firebase.leaderboardData = Firebase.leaderboardData.filter(e => e.uid !== uid);
+      this.renderAdminLeaderboard();
+      if (App.currentScreen === 'leaderboard') Firebase.renderLeaderboard();
+      alert('Player data purged.');
+    }).catch(err => alert('Purge failed: ' + err.message));
   },
 
   cleanDuplicateNames() {
