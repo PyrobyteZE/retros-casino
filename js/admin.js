@@ -748,12 +748,32 @@ const Admin = {
 
   stocksResetPrices() {
     if (typeof Stocks === 'undefined') return;
+    // Reset system stocks
     Stocks.stocks.forEach((s, i) => {
       Stocks.prices[i] = s.basePrice;
       Stocks.priceHistory[i] = [];
       for (let j = 0; j < 60; j++) Stocks.priceHistory[i].push(s.basePrice);
     });
     this._pushStockPricesNow();
+    // Reset player stocks to their base price
+    if (typeof Companies !== 'undefined') {
+      const playerUpdates = {};
+      for (const sym in Companies._allPlayerStocks) {
+        const s = Companies._allPlayerStocks[sym];
+        const base = s.basePrice || 100;
+        s.price = base;
+        s.history = [];
+        for (let j = 0; j < 60; j++) s.history.push(base);
+        playerUpdates[sym] = base;
+        delete Companies._playerStockTargets[sym];
+        delete Companies._peakHolds[sym];
+        delete s._lowTicks;
+        delete s._bankruptDeclared;
+      }
+      if (typeof Firebase !== 'undefined' && Firebase.isOnline() && Object.keys(playerUpdates).length) {
+        Firebase.pushPlayerStockPrices(playerUpdates);
+      }
+    }
     if (App.currentScreen === 'stocks') Stocks.render();
     this.renderStockControls();
   },

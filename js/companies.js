@@ -148,6 +148,7 @@ const Companies = {
   _scandals: {},           // { [symbol]: { text, ownerUid, firedAt, suppressed } }
   _scandalCooldowns: {},   // { [symbol]: timestamp } — prevent spam
   _competitors: {},        // { [theirUid]: { name, ticker, setAt } }
+  _allies: {},             // { [theirUid]: { name, ticker, setAt } }
   _shareOffers: {},        // { [offerId]: offer } — incoming private share offers
   _peakHolds: {},          // { [sym]: ticksLeft } — plateau counter before hard-cap decay
   activeTab: 'browse',
@@ -186,6 +187,8 @@ const Companies = {
       Firebase.listenScandals(data => { this._scandals = data || {}; this._triggerRender(); });
       Firebase.listenStockDeletions(data => this._onStockDeletion(data));
       Firebase.listenCompetitors(data => { this._competitors = data || {}; this._triggerRender(); });
+      Firebase.listenAllies(data => { this._allies = data || {}; this._triggerRender(); });
+      Firebase.listenAllyNotifications(notif => this._onAllyNotification(notif));
       Firebase.listenSabotageNotifications(notif => this._onSabotageNotification(notif));
       Firebase.listenShareOffers(Firebase.uid, data => {
         this._shareOffers = data || {};
@@ -720,12 +723,76 @@ const Companies = {
       if (typeof Firebase !== 'undefined') Firebase.removeCompetitor(theirUid);
       this._toast('\u274C Removed competitor: ' + this._esc(theirName));
     } else {
+      // Mutually exclusive with ally
+      if (this._allies[theirUid]) {
+        delete this._allies[theirUid];
+        if (typeof Firebase !== 'undefined') Firebase.removeAlly(theirUid);
+      }
       const entry = { name: theirName, ticker: theirTicker, setAt: Date.now() };
       this._competitors[theirUid] = entry;
       if (typeof Firebase !== 'undefined') Firebase.pushCompetitor(theirUid, entry);
       this._toast('\u{1F3AF} Marked as competitor: ' + this._esc(theirName));
     }
     this._triggerRender();
+  },
+
+  toggleAlly(theirUid, theirName, theirTicker) {
+    if (this._allies[theirUid]) {
+      delete this._allies[theirUid];
+      if (typeof Firebase !== 'undefined') Firebase.removeAlly(theirUid);
+      this._toast('\u274C Removed ally: ' + this._esc(theirName));
+    } else {
+      // Mutually exclusive with competitor
+      if (this._competitors[theirUid]) {
+        delete this._competitors[theirUid];
+        if (typeof Firebase !== 'undefined') Firebase.removeCompetitor(theirUid);
+      }
+      const entry = { name: theirName, ticker: theirTicker, setAt: Date.now() };
+      this._allies[theirUid] = entry;
+      if (typeof Firebase !== 'undefined') Firebase.pushAlly(theirUid, entry);
+      this._toast('\u{1F91D} Allied with: ' + this._esc(theirName));
+    }
+    this._triggerRender();
+  },
+
+  allyBoostCost(theirUid) {
+    let maxPrice = 100;
+    for (const sym in this._allPlayerStocks) {
+      const s = this._allPlayerStocks[sym];
+      if (s.ownerUid === theirUid && s.type === 'public') maxPrice = Math.max(maxPrice, s.price || 100);
+    }
+    return Math.max(100_000, Math.round(maxPrice * 100));
+  },
+
+  boostAlly(theirUid) {
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    if (!myUid || theirUid === myUid) { alert("Can't boost yourself."); return; }
+    const ally = this._allies[theirUid];
+    if (!ally) return;
+    const cost = this.allyBoostCost(theirUid);
+    if (App.balance < cost) { alert('Not enough funds. Need ' + App.formatMoney(cost)); return; }
+    if (!confirm('Boost ' + this._esc(ally.name || ally.ticker) + "'s stocks for " + App.formatMoney(cost) + '?\n\nTheir public stocks get a +10\u201320% price push.')) return;
+    App.addBalance(-cost);
+    App.save();
+    const myName = typeof Settings !== 'undefined' ? Settings.profile.name : 'Ally';
+    const targetSymbols = Object.keys(this._allPlayerStocks)
+      .filter(sym => this._allPlayerStocks[sym].ownerUid === theirUid && this._allPlayerStocks[sym].type === 'public');
+    targetSymbols.forEach(sym => {
+      const s = this._allPlayerStocks[sym];
+      const boost = 0.10 + Math.random() * 0.10;
+      this._playerStockTargets[sym] = { target: s.price * (1 + boost), stepsLeft: 10 };
+      if (typeof Firebase !== 'undefined') {
+        Firebase.pushTradeInfluence(sym, 1, boost);
+        Firebase.pushStockNews('\u{1F91D} ALLY BOOST: ' + (s.companyName || sym) + ' \u2014 allied support buying!', true);
+      }
+    });
+    if (typeof Firebase !== 'undefined') Firebase.pushAllyNotification(theirUid, myName, ally.ticker || '');
+    this._toast('\u2705 Boosted ' + this._esc(ally.ticker || ally.name) + "'s stocks!");
+    this._triggerRender();
+  },
+
+  _onAllyNotification(notif) {
+    Toast.show('\u{1F91D} ' + this._esc(notif.fromName || 'An ally') + ' boosted your company stocks!', '#27ae60', 7000);
   },
 
   sabotageCost(theirUid) {
@@ -1309,15 +1376,21 @@ const Companies = {
         const isUp = pct >= 0;
         const isMyStock = s.ownerUid === myUid;
         const isComp = !isMyStock && !!this._competitors[s.ownerUid];
+        const isAlly = !isMyStock && !!this._allies[s.ownerUid];
         const scandal = this._scandals[s.symbol];
         const hasActiveScandal = scandal && !scandal.suppressed && Date.now() - (scandal.firedAt || 0) < 120000;
 
-        // Competitor/sabotage controls — one block per owner
+        // Competitor/ally controls — one block per owner
         let compControls = '';
         if (!isMyStock && !ownersSeen.has(s.ownerUid)) {
           ownersSeen.add(s.ownerUid);
           const compCost = App.formatMoney(this.sabotageCost(s.ownerUid));
+          const boostCost = App.formatMoney(this.allyBoostCost(s.ownerUid));
           compControls = `<div class="competitor-controls">
+            <button class="ally-btn${isAlly ? ' ally-active' : ''}" onclick="Companies.toggleAlly('${s.ownerUid}','${this._esc(s.ownerName)}','${this._esc(s.companyTicker || s.symbol)}')">
+              ${isAlly ? '\u{1F91D} Ally' : '+ Set Ally'}
+            </button>
+            ${isAlly ? `<button class="boost-btn" onclick="Companies.boostAlly('${s.ownerUid}')">Boost — ${boostCost}</button>` : ''}
             <button class="competitor-btn${isComp ? ' competitor-active' : ''}" onclick="Companies.toggleCompetitor('${s.ownerUid}','${this._esc(s.ownerName)}','${this._esc(s.companyTicker || s.symbol)}')">
               ${isComp ? '\u{1F3AF} Competitor' : '+ Set Competitor'}
             </button>
@@ -1325,12 +1398,13 @@ const Companies = {
           </div>`;
         }
 
-        html += `<div class="company-card${isComp ? ' competitor-card' : ''}">
+        html += `<div class="company-card${isComp ? ' competitor-card' : isAlly ? ' ally-card' : ''}">
           <div class="company-card-header">
             <div>
               <span class="company-card-sym">${this._esc(s.symbol)}</span>
               <span class="player-stock-badge">PLAYER</span>
               ${isComp ? '<span class="competitor-badge">RIVAL</span>' : ''}
+              ${isAlly ? '<span class="ally-badge">ALLY</span>' : ''}
             </div>
             <div class="company-card-price ${isUp ? 'ticker-up' : 'ticker-dn'}">
               $${s.price < 10 ? s.price.toFixed(2) : Math.round(s.price).toLocaleString()}

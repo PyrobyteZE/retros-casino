@@ -5537,6 +5537,44 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   cursor: pointer;
 }
 .sabotage-btn:active { opacity: 0.7; }
+.ally-card { border-color: #27ae60 !important; }
+.ally-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(39,174,96,0.2);
+  color: #27ae60;
+  border-radius: 4px;
+  padding: 2px 5px;
+  margin-left: 4px;
+}
+.ally-btn {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--bg3);
+  background: var(--bg2);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ally-btn.ally-active {
+  border-color: #27ae60;
+  color: #27ae60;
+  background: rgba(39,174,96,0.1);
+}
+.boost-btn {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid #27ae60;
+  background: rgba(39,174,96,0.15);
+  color: #27ae60;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.boost-btn:active { opacity: 0.7; }
 
 /* ===== COMPANY PROPERTIES ===== */
 .company-properties-section {

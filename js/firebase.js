@@ -1783,6 +1783,40 @@ const Firebase = {
       err => console.warn('listenCompetitors denied:', err.code));
   },
 
+  // === ALLIES ===
+  pushAlly(theirUid, data) {
+    if (!this.isOnline() || !this.uid) return Promise.resolve();
+    return this.db.ref('allies/' + this.uid + '/' + theirUid).set(data)
+      .catch(err => console.error('pushAlly error:', err));
+  },
+
+  removeAlly(theirUid) {
+    if (!this.isOnline() || !this.uid) return Promise.resolve();
+    return this.db.ref('allies/' + this.uid + '/' + theirUid).remove()
+      .catch(err => console.error('removeAlly error:', err));
+  },
+
+  listenAllies(cb) {
+    if (!this.isOnline() || !this.uid) return;
+    this.db.ref('allies/' + this.uid).on('value', snap => cb(snap.val() || {}),
+      err => console.warn('listenAllies denied:', err.code));
+  },
+
+  pushAllyNotification(targetUid, fromName, stockSym) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('allyNotifications/' + targetUid).push({ fromName, stockSym, ts: Date.now() })
+      .catch(err => console.error('pushAllyNotification error:', err));
+  },
+
+  listenAllyNotifications(cb) {
+    if (!this.isOnline() || !this.uid) return;
+    this.db.ref('allyNotifications/' + this.uid).on('child_added', snap => {
+      const data = snap.val();
+      if (!data || Date.now() - (data.ts || 0) > 30000) return;
+      cb(data);
+    }, err => console.warn('listenAllyNotifications denied:', err.code));
+  },
+
   // === SABOTAGE NOTIFICATIONS ===
   pushSabotageNotification(targetUid, fromName, success, stockSym) {
     if (!this.isOnline()) return Promise.resolve();
