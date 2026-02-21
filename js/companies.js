@@ -1035,30 +1035,61 @@ const Companies = {
 
   promptBuy(symbol) {
     const s = this._allPlayerStocks[symbol];
+    if (!s || App.balance <= 0) return;
+    const html = `<div class="stock-trade-modal">
+      <div class="stock-trade-title">Buy ${symbol} @ ${App.formatMoney(s.price)}</div>
+      <div class="stock-trade-custom-amount">
+        <label for="ps-buy-input">$</label>
+        <input type="number" id="ps-buy-input" placeholder="Enter amount to invest"
+          oninput="Companies.updatePlayerBuyButton(this.value,'${symbol}')">
+        <button onclick="document.getElementById('ps-buy-input').value=App.balance;Companies.updatePlayerBuyButton(App.balance,'${symbol}')">Max</button>
+      </div>
+      <div id="ps-buy-summary"></div>
+      <div class="stock-trade-buttons">
+        <button id="ps-buy-confirm" class="stock-trade-btn" onclick="Companies.buyPlayerWithMoney('${symbol}')" disabled>Buy</button>
+      </div>
+      <button class="stock-trade-cancel" onclick="Stocks.closeModal()">Cancel</button>
+    </div>`;
+    Stocks._showModal(html);
+  },
+
+  updatePlayerBuyButton(money, symbol) {
+    const amount = parseFloat(money);
+    const summaryEl = document.getElementById('ps-buy-summary');
+    const buyBtn = document.getElementById('ps-buy-confirm');
+    if (!summaryEl || !buyBtn) return;
+    if (isNaN(amount) || amount <= 0) { summaryEl.textContent = ''; buyBtn.disabled = true; return; }
+    const s = this._allPlayerStocks[symbol];
+    const price = s ? s.price : 1;
+    const shares = Math.min(amount, App.balance) / price;
+    summaryEl.textContent = `~${shares.toFixed(4)} shares @ ${App.formatMoney(price)}`;
+    buyBtn.disabled = amount > App.balance || amount <= 0;
+  },
+
+  buyPlayerWithMoney(symbol) {
+    const input = document.getElementById('ps-buy-input');
+    if (!input) return;
+    let amount = parseFloat(input.value);
+    if (isNaN(amount) || amount <= 0) return;
+    const s = this._allPlayerStocks[symbol];
     if (!s) return;
-    const qtyStr = prompt('Buy ' + symbol + ' @ $' + s.price.toFixed(2) + '\nHow many shares?');
-    if (!qtyStr) return;
-    const qty = parseInt(qtyStr);
-    if (isNaN(qty) || qty <= 0) return;
-    const total = qty * s.price;
-    if (App.balance < total) { alert('Not enough funds.'); return; }
-    if (typeof Settings !== 'undefined' && Settings.shouldConfirmBet(total)) {
-      if (!confirm('Buy ' + qty + ' shares of ' + symbol + ' for ' + App.formatMoney(total) + '?')) return;
-    }
-    App.balance -= total;
+    amount = Math.min(amount, App.balance);
+    if (amount <= 0) return;
+    const shares = amount / s.price;
+    App.balance -= amount;
     App.updateBalance();
     if (!this._holdings[symbol]) this._holdings[symbol] = { shares: 0, avgCost: 0 };
     const h = this._holdings[symbol];
-    const prev = h.shares * h.avgCost;
-    h.shares += qty;
-    h.avgCost = (prev + total) / h.shares;
-    const impactPct = this._calcPlayerTradeImpact(s, total);
+    h.avgCost = (h.shares * h.avgCost + amount) / (h.shares + shares);
+    h.shares += shares;
+    const impactPct = this._calcPlayerTradeImpact(s, amount);
     if (impactPct >= 0.0005) {
       this._playerStockTargets[symbol] = { target: Math.max(0.01, s.price * (1 + impactPct)), stepsLeft: 8 };
       if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushTradeInfluence(symbol, 1, impactPct);
     }
     this._saveLocal();
-    this._toast('\u2705 Bought ' + qty + 'x ' + symbol);
+    Stocks.closeModal();
+    this._toast('\u2705 Bought ' + shares.toFixed(4) + 'x ' + symbol + ' for ' + App.formatMoney(amount));
     this._triggerRender();
   },
 
@@ -1066,22 +1097,40 @@ const Companies = {
     const s = this._allPlayerStocks[symbol];
     if (!s) return;
     const h = this._holdings[symbol];
-    if (!h || h.shares <= 0) { alert("You don't own any " + symbol + " shares."); return; }
-    const qtyStr = prompt('Sell ' + symbol + ' @ $' + s.price.toFixed(2) + '\nYou own ' + h.shares + ' shares. How many to sell?');
-    if (!qtyStr) return;
-    const qty = Math.min(parseInt(qtyStr), h.shares);
-    if (isNaN(qty) || qty <= 0) return;
-    const total = qty * s.price;
+    if (!h || h.shares <= 0) return;
+    const price = s.price;
+    const owned = h.shares;
+    const fixedAmounts = [1, 5, 10].filter(a => a < owned);
+    let html = `<div class="stock-trade-modal">
+      <div class="stock-trade-title">Sell ${symbol} @ ${App.formatMoney(price)}</div>
+      <div class="stock-trade-buttons">`;
+    fixedAmounts.forEach(a => {
+      html += `<button class="stock-trade-btn stock-sell-btn" onclick="Companies.playerSellShares('${symbol}',${a})">${a} share${a > 1 ? 's' : ''}<br>${App.formatMoney(price * a)}</button>`;
+    });
+    html += `<button class="stock-trade-btn stock-sell-btn" onclick="Companies.playerSellShares('${symbol}',${owned})">ALL<br>${App.formatMoney(price * owned)}</button>`;
+    html += `</div><button class="stock-trade-cancel" onclick="Stocks.closeModal()">Cancel</button></div>`;
+    Stocks._showModal(html);
+  },
+
+  playerSellShares(symbol, qty) {
+    const s = this._allPlayerStocks[symbol];
+    if (!s) return;
+    const h = this._holdings[symbol];
+    if (!h || h.shares <= 0) return;
+    const shares = Math.min(qty, h.shares);
+    if (shares <= 0) return;
+    const total = shares * s.price;
     App.addBalance(total);
-    h.shares -= qty;
-    if (h.shares === 0) delete this._holdings[symbol];
+    h.shares -= shares;
+    if (h.shares < 0.0001) delete this._holdings[symbol];
     const impactPct = this._calcPlayerTradeImpact(s, total);
     if (impactPct >= 0.0005) {
       this._playerStockTargets[symbol] = { target: Math.max(0.01, s.price * (1 - impactPct)), stepsLeft: 8 };
       if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushTradeInfluence(symbol, -1, impactPct);
     }
     this._saveLocal();
-    this._toast('\u{1F4B0} Sold ' + qty + 'x ' + symbol + ' +' + App.formatMoney(total));
+    Stocks.closeModal();
+    this._toast('\u{1F4B0} Sold ' + shares.toFixed(4) + 'x ' + symbol + ' +' + App.formatMoney(total));
     this._triggerRender();
   },
 
