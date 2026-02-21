@@ -8,6 +8,16 @@ const Companies = {
   MAX_COMPANIES_HARD: 10,
   SLOT_COSTS: [0, 5_000_000, 15_000_000], // cost to unlock slot 2 then 3
 
+  // Base price cap per Bull Propaganda level (0–5)
+  BULL_PROP_BASE_CAPS: [100, 500, 1200, 2500, 5000, 10000],
+
+  // Default stock parameters per personality type
+  PERSONALITY_DEFAULTS: {
+    standard: { basePrice: 100,  vol: 0.05 },
+    extreme:  { basePrice: 100,  vol: 0.18 },
+    penny:    { basePrice: 0.50, vol: 0.25 },
+  },
+
   // === COMPANY PROPERTIES (4 tiers per industry, base income per 5 seconds) ===
   COMPANY_PROPERTIES: {
     energy: [
@@ -262,6 +272,7 @@ const Companies = {
             companyFoundedAt: company.foundedAt || 0,
             companyUpgrades: company.upgrades || {},
             companyIndustry: company.industry || 'tech',
+            companyPersonality: company.personality || 'standard',
             companyProperties: Array.isArray(company.properties) ? company.properties : [],
             companyIncomeShare: typeof company.incomeShare === 'number' ? company.incomeShare : 100,
           };
@@ -376,9 +387,26 @@ const Companies = {
         t.stepsLeft--;
         if (t.stepsLeft <= 0) delete this._playerStockTargets[sym];
       } else {
-        const base = s.basePrice || 100;
+        const personality = s.companyPersonality || 'standard';
+        const effectiveBase = this._getEffectiveBase(s);
         const vol = s.vol || 0.05;
-        const ratio = s.price / base;
+        const ratio = s.price / effectiveBase;
+
+        // Hard cap: penny=$100 absolute, standard=10× effectiveBase, extreme=15× effectiveBase
+        const hardCap = personality === 'penny' ? 100
+          : personality === 'extreme' ? effectiveBase * 15
+          : effectiveBase * 10;
+
+        // --- Hard price cap: snap back when exceeded ---
+        if (s.price > hardCap) {
+          this._playerStockTargets[sym] = { target: hardCap * 0.7, stepsLeft: 8 };
+          this._playerManiaCooldowns[sym] = Date.now();
+          s.price = Math.max(0.01, s.price + s.price * (Math.random() - 0.5) * 2 * vol);
+          const resLv2 = upg.resilience || 0;
+          if (resLv2 > 0) { const fl = effectiveBase * 0.05 * resLv2; if (s.price < fl) s.price = fl; }
+          updates[sym] = s.price;
+          continue;
+        }
 
         // Standard random walk
         let delta = s.price * (Math.random() - 0.5) * 2 * vol;
@@ -397,23 +425,17 @@ const Companies = {
 
         // --- BULL PROPAGANDA upgrade: upward drift each tick ---
         const bullLv = upg.bullBias || 0;
-        if (bullLv > 0) delta += s.price * bullLv * 0.001; // +0.1–0.5%/tick
-
-        // --- Hard price cap: if price exceeds 20× base, force it back down ---
-        if (ratio > 20) {
-          this._playerStockTargets[sym] = { target: base * 12, stepsLeft: 8 };
-          this._playerManiaCooldowns[sym] = Date.now(); // reset cooldown so no new mania immediately
-          s.price = Math.max(0.01, s.price + delta);
-          if (upg.resilience > 0) { const floor = base * 0.05 * upg.resilience; if (s.price < floor) s.price = floor; }
-          updates[sym] = s.price;
-          continue;
-        }
+        if (bullLv > 0 && personality !== 'penny') delta += s.price * bullLv * 0.001;
 
         // --- Mania event: rare explosive spike (cooldown prevents stacking) ---
         const maniaCooldownOk = (Date.now() - (this._playerManiaCooldowns[sym] || 0)) > 120000;
-        if (maniaCooldownOk && Math.random() < 0.002) {
-          const mult = 3 + Math.random() * 8; // 3x to 11x spike
-          this._playerStockTargets[sym] = { target: s.price * mult, stepsLeft: 5, isMania: true };
+        const maniaChance = personality === 'extreme' ? 0.006 : 0.002;
+        // Penny stocks: skip mania above $80 (let vol do the work near cap)
+        const maniaAllowed = personality !== 'penny' || s.price < 80;
+        if (maniaCooldownOk && maniaAllowed && Math.random() < maniaChance) {
+          const maxManiaMult = personality === 'penny' ? Math.min(4, 100 / Math.max(0.5, s.price)) : (3 + Math.random() * 8);
+          const mult = 1.5 + Math.random() * (maxManiaMult - 1.5);
+          this._playerStockTargets[sym] = { target: Math.min(s.price * mult, hardCap * 0.95), stepsLeft: 5, isMania: true };
           this._playerManiaCooldowns[sym] = Date.now();
           const pctUp = Math.round((mult - 1) * 100);
           const msg = '\u{1F680} MANIA: ' + sym + ' (\u200B' + (s.companyName || '') + ') \u2014 buying frenzy! +' + pctUp + '%!';
@@ -421,12 +443,16 @@ const Companies = {
           if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushStockNews(msg, true);
         }
 
-        // --- Mean reversion: scales aggressively at extreme prices ---
-        const revStr = ratio > 5 ? 0.025 : 0.005;
+        // --- Mean reversion toward effectiveBase ---
+        // Penny: very gentle (revMult 0.15) — stocks drift but don't snap back hard
+        // Extreme: weak (revMult 0.5) — more free-floating
+        // Standard: full strength
+        const revMult = personality === 'penny' ? 0.15 : personality === 'extreme' ? 0.5 : 1.0;
+        const revStr = ratio > 5 ? 0.025 * revMult : 0.005 * revMult;
         delta -= s.price * (ratio - 1) * revStr;
 
-        // --- High-price crash risk (escalates at very high ratios) ---
-        if (ratio > 2.5) {
+        // --- High-price crash risk (disabled for penny — cap handles it) ---
+        if (personality !== 'penny' && ratio > 2.5) {
           const crashChance = Math.min(0.20, (ratio - 2.5) * 0.025);
           if (Math.random() < crashChance) {
             const snapPct = ratio > 5 ? 0.15 + Math.random() * 0.25 : 0.08 + Math.random() * 0.12;
@@ -439,7 +465,7 @@ const Companies = {
         // --- MARKET RESILIENCE upgrade: price floor ---
         const resLv = upg.resilience || 0;
         if (resLv > 0) {
-          const floor = base * 0.05 * resLv; // lv1=5% of base … lv3=15%
+          const floor = effectiveBase * 0.05 * resLv;
           if (s.price < floor) s.price = floor;
         }
       }
@@ -767,10 +793,13 @@ const Companies = {
     const nameEl = document.getElementById('co-found-name');
     const tickerEl = document.getElementById('co-found-ticker');
     const industryEl = document.getElementById('co-found-industry');
+    const personalityEl = document.getElementById('co-found-personality');
     if (!nameEl || !tickerEl) return;
     const name = nameEl.value.trim();
     const ticker = tickerEl.value.trim().toUpperCase().replace(/[^A-Z]/g, '').slice(0, 5);
     const industry = industryEl ? industryEl.value : 'tech';
+    const personality = (personalityEl ? personalityEl.value : 'standard') || 'standard';
+    const pd = this.PERSONALITY_DEFAULTS[personality] || this.PERSONALITY_DEFAULTS.standard;
     if (!name) { alert('Enter a company name.'); return; }
     if (!ticker || ticker.length < 2) { alert('Enter a ticker (2-5 letters).'); return; }
     if (App.balance < this.FOUND_COST) { alert('Not enough funds. You need ' + App.formatMoney(this.FOUND_COST)); return; }
@@ -794,9 +823,11 @@ const Companies = {
       name,
       ticker,
       industry,
+      personality,
       ownerName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Player',
       foundedAt: Date.now(),
-      stocks: [{ symbol: ticker, name: name + ' Stock', type: 'private', price: 100, vol: 0.05, basePrice: 100 }],
+      stocks: [{ symbol: ticker, name: name + ' Stock', type: 'private',
+        price: pd.basePrice, vol: pd.vol, basePrice: pd.basePrice }],
       mainIdx: 0,
       upgrades: {},
     };
@@ -830,7 +861,8 @@ const Companies = {
 
     App.balance -= cost;
     App.updateBalance();
-    c.stocks.push({ symbol: sym, name: sName, type: 'private', price: 100, vol: 0.05, basePrice: 100 });
+    const spd = this.PERSONALITY_DEFAULTS[c.personality || 'standard'] || this.PERSONALITY_DEFAULTS.standard;
+    c.stocks.push({ symbol: sym, name: sName, type: 'private', price: spd.basePrice, vol: spd.vol, basePrice: spd.basePrice });
     this._saveLocal();
     this._pushToFirebase();
     this.render();
@@ -899,6 +931,17 @@ const Companies = {
     if (!confirm(def.icon + ' Upgrade ' + def.name + ' to Lv' + (current + 1) + ' for ' + App.formatMoney(cost) + '?')) return;
     App.addBalance(-cost);
     c.upgrades[upgradeKey] = current + 1;
+
+    // Bull Propaganda: permanently raise the basePrice anchor on all stocks in this company
+    if (upgradeKey === 'bullBias' && (c.personality || 'standard') !== 'penny') {
+      const newLevel = c.upgrades.bullBias;
+      const newBase = this.BULL_PROP_BASE_CAPS[Math.min(newLevel, 5)];
+      (c.stocks || []).forEach(s => {
+        if ((s.basePrice || 100) < newBase) s.basePrice = newBase;
+      });
+      Toast.show('\u{1F4C8} Bull Prop Lv' + newLevel + ' — base price raised to ' + App.formatMoney(newBase), 'var(--green-dark)', 4500);
+    }
+
     this._saveLocal();
     this._pushToFirebase();
     App.save();
@@ -1215,8 +1258,11 @@ const Companies = {
     this._companies.forEach((c, cIdx) => {
       const listing = this._companyListings[c.ticker];
       const isListed = listing && listing.ownerUid === myUid;
+      const pBadge = c.personality === 'extreme' ? '<span style="font-size:10px;background:#8e44ad;color:#fff;border-radius:4px;padding:2px 5px;margin-left:6px">🌋 EXTREME</span>'
+        : c.personality === 'penny' ? '<span style="font-size:10px;background:#2980b9;color:#fff;border-radius:4px;padding:2px 5px;margin-left:6px">🪙 PENNY</span>'
+        : '';
       html += `<div class="company-manage-section" style="margin-bottom:10px">
-        <h3>&#x1F3E2; ${this._esc(c.name)} <span style="color:var(--text-dim);font-weight:400">(${this._esc(c.ticker)})</span></h3>
+        <h3>&#x1F3E2; ${this._esc(c.name)} <span style="color:var(--text-dim);font-weight:400">(${this._esc(c.ticker)})</span>${pBadge}</h3>
         <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">
           Founded ${new Date(c.foundedAt || 0).toLocaleDateString()}
         </div>
@@ -1237,6 +1283,7 @@ const Companies = {
           <div style="text-align:right;flex-shrink:0">
             <div class="csr-price">$${(s.price || 0) < 10 ? (s.price || 0).toFixed(2) : Math.round(s.price || 0).toLocaleString()}</div>
             <div class="csr-type ${s.type === 'public' ? 'csr-type-public' : 'csr-type-private'}">${s.type}</div>
+            ${(() => { const p = c.personality || 'standard'; const bullLv = (c.upgrades && c.upgrades.bullBias) || 0; const cap = p === 'penny' ? '$100' : '$' + App.formatMoney(this.BULL_PROP_BASE_CAPS[Math.min(bullLv,5)] * (p === 'extreme' ? 15 : 10)); return `<div style="font-size:10px;color:var(--text-dim)">cap ${cap}</div>`; })()}
           </div>
           <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
             <button class="csr-toggle-btn" onclick="Companies.togglePublic(${cIdx},${sIdx})">${s.type === 'public' ? 'Make Private' : 'Go Public'}</button>
@@ -1395,6 +1442,8 @@ const Companies = {
         <input type="text" id="co-found-ticker" placeholder="Ticker (e.g. RETRO)" maxlength="5" style="text-transform:uppercase;font-size:16px">
         <div style="font-size:12px;color:var(--text-dim);margin:4px 0 2px">Industry</div>
         ${this._industrySelectHtml()}
+        <div style="font-size:12px;color:var(--text-dim);margin:4px 0 2px">Stock Personality</div>
+        ${this._personalitySelectHtml()}
         <button class="company-found-btn" onclick="Companies.foundCompany()">Found Company — ${App.formatMoney(this.FOUND_COST)}</button>
       </div>`;
     }
@@ -1443,6 +1492,8 @@ const Companies = {
         <input type="text" id="co-found-ticker" placeholder="Ticker (e.g. RETRO)" maxlength="5" style="text-transform:uppercase;font-size:16px">
         <div style="font-size:12px;color:var(--text-dim);margin:4px 0 2px">Industry</div>
         ${this._industrySelectHtml()}
+        <div style="font-size:12px;color:var(--text-dim);margin:4px 0 2px">Stock Personality</div>
+        ${this._personalitySelectHtml()}
         <button class="company-found-btn" onclick="Companies.foundCompany()">Found Company — ${App.formatMoney(this.FOUND_COST)}</button>
       </div>`;
     }
@@ -1460,6 +1511,24 @@ const Companies = {
       `<option value="${ind.id}">${ind.label}</option>`
     ).join('');
     return `<select id="co-found-industry" style="font-size:15px;padding:8px;border-radius:8px;background:var(--bg2);color:var(--text);border:1px solid var(--bg3);width:100%">${opts}</select>`;
+  },
+
+  _personalitySelectHtml() {
+    return `<select id="co-found-personality" style="font-size:14px;padding:8px;border-radius:8px;background:var(--bg2);color:var(--text);border:1px solid var(--bg3);width:100%">
+      <option value="standard">📊 Standard — balanced growth, Bull Prop raises base price</option>
+      <option value="extreme">🌋 Extreme — wild swings both ways, higher cap, 3× mania chance</option>
+      <option value="penny">🪙 Penny Stock — starts at $0.50, hard cap $100</option>
+    </select>`;
+  },
+
+  // Compute the effective base price used for mean reversion and hard-cap logic.
+  // Standard/Extreme: driven by Bull Propaganda upgrade level (caps at $10K at Lv5).
+  // Penny: uses $5 as the reversion anchor; absolute hard cap is $100.
+  _getEffectiveBase(s) {
+    const p = s.companyPersonality || 'standard';
+    if (p === 'penny') return 5;
+    const bullLv = (s.companyUpgrades || {}).bullBias || 0;
+    return this.BULL_PROP_BASE_CAPS[Math.min(bullLv, 5)];
   },
 
   // Returns 0.3–2.0 world price multiplier based on linked system stocks
