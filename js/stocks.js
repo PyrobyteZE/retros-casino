@@ -141,7 +141,10 @@ const Stocks = {
             ? 15 + Math.floor(Math.random() * 15)               // 15–30 ticks (wilder)
             : 25 + Math.floor(Math.random() * 20);              // 25–45 ticks (long)
           this._lunaTrend = { direction: Math.random() < 0.5 ? 1 : -1, magnitude: mag, stepsLeft: steps, totalSteps: steps };
-          if (retroDown) this._addNews('LUNA: RETRO weakness detected — lunar volatility intensifying 🌑', false);
+          if (retroDown && Date.now() - (this._lunaNewsAt || 0) > 60000) {
+            this._lunaNewsAt = Date.now();
+            this._addNews('LUNA: RETRO weakness detected — lunar volatility intensifying 🌑', false);
+          }
         }
 
         const t = this._lunaTrend;
@@ -239,9 +242,13 @@ const Stocks = {
             const snapPct = ratio > 5 ? 0.15 + Math.random() * 0.20 : 0.08 + Math.random() * 0.12;
             changes[i] -= this.prices[i] * snapPct;
             if (ratio > 4) {
-              this._addNews(s.symbol + ': Overvalued \u2014 market correction incoming!', false);
-              if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
-                Firebase.pushStockNews(s.symbol + ': Overvalued \u2014 market corrects hard!', false);
+              if (!this._overvaluedNewsCooldowns) this._overvaluedNewsCooldowns = {};
+              if (Date.now() - (this._overvaluedNewsCooldowns[s.symbol] || 0) > 60000) {
+                this._overvaluedNewsCooldowns[s.symbol] = Date.now();
+                this._addNews(s.symbol + ': Overvalued \u2014 market correction incoming!', false);
+                if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+                  Firebase.pushStockNews(s.symbol + ': Overvalued \u2014 market corrects hard!', false);
+                }
               }
             }
           }
@@ -521,10 +528,21 @@ const Stocks = {
   },
 
   _addNews(text, good) {
+    // Deduplicate: ignore if identical text was already added within the last 5 seconds
+    // (prevents authority double-fire: local call + Firebase listener echo)
+    if (this.newsHistory.length > 0 &&
+        this.newsHistory[0].text === text &&
+        Date.now() - this.newsHistory[0].time < 5000) return;
+
     this.newsHistory.unshift({ text, good, time: Date.now() });
     if (this.newsHistory.length > 20) this.newsHistory.pop();
+
     if (typeof Settings !== 'undefined' && Settings.options.newsPopups) {
-      Toast.show((good ? '📈 ' : '📉 ') + text, good ? 'var(--green-dark)' : '#c0392b', 4500);
+      // Rate-limit toasts: at most one news popup every 12 seconds
+      if (Date.now() - (this._lastNewsToastAt || 0) > 12000) {
+        this._lastNewsToastAt = Date.now();
+        Toast.show((good ? '📈 ' : '📉 ') + text, good ? 'var(--green-dark)' : '#c0392b', 4500);
+      }
     }
   },
 

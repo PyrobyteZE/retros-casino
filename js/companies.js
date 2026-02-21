@@ -439,8 +439,12 @@ const Companies = {
           this._playerManiaCooldowns[sym] = Date.now();
           const pctUp = Math.round((mult - 1) * 100);
           const msg = '\u{1F680} MANIA: ' + sym + ' (\u200B' + (s.companyName || '') + ') \u2014 buying frenzy! +' + pctUp + '%!';
-          if (typeof Stocks !== 'undefined') Stocks._addNews(msg, true);
-          if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushStockNews(msg, true);
+          // Global mania news cooldown: don't push more than 1 mania news per 20s across all player stocks
+          if (Date.now() - (this._lastManiaPush || 0) > 20000) {
+            this._lastManiaPush = Date.now();
+            if (typeof Stocks !== 'undefined') Stocks._addNews(msg, true);
+            if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushStockNews(msg, true);
+          }
         }
 
         // --- Mean reversion toward effectiveBase ---
