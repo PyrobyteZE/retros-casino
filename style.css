@@ -4730,7 +4730,7 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   position: fixed;
   top: 60px;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(-10px);
   background: var(--bg2);
   border: 1px solid var(--gold);
   border-radius: 10px;
@@ -4741,13 +4741,22 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   color: var(--gold);
   text-align: center;
   max-width: 90vw;
-  animation: fadeInOut 4s ease forwards;
+  opacity: 0;
+  pointer-events: none;
 }
-@keyframes fadeInOut {
-  0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
-  15% { opacity: 1; transform: translateX(-50%) translateY(0); }
-  80% { opacity: 1; }
-  100% { opacity: 0; }
+.insider-tip-toast.toast-in {
+  animation: toastSlideIn 0.35s ease forwards;
+}
+.insider-tip-toast.toast-out {
+  animation: toastSlideOut 0.38s ease forwards;
+}
+@keyframes toastSlideIn {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+@keyframes toastSlideOut {
+  0%   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
 }
 
 /* Stock Insider Button */

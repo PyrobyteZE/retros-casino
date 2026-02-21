@@ -76,12 +76,7 @@ const Stocks = {
     Firebase.listenBountyRefunds(Firebase.uid, refund => {
       App.addBalance(refund.amount);
       App.save();
-      const toast = document.createElement('div');
-      toast.className = 'insider-tip-toast';
-      toast.textContent = '\u{1F504} Bounty expired — ' + App.formatMoney(refund.amount) + ' refunded';
-      toast.style.background = 'var(--bg3)';
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 4000);
+      Toast.show('\u{1F504} Bounty expired — ' + App.formatMoney(refund.amount) + ' refunded', 'var(--bg3)');
     });
     setInterval(() => this._expireBounties(), 300000);
     if (typeof Companies !== 'undefined') Companies.init();
@@ -529,13 +524,7 @@ const Stocks = {
     this.newsHistory.unshift({ text, good, time: Date.now() });
     if (this.newsHistory.length > 20) this.newsHistory.pop();
     if (typeof Settings !== 'undefined' && Settings.options.newsPopups) {
-      const toast = document.createElement('div');
-      toast.className = 'insider-tip-toast';
-      toast.textContent = (good ? '📈 ' : '📉 ') + text;
-      toast.style.background = good ? 'var(--green-dark)' : '#c0392b';
-      toast.style.color = '#fff';
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 4500);
+      Toast.show((good ? '📈 ' : '📉 ') + text, good ? 'var(--green-dark)' : '#c0392b', 4500);
     }
   },
 
@@ -1070,12 +1059,7 @@ const Stocks = {
       ts: Date.now(),
     };
     Firebase.postBounty(id, data).then(() => {
-      const toast = document.createElement('div');
-      toast.className = 'insider-tip-toast';
-      toast.textContent = '\u{1F3AF} Bounty posted on ' + symbol + ' — ' + App.formatMoney(amount);
-      toast.style.background = '#ff9100';
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 3000);
+      Toast.show('\u{1F3AF} Bounty posted on ' + symbol + ' — ' + App.formatMoney(amount), '#ff9100', 3000);
     }).catch(err => {
       App.addBalance(amount); // refund on failure
       console.error('Bounty post failed:', err);
@@ -1092,12 +1076,7 @@ const Stocks = {
     Firebase.claimBounty(id).then(() => {
       App.addBalance(bounty.pot);
       App.save();
-      const toast = document.createElement('div');
-      toast.className = 'insider-tip-toast';
-      toast.textContent = '\u{1F3AF} Bounty claimed on ' + symbol + '! +' + App.formatMoney(bounty.pot);
-      toast.style.background = 'var(--green)';
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 5000);
+      Toast.show('\u{1F3AF} Bounty claimed on ' + symbol + '! +' + App.formatMoney(bounty.pot), 'var(--green)', 5000);
     }).catch(() => {});
   },
 
@@ -1257,20 +1236,18 @@ const Stocks = {
   },
 
   _showAttackResult(symbol, success, dropPct) {
-    const toast = document.createElement('div');
-    toast.className = 'insider-tip-toast';
+    let text, color;
     if (success) {
-      toast.textContent = `🎯 Attack on ${symbol} worked! -${(dropPct*100).toFixed(0)}% incoming`;
-      toast.style.background = 'var(--red)';
+      text = `🎯 Attack on ${symbol} worked! -${(dropPct*100).toFixed(0)}% incoming`;
+      color = 'var(--red)';
     } else if (dropPct < 0) {
-      toast.textContent = `💥 Attack on ${symbol} backfired — it's going UP`;
-      toast.style.background = '#ff8800';
+      text = `💥 Attack on ${symbol} backfired — it's going UP`;
+      color = '#ff8800';
     } else {
-      toast.textContent = `❌ Attack on ${symbol} failed — fee lost`;
-      toast.style.background = 'var(--bg3)';
+      text = `❌ Attack on ${symbol} failed — fee lost`;
+      color = 'var(--bg3)';
     }
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 4000);
+    Toast.show(text, color);
   },
 
   // === Casino Ownership (R5+ & LUCKY shares) ===
@@ -1284,12 +1261,7 @@ const Stocks = {
     const earned = amount * cut;
     if (earned < 0.01) return;
     App.addBalance(earned);
-    const toast = document.createElement('div');
-    toast.className = 'insider-tip-toast';
-    toast.textContent = '\u{1F3B0} Casino cut: +' + App.formatMoney(earned);
-    toast.style.background = '#ff9100';
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
+    Toast.show('\u{1F3B0} Casino cut: +' + App.formatMoney(earned), '#ff9100', 3000);
   },
 
   // === Save/Load ===

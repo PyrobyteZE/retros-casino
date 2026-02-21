@@ -178,12 +178,7 @@ const Companies = {
       Firebase.listenSaleReceipts(Firebase.uid, receipt => {
         App.addBalance(receipt.amount);
         App.save();
-        const toast = document.createElement('div');
-        toast.className = 'insider-tip-toast';
-        toast.style.background = 'var(--green-dark)';
-        toast.textContent = '\u{1F3E2} Company sold! +' + App.formatMoney(receipt.amount) + ' received.';
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 5000);
+        Toast.show('\u{1F3E2} Company sold! +' + App.formatMoney(receipt.amount) + ' received.', 'var(--green-dark)', 5000);
       });
     }
   },
@@ -332,12 +327,7 @@ const Companies = {
       if (idx >= 0) {
         this._companies.splice(idx, 1);
         needsSave = true;
-        const toast = document.createElement('div');
-        toast.className = 'insider-tip-toast';
-        toast.style.background = '#c0392b';
-        toast.textContent = '\u{1F534} ' + c.ticker + ' went bankrupt! Pay the debt to recover it.';
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 6000);
+        Toast.show('\u{1F534} ' + c.ticker + ' went bankrupt! Pay the debt to recover it.', '#c0392b', 6000);
       }
     });
     if (needsSave) { this._saveLocal(); this._pushToFirebase(); }
@@ -740,17 +730,11 @@ const Companies = {
   },
 
   _onSabotageNotification(notif) {
-    const toast = document.createElement('div');
-    toast.className = 'insider-tip-toast';
     if (notif.success) {
-      toast.textContent = '\u26A0\uFE0F ' + this._esc(notif.fromName || 'Someone') + ' successfully sabotaged your company!';
-      toast.style.background = '#c0392b';
+      Toast.show('\u26A0\uFE0F ' + this._esc(notif.fromName || 'Someone') + ' successfully sabotaged your company!', '#c0392b', 7000);
     } else {
-      toast.textContent = '\u{1F6E1} Sabotage attempt by ' + this._esc(notif.fromName || 'Someone') + ' failed \u2014 they paid the price.';
-      toast.style.background = '#f39c12';
+      Toast.show('\u{1F6E1} Sabotage attempt by ' + this._esc(notif.fromName || 'Someone') + ' failed \u2014 they paid the price.', '#f39c12', 7000);
     }
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 7000);
   },
 
   // === DELETE COMPANY ===
@@ -1548,11 +1532,7 @@ const Companies = {
     }
   },
 
-  _toast(msg) {
-    const el = document.createElement('div');
-    el.className = 'insider-tip-toast';
-    el.textContent = msg;
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 3500);
+  _toast(msg, color) {
+    Toast.show(msg, color || '', 3500);
   },
 };

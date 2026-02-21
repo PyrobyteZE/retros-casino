@@ -890,11 +890,7 @@ const Loans = {
       App.addBalance(payment.amount);
       App.save();
       snap.ref.remove();
-      const toast = document.createElement('div');
-      toast.className = 'insider-tip-toast';
-      toast.textContent = '\u{1F4B8} ' + payment.borrowerName + ' paid back ' + App.formatMoney(payment.amount) + '!';
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 4000);
+      Toast.show('\u{1F4B8} ' + payment.borrowerName + ' paid back ' + App.formatMoney(payment.amount) + '!');
     });
 
     // Listen for returned loan money (declined offers)
@@ -904,11 +900,7 @@ const Loans = {
       App.addBalance(ret.amount);
       App.save();
       snap.ref.remove();
-      const toast = document.createElement('div');
-      toast.className = 'insider-tip-toast';
-      toast.textContent = '\u{1F504} Loan declined \u2014 ' + App.formatMoney(ret.amount) + ' returned!';
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 4000);
+      Toast.show('\u{1F504} Loan declined \u2014 ' + App.formatMoney(ret.amount) + ' returned!');
     });
   },
 
@@ -1079,22 +1071,16 @@ const Loans = {
       return;
     }
     const roll = Math.random();
-    const toast = document.createElement('div');
-    toast.className = 'insider-tip-toast';
     if (roll < 0.80) {
       const payment = this._counterLoan.amount * 0.08;
       App.addBalance(payment);
       this._counterLoan.totalEarned += payment;
       this._counterLoan.lastPaidAt = Date.now();
-      toast.textContent = '\u{1F4B0} Shark paid: +' + App.formatMoney(payment) + ' (Counter-Loan)';
-      toast.style.background = 'var(--green)';
+      Toast.show('\u{1F4B0} Shark paid: +' + App.formatMoney(payment) + ' (Counter-Loan)', 'var(--green)');
     } else {
       const msg = this._counterLoanSkipMessages[Math.floor(Math.random() * this._counterLoanSkipMessages.length)];
-      toast.textContent = '\u{1F988} ' + msg;
-      toast.style.background = 'var(--bg3)';
+      Toast.show('\u{1F988} ' + msg, 'var(--bg3)');
     }
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 4000);
     App.save();
     this._renderCounterLoanSection();
   },
@@ -1102,12 +1088,7 @@ const Loans = {
   recallCounterLoan() {
     if (this._counterLoan.amount <= 0) return;
     App.addBalance(this._counterLoan.amount);
-    const toast = document.createElement('div');
-    toast.className = 'insider-tip-toast';
-    toast.textContent = '\u{1F4B5} Counter-loan recalled: +' + App.formatMoney(this._counterLoan.amount) + ' returned';
-    toast.style.background = 'var(--green)';
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
+    Toast.show('\u{1F4B5} Counter-loan recalled: +' + App.formatMoney(this._counterLoan.amount) + ' returned', 'var(--green)', 3000);
     this._counterLoan = { amount: 0, startedAt: 0, lastPaidAt: 0, totalEarned: 0 };
     if (this._counterLoanTimer) { clearInterval(this._counterLoanTimer); this._counterLoanTimer = null; }
     App.save();
@@ -1150,12 +1131,7 @@ const Loans = {
     this._interestReduction = 0.10;
     App.save();
     this._renderNegotiatorSection();
-    const toast = document.createElement('div');
-    toast.className = 'insider-tip-toast';
-    toast.textContent = '\u{1F91D} Negotiator hired! Interest permanently -10%';
-    toast.style.background = 'var(--green)';
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 4000);
+    Toast.show('\u{1F91D} Negotiator hired! Interest permanently -10%', 'var(--green)');
   },
 
   _renderNegotiatorSection() {
@@ -1187,12 +1163,7 @@ const Loans = {
     this._riggedDecks[type] += 3;
     App.save();
     this._renderBlackMarketSection();
-    const toast = document.createElement('div');
-    toast.className = 'insider-tip-toast';
-    toast.textContent = '\u{1F0CF} Rigged ' + (type === 'blackjack' ? 'Blackjack Deck' : 'Coin') + ' — 3 uses added!';
-    toast.style.background = '#ff9100';
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
+    Toast.show('\u{1F0CF} Rigged ' + (type === 'blackjack' ? 'Blackjack Deck' : 'Coin') + ' — 3 uses added!', '#ff9100', 3000);
   },
 
   useRiggedDeck(type) {

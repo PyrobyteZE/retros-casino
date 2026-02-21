@@ -216,6 +216,42 @@ const App = {
   }
 };
 
+// Toast notification queue — prevents overlapping news/alerts
+const Toast = {
+  _queue: [],
+  _active: false,
+  _el: null,
+
+  // show(text, color?, duration?) — enqueue a toast
+  show(text, color = '', duration = 4000) {
+    this._queue.push({ text, color, duration });
+    if (!this._active) this._next();
+  },
+
+  _next() {
+    if (!this._queue.length) { this._active = false; return; }
+    this._active = true;
+    const { text, color, duration } = this._queue.shift();
+
+    const el = document.createElement('div');
+    el.className = 'insider-tip-toast toast-in';
+    el.textContent = text;
+    if (color) { el.style.background = color; el.style.color = '#fff'; }
+    document.body.appendChild(el);
+    this._el = el;
+
+    const hideAfter = Math.max(duration - 400, 200);
+    setTimeout(() => {
+      el.classList.remove('toast-in');
+      el.classList.add('toast-out');
+      setTimeout(() => {
+        el.remove();
+        this._next();
+      }, 380);
+    }, hideAfter);
+  },
+};
+
 document.addEventListener('DOMContentLoaded', () => {
   App.init();
   Clicker.init();

@@ -1356,11 +1356,7 @@ const Firebase = {
             App.updateBalance();
             if (typeof Clicker !== 'undefined') { Clicker.startAutoClicker(); Clicker.updateStats(); Clicker.renderUpgrades(); }
           }
-          const toast = document.createElement('div');
-          toast.className = 'insider-tip-toast';
-          toast.textContent = '\u2601\uFE0F Save restored from cloud!';
-          document.body.appendChild(toast);
-          setTimeout(() => toast.remove(), 4000);
+          Toast.show('\u2601\uFE0F Save restored from cloud!');
           console.log('Firebase: cloud save restored');
         }
         // Push current state to cloud after load (or immediately if nothing was restored)
@@ -1406,11 +1402,7 @@ const Firebase = {
         const newReqs = Object.values(this._friendRequests);
         const latest = newReqs[newReqs.length - 1];
         if (latest) {
-          const toast = document.createElement('div');
-          toast.className = 'insider-tip-toast';
-          toast.textContent = '\u{1F465} ' + (latest.name || 'Player') + ' sent you a friend request!';
-          document.body.appendChild(toast);
-          setTimeout(() => toast.remove(), 5000);
+          Toast.show('\u{1F465} ' + (latest.name || 'Player') + ' sent you a friend request!', '', 5000);
         }
       }
     });
