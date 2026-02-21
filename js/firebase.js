@@ -893,14 +893,20 @@ const Firebase = {
         const idx = Stocks.stocks.findIndex(s => s.symbol === sym);
         if (idx >= 0) {
           const price = Stocks.prices[idx];
-          // Coordinated dump detection: sell pressure > 15% → panic crash
           if (data.dir < 0 && data.pct > 0.15) {
-            const panicDrop = 0.25 + Math.random() * 0.10; // 25–35% crash
-            const panicTarget = Math.max(1, price * (1 - panicDrop));
-            Stocks._priceTargets[idx] = { target: panicTarget, stepsLeft: 10 };
+            // Coordinated dump → panic crash 25–35%
+            const panicDrop = 0.25 + Math.random() * 0.10;
+            Stocks._priceTargets[idx] = { target: Math.max(1, price * (1 - panicDrop)), stepsLeft: 10 };
             const msg = '\u{1F4C9} PANIC SELL: ' + sym + ' \u2014 coordinated dump! Price in freefall!';
             Stocks._addNews(msg, false);
             if (this.isOnline()) this.pushStockNews(msg, false);
+          } else if (data.dir > 0 && data.pct > 0.15) {
+            // Coordinated pump → boom 25–35%
+            const boom = 0.25 + Math.random() * 0.10;
+            Stocks._priceTargets[idx] = { target: price * (1 + boom), stepsLeft: 10 };
+            const msg = '\u{1F4C8} PUMP: ' + sym + ' \u2014 coordinated buying surge! Price skyrocketing!';
+            Stocks._addNews(msg, true);
+            if (this.isOnline()) this.pushStockNews(msg, true);
           } else {
             const newTarget = Math.max(1, price * (1 + data.dir * data.pct));
             const existing = Stocks._priceTargets[idx];
@@ -908,17 +914,23 @@ const Firebase = {
           }
         }
       }
-      // Apply to player stocks (always — Companies authority handles push)
+      // Apply to player stocks (all clients update target; Companies authority applies via tickPrices)
       if (typeof Companies !== 'undefined' && Companies._allPlayerStocks[sym]) {
         const s = Companies._allPlayerStocks[sym];
-        // Coordinated dump on player stock
         if (data.dir < 0 && data.pct > 0.15) {
+          // Coordinated dump → panic crash
           const panicDrop = 0.25 + Math.random() * 0.10;
-          const panicTarget = Math.max(0.01, s.price * (1 - panicDrop));
-          Companies._playerStockTargets[sym] = { target: panicTarget, stepsLeft: 10 };
-          const panicMsg = '\u{1F4C9} PANIC SELL: ' + sym + ' \u2014 coordinated dump! Price in freefall!';
-          if (typeof Stocks !== 'undefined') Stocks._addNews(panicMsg, false);
-          if (this.isOnline()) this.pushStockNews(panicMsg, false);
+          Companies._playerStockTargets[sym] = { target: Math.max(0.01, s.price * (1 - panicDrop)), stepsLeft: 10 };
+          const msg = '\u{1F4C9} PANIC SELL: ' + sym + ' \u2014 coordinated dump! Price in freefall!';
+          if (typeof Stocks !== 'undefined') Stocks._addNews(msg, false);
+          if (this.isOnline()) this.pushStockNews(msg, false);
+        } else if (data.dir > 0 && data.pct > 0.15) {
+          // Coordinated pump → boom
+          const boom = 0.25 + Math.random() * 0.10;
+          Companies._playerStockTargets[sym] = { target: s.price * (1 + boom), stepsLeft: 10 };
+          const msg = '\u{1F4C8} PUMP: ' + sym + ' \u2014 coordinated buying surge! Price skyrocketing!';
+          if (typeof Stocks !== 'undefined') Stocks._addNews(msg, true);
+          if (this.isOnline()) this.pushStockNews(msg, true);
         } else {
           const newTarget = Math.max(0.01, s.price * (1 + data.dir * data.pct));
           const existing = Companies._playerStockTargets[sym];
@@ -1047,9 +1059,16 @@ const Firebase = {
       if (!curr || now - (curr.ts || 0) > 20000) {
         return { dir, pct, ts: now };
       }
-      // Accumulate: same-direction adds, opposite-direction reduces; cap raised to 0.30
-      const combinedPct = Math.min(0.30, (curr.pct || 0) + pct);
-      return { dir: curr.dir === dir ? dir : (combinedPct > 0 ? dir : -dir), pct: combinedPct, ts: now };
+      // Same direction: accumulate (cap 0.30); opposite direction: cancel out
+      let combinedPct, combinedDir;
+      if (curr.dir === dir) {
+        combinedPct = Math.min(0.30, (curr.pct || 0) + pct);
+        combinedDir = dir;
+      } else {
+        combinedPct = Math.max(0, (curr.pct || 0) - pct);
+        combinedDir = combinedPct > 0 ? curr.dir : dir; // keep dominant dir; flip to new if fully cancelled
+      }
+      return { dir: combinedDir, pct: combinedPct, ts: now };
     }).catch(err => console.error('Firebase tradeInfluence write error:', err));
   },
 
@@ -1714,6 +1733,76 @@ const Firebase = {
         return Object.keys(upd).length ? db.ref('companySales').update(upd) : Promise.resolve();
       }),
     ]).catch(err => console.error('deletePlayerData error:', err));
+  },
+
+  // === SCANDALS ===
+  pushScandal(sym, text, ownerUid) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('scandals/' + sym).set({ text, ownerUid, firedAt: Date.now(), suppressed: false })
+      .catch(err => console.error('pushScandal error:', err));
+  },
+
+  suppressScandal(sym) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('scandals/' + sym).update({ suppressed: true, suppressedAt: Date.now() })
+      .catch(err => console.error('suppressScandal error:', err));
+  },
+
+  listenScandals(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('scandals').on('value', snap => cb(snap.val() || {}),
+      err => console.warn('listenScandals denied:', err.code));
+  },
+
+  // === STOCK DELETION (remove individual stock from company) ===
+  pushStockDeletion(symbol, pricePerShare, refund) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('stockDeletions/' + symbol).set({ symbol, pricePerShare: pricePerShare || 0, refund: !!refund, ts: Date.now() })
+      .catch(err => console.error('pushStockDeletion error:', err));
+  },
+
+  listenStockDeletions(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('stockDeletions').on('child_added', snap => {
+      const data = snap.val();
+      if (!data || Date.now() - (data.ts || 0) > 30000) return;
+      cb(data);
+    }, err => console.warn('listenStockDeletions denied:', err.code));
+  },
+
+  // === COMPETITORS ===
+  pushCompetitor(theirUid, data) {
+    if (!this.isOnline() || !this.uid) return Promise.resolve();
+    return this.db.ref('competitors/' + this.uid + '/' + theirUid).set(data)
+      .catch(err => console.error('pushCompetitor error:', err));
+  },
+
+  removeCompetitor(theirUid) {
+    if (!this.isOnline() || !this.uid) return Promise.resolve();
+    return this.db.ref('competitors/' + this.uid + '/' + theirUid).remove()
+      .catch(err => console.error('removeCompetitor error:', err));
+  },
+
+  listenCompetitors(cb) {
+    if (!this.isOnline() || !this.uid) return;
+    this.db.ref('competitors/' + this.uid).on('value', snap => cb(snap.val() || {}),
+      err => console.warn('listenCompetitors denied:', err.code));
+  },
+
+  // === SABOTAGE NOTIFICATIONS ===
+  pushSabotageNotification(targetUid, fromName, success, stockSym) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('sabotageNotifications/' + targetUid).push({ fromName, success, stockSym, ts: Date.now() })
+      .catch(err => console.error('pushSabotageNotification error:', err));
+  },
+
+  listenSabotageNotifications(cb) {
+    if (!this.isOnline() || !this.uid) return;
+    this.db.ref('sabotageNotifications/' + this.uid).on('child_added', snap => {
+      const data = snap.val();
+      if (!data || Date.now() - (data.ts || 0) > 30000) return;
+      cb(data);
+    }, err => console.warn('listenSabotageNotifications denied:', err.code));
   },
 
   // Clean up stale player stock prices for deleted symbols

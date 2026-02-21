@@ -5451,3 +5451,80 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   border-radius: 8px;
   font-size: 12px;
 }
+
+/* ===== SCANDALS ===== */
+.scandal-alert {
+  margin-top: 6px;
+  padding: 7px 9px;
+  background: rgba(192,57,43,0.13);
+  border: 1px solid rgba(192,57,43,0.4);
+  border-radius: 7px;
+  font-size: 12px;
+  color: #e74c3c;
+  line-height: 1.4;
+}
+.scandal-suppress-btn {
+  margin-top: 5px;
+  padding: 4px 9px;
+  border-radius: 5px;
+  border: 1px solid #e74c3c;
+  background: transparent;
+  color: #e74c3c;
+  font-size: 11px;
+  cursor: pointer;
+}
+.scandal-suppress-btn:hover { background: rgba(231,76,60,0.15); }
+.scandal-news-banner {
+  margin-top: 5px;
+  font-size: 11px;
+  color: #e74c3c;
+  padding: 4px 7px;
+  background: rgba(192,57,43,0.08);
+  border-radius: 5px;
+}
+
+/* ===== COMPETITOR / SABOTAGE ===== */
+.competitor-card { border-color: #e74c3c !important; }
+.competitor-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(231,76,60,0.2);
+  color: #e74c3c;
+  border-radius: 4px;
+  padding: 2px 5px;
+  margin-left: 4px;
+}
+.competitor-controls {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.competitor-btn {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--bg3);
+  background: var(--bg2);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.competitor-btn.competitor-active {
+  border-color: #e74c3c;
+  color: #e74c3c;
+  background: rgba(231,76,60,0.1);
+}
+.sabotage-btn {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid #e74c3c;
+  background: rgba(231,76,60,0.15);
+  color: #e74c3c;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sabotage-btn:active { opacity: 0.7; }

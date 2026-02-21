@@ -56,7 +56,32 @@ const Companies = {
   _bankruptCompanies: {},  // { [ticker]: { ticker, name, debtCost, bankruptAt, originalOwnerUid, originalOwnerName, stocks, mainIdx, foundedAt } }
   _companyListings: {},    // { [ticker]: { ticker, name, company, salePrice, ownerUid, ownerName, listedAt } }
   _processedBankrupt: null,// Set<string> of tickers already handled locally
+  _scandals: {},           // { [symbol]: { text, ownerUid, firedAt, suppressed } }
+  _scandalCooldowns: {},   // { [symbol]: timestamp } — prevent spam
+  _competitors: {},        // { [theirUid]: { name, ticker, setAt } }
   activeTab: 'browse',
+
+  // Scandal text templates ('{n}' replaced with company name)
+  SCANDAL_EVENTS: [
+    '{n} CEO caught embezzling lunch money — investors furious 💰',
+    '{n} board meeting revealed to be a D&D campaign 🎲',
+    '{n} CFO quit to pursue "vibes-based accounting" 🎯',
+    '{n} CEO accidentally livestreamed full board meeting 📱',
+    '{n} HQ under investigation for suspicious pizza deliveries 🍕',
+    '{n} insider claims CEO is "completely making it up" 🤡',
+    '{n} bear spotted in boardroom — unclear if metaphor 🐻',
+    '{n} CEO named in rubber duck smuggling operation 🦆',
+    '{n} annual report described as "very made up" by former intern 📋',
+    '{n} CEO tests positive for performance-enhancing spreadsheets 💊',
+    '{n} board used company funds to buy 200 gaming chairs 🪑',
+    '{n} financial model revealed to be an astrology chart ♈',
+    '{n} CEO spent 40 minutes arguing with a vending machine 🥤',
+    '{n} accused of faking revenue with Monopoly money 🎩',
+    '{n} "leaked" earnings call just CEO reading Wikipedia out loud 📖',
+    '{n} CFO discovered the "ledger" was just a Minecraft chest 🎮',
+    '{n} CEO claimed quarterly losses were "a social experiment" 🧪',
+    '{n} janitor fired for knowing too much about quarterly earnings 🧹',
+  ],
 
   // === INIT ===
   init() {
@@ -67,6 +92,10 @@ const Companies = {
       Firebase.listenPlayerStockPrices(prices => this._onPriceUpdate(prices));
       Firebase.listenBankruptCompanies(data => this._onBankruptcyUpdate(data));
       Firebase.listenCompanySales(data => { this._companyListings = data || {}; this._triggerRender(); });
+      Firebase.listenScandals(data => { this._scandals = data || {}; this._triggerRender(); });
+      Firebase.listenStockDeletions(data => this._onStockDeletion(data));
+      Firebase.listenCompetitors(data => { this._competitors = data || {}; this._triggerRender(); });
+      Firebase.listenSabotageNotifications(notif => this._onSabotageNotification(notif));
       Firebase.listenSaleReceipts(Firebase.uid, receipt => {
         App.addBalance(receipt.amount);
         App.save();
@@ -292,14 +321,26 @@ const Companies = {
         const bullLv = upg.bullBias || 0;
         if (bullLv > 0) delta += s.price * bullLv * 0.001; // +0.1–0.5%/tick
 
-        // --- Mean reversion: gentle pull back toward basePrice ---
-        delta -= s.price * (ratio - 1) * 0.005;
+        // --- Mania event: rare explosive spike (reversion handles the fall) ---
+        if (Math.random() < 0.002) {
+          const mult = 3 + Math.random() * 8; // 3x to 11x spike
+          this._playerStockTargets[sym] = { target: s.price * mult, stepsLeft: 5, isMania: true };
+          const pctUp = Math.round((mult - 1) * 100);
+          const msg = '\u{1F680} MANIA: ' + sym + ' (\u200B' + (s.companyName || '') + ') \u2014 buying frenzy! +' + pctUp + '%!';
+          if (typeof Stocks !== 'undefined') Stocks._addNews(msg, true);
+          if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushStockNews(msg, true);
+        }
 
-        // --- High-price crash risk ---
-        if (ratio > 3) {
-          const crashChance = Math.min(0.12, (ratio - 3) * 0.02);
+        // --- Mean reversion: scales aggressively at extreme prices ---
+        const revStr = ratio > 5 ? 0.025 : 0.005;
+        delta -= s.price * (ratio - 1) * revStr;
+
+        // --- High-price crash risk (escalates at very high ratios) ---
+        if (ratio > 2.5) {
+          const crashChance = Math.min(0.20, (ratio - 2.5) * 0.025);
           if (Math.random() < crashChance) {
-            delta -= s.price * (0.08 + Math.random() * 0.12);
+            const snapPct = ratio > 5 ? 0.15 + Math.random() * 0.25 : 0.08 + Math.random() * 0.12;
+            delta -= s.price * snapPct;
           }
         }
 
@@ -327,6 +368,15 @@ const Companies = {
     }
     if (typeof Firebase !== 'undefined' && Firebase.isOnline() && Firebase._isStockAuthority) {
       Firebase.pushPlayerStockPrices(updates);
+      // Scandal trigger — authority fires at most once per stock per 5 min, public stocks only
+      for (const sym in this._allPlayerStocks) {
+        const s = this._allPlayerStocks[sym];
+        if (s.type !== 'public' || s._bankruptDeclared) continue;
+        const existing = this._scandals[sym];
+        if (existing && !existing.suppressed && Date.now() - (existing.firedAt || 0) < 120000) continue;
+        if (Date.now() - (this._scandalCooldowns[sym] || 0) < 300000) continue;
+        if (Math.random() < 0.002) this._triggerScandal(sym, s);
+      }
     }
   },
 
@@ -404,6 +454,153 @@ const Companies = {
     if (typeof Firebase !== 'undefined') Firebase.bailOutCompany(ticker);
     App.save();
     this._triggerRender();
+  },
+
+  // === SCANDALS ===
+  _triggerScandal(sym, s) {
+    const tpl = this.SCANDAL_EVENTS[Math.floor(Math.random() * this.SCANDAL_EVENTS.length)];
+    const text = tpl.replace('{n}', s.companyName || sym);
+    const drop = 0.15 + Math.random() * 0.15; // 15–30% price drop
+    this._playerStockTargets[sym] = { target: Math.max(0.01, s.price * (1 - drop)), stepsLeft: 8 };
+    this._scandalCooldowns[sym] = Date.now();
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.pushScandal(sym, text, s.ownerUid);
+      Firebase.pushStockNews('\u{1F4F0} SCANDAL: ' + text, false);
+    }
+  },
+
+  suppressScandal(sym) {
+    const scandal = this._scandals[sym];
+    if (!scandal) return;
+    const s = this._allPlayerStocks[sym];
+    const cost = Math.max(100_000, Math.round((s ? s.basePrice || 100 : 100) * 1000));
+    if (!confirm('Suppress this scandal for ' + App.formatMoney(cost) + '?')) return;
+    if (App.balance < cost) { alert('Not enough funds. Need ' + App.formatMoney(cost)); return; }
+    App.addBalance(-cost);
+    App.save();
+    if (typeof Firebase !== 'undefined') Firebase.suppressScandal(sym);
+    this._toast('\u{1F910} Scandal suppressed.');
+  },
+
+  // === REMOVE INDIVIDUAL STOCK ===
+  removeStock(cIdx, sIdx) {
+    const c = this._companies[cIdx];
+    if (!c || !c.stocks[sIdx]) return;
+    if (c.stocks.length <= 1) { alert("Can't remove your only stock. Delete the whole company instead."); return; }
+    const s = c.stocks[sIdx];
+    const priceStr = App.formatMoney(s.price || 0);
+    const refund = confirm('Refund shareholders ' + priceStr + '/share?\n\nOK = pay all current holders at market price\nCancel = delete with no refund');
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.pushStockDeletion(s.symbol, refund ? (s.price || 0) : 0, refund);
+    }
+    c.stocks.splice(sIdx, 1);
+    if ((c.mainIdx || 0) >= c.stocks.length) c.mainIdx = 0;
+    this._saveLocal();
+    this._pushToFirebase();
+    if (typeof Firebase !== 'undefined') Firebase.removePlayerStockPrices([s.symbol]);
+    this._triggerRender();
+  },
+
+  _onStockDeletion(data) {
+    if (!data || !data.symbol) return;
+    const sym = data.symbol;
+    const h = this._holdings[sym];
+    if (!h || h.shares <= 0) return;
+    if (data.refund && data.pricePerShare > 0) {
+      const total = Math.round(h.shares * data.pricePerShare * 100) / 100;
+      App.addBalance(total);
+      App.save();
+      this._toast('\u{1F4CB} ' + sym + ' delisted \u2014 refund +' + App.formatMoney(total));
+    } else {
+      this._toast('\u{1F4CB} ' + sym + ' delisted by owner. No refund issued.');
+    }
+    delete this._holdings[sym];
+    this._saveLocal();
+  },
+
+  // === COMPETITOR / SABOTAGE ===
+  toggleCompetitor(theirUid, theirName, theirTicker) {
+    if (this._competitors[theirUid]) {
+      delete this._competitors[theirUid];
+      if (typeof Firebase !== 'undefined') Firebase.removeCompetitor(theirUid);
+      this._toast('\u274C Removed competitor: ' + this._esc(theirName));
+    } else {
+      const entry = { name: theirName, ticker: theirTicker, setAt: Date.now() };
+      this._competitors[theirUid] = entry;
+      if (typeof Firebase !== 'undefined') Firebase.pushCompetitor(theirUid, entry);
+      this._toast('\u{1F3AF} Marked as competitor: ' + this._esc(theirName));
+    }
+    this._triggerRender();
+  },
+
+  sabotageCost(theirUid) {
+    let maxPrice = 100;
+    for (const sym in this._allPlayerStocks) {
+      const s = this._allPlayerStocks[sym];
+      if (s.ownerUid === theirUid && s.type === 'public') maxPrice = Math.max(maxPrice, s.price || 100);
+    }
+    return Math.max(500_000, Math.round(maxPrice * 200));
+  },
+
+  sabotage(theirUid) {
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    if (!myUid || theirUid === myUid) { alert("Can't sabotage yourself."); return; }
+    const comp = this._competitors[theirUid];
+    if (!comp) return;
+    const cost = this.sabotageCost(theirUid);
+    if (App.balance < cost) { alert('Not enough funds. Need ' + App.formatMoney(cost)); return; }
+    if (!confirm('Sabotage ' + this._esc(comp.name || comp.ticker) + ' for ' + App.formatMoney(cost) + '?\n\n65% success: their stock crashes\n35% fail: your stock drops + they get a warning')) return;
+    App.addBalance(-cost);
+    App.save();
+
+    const success = Math.random() < 0.65;
+    const myName = typeof Settings !== 'undefined' ? Settings.profile.name : 'Rival';
+
+    if (success) {
+      // Crash their public stocks
+      const targetSymbols = Object.keys(this._allPlayerStocks)
+        .filter(sym => this._allPlayerStocks[sym].ownerUid === theirUid && this._allPlayerStocks[sym].type === 'public');
+      targetSymbols.forEach(sym => {
+        const s = this._allPlayerStocks[sym];
+        const drop = 0.20 + Math.random() * 0.20;
+        this._playerStockTargets[sym] = { target: Math.max(0.01, s.price * (1 - drop)), stepsLeft: 10 };
+        if (typeof Firebase !== 'undefined') {
+          Firebase.pushTradeInfluence(sym, -1, drop);
+          Firebase.pushStockNews('\u{1F3AF} SABOTAGE: ' + (s.companyName || sym) + ' \u2014 hostile attack! Stock in freefall!', false);
+        }
+      });
+      if (typeof Firebase !== 'undefined') Firebase.pushSabotageNotification(theirUid, myName, true, comp.ticker || '');
+      this._toast('\u2705 Sabotage landed! ' + this._esc(comp.ticker || '') + ' stock is crashing.');
+    } else {
+      // Backfire: your own main stock drops
+      if (this._companies.length > 0) {
+        const myMain = this._companies[0];
+        const myMainSym = myMain.stocks && myMain.stocks[myMain.mainIdx || 0] ? myMain.stocks[myMain.mainIdx || 0].symbol : null;
+        if (myMainSym && this._allPlayerStocks[myMainSym]) {
+          const myS = this._allPlayerStocks[myMainSym];
+          const backfire = 0.10 + Math.random() * 0.10;
+          this._playerStockTargets[myMainSym] = { target: Math.max(0.01, myS.price * (1 - backfire)), stepsLeft: 8 };
+          if (typeof Firebase !== 'undefined') Firebase.pushTradeInfluence(myMainSym, -1, backfire);
+        }
+      }
+      if (typeof Firebase !== 'undefined') Firebase.pushSabotageNotification(theirUid, myName, false, comp.ticker || '');
+      this._toast('\u274C Sabotage backfired! Your own stock took damage.');
+    }
+    this._triggerRender();
+  },
+
+  _onSabotageNotification(notif) {
+    const toast = document.createElement('div');
+    toast.className = 'insider-tip-toast';
+    if (notif.success) {
+      toast.textContent = '\u26A0\uFE0F ' + this._esc(notif.fromName || 'Someone') + ' successfully sabotaged your company!';
+      toast.style.background = '#c0392b';
+    } else {
+      toast.textContent = '\u{1F6E1} Sabotage attempt by ' + this._esc(notif.fromName || 'Someone') + ' failed \u2014 they paid the price.';
+      toast.style.background = '#f39c12';
+    }
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 7000);
   },
 
   // === DELETE COMPANY ===
@@ -738,6 +935,8 @@ const Companies = {
 
     // Public player stocks
     if (publicStocks.length > 0) {
+      // Group by ownerUid so each company gets one competitor/sabotage block
+      const ownersSeen = new Set();
       html += '<div style="display:flex;flex-direction:column;gap:10px">';
       publicStocks.forEach(s => {
         const h = this._holdings[s.symbol];
@@ -746,11 +945,30 @@ const Companies = {
         const prev = hist.length >= 2 ? hist[hist.length - 2] : s.price;
         const pct = prev > 0 ? ((s.price - prev) / prev * 100) : 0;
         const isUp = pct >= 0;
-        html += `<div class="company-card">
+        const isMyStock = s.ownerUid === myUid;
+        const isComp = !isMyStock && !!this._competitors[s.ownerUid];
+        const scandal = this._scandals[s.symbol];
+        const hasActiveScandal = scandal && !scandal.suppressed && Date.now() - (scandal.firedAt || 0) < 120000;
+
+        // Competitor/sabotage controls — one block per owner
+        let compControls = '';
+        if (!isMyStock && !ownersSeen.has(s.ownerUid)) {
+          ownersSeen.add(s.ownerUid);
+          const compCost = App.formatMoney(this.sabotageCost(s.ownerUid));
+          compControls = `<div class="competitor-controls">
+            <button class="competitor-btn${isComp ? ' competitor-active' : ''}" onclick="Companies.toggleCompetitor('${s.ownerUid}','${this._esc(s.ownerName)}','${this._esc(s.companyTicker || s.symbol)}')">
+              ${isComp ? '\u{1F3AF} Competitor' : '+ Set Competitor'}
+            </button>
+            ${isComp ? `<button class="sabotage-btn" onclick="Companies.sabotage('${s.ownerUid}')">Sabotage — ${compCost}</button>` : ''}
+          </div>`;
+        }
+
+        html += `<div class="company-card${isComp ? ' competitor-card' : ''}">
           <div class="company-card-header">
             <div>
               <span class="company-card-sym">${this._esc(s.symbol)}</span>
               <span class="player-stock-badge">PLAYER</span>
+              ${isComp ? '<span class="competitor-badge">RIVAL</span>' : ''}
             </div>
             <div class="company-card-price ${isUp ? 'ticker-up' : 'ticker-dn'}">
               $${s.price < 10 ? s.price.toFixed(2) : Math.round(s.price).toLocaleString()}
@@ -759,10 +977,12 @@ const Companies = {
           </div>
           <div class="company-card-name">${this._esc(s.name)}</div>
           <div class="company-card-owner">by ${this._esc(s.ownerName)}${owned > 0 ? ' &bull; You own <strong>' + owned + '</strong> shares' : ''}</div>
+          ${hasActiveScandal ? `<div class="scandal-news-banner">\u{1F4F0} ${this._esc(scandal.text)}</div>` : ''}
           <div class="company-card-actions">
             <button class="company-buy-btn" onclick="Companies.promptBuy('${s.symbol}')">Buy</button>
             ${owned > 0 ? `<button class="company-sell-btn" onclick="Companies.promptSell('${s.symbol}')">Sell</button>` : ''}
           </div>
+          ${compControls}
         </div>`;
       });
       html += '</div>';
@@ -857,20 +1077,25 @@ const Companies = {
 
       c.stocks.forEach((s, sIdx) => {
         const isMain = sIdx === (c.mainIdx || 0);
+        const scandal = this._scandals[s.symbol];
+        const hasActiveScandal = scandal && !scandal.suppressed && Date.now() - (scandal.firedAt || 0) < 120000;
+        const suppressCost = App.formatMoney(Math.max(100_000, Math.round((s.basePrice || 100) * 1000)));
         html += `<div class="company-stock-row">
-          <div>
+          <div style="flex:1;min-width:0">
             <span class="csr-sym">${this._esc(s.symbol)}</span>
             ${isMain ? '<span style="font-size:10px;color:var(--gold);margin-left:4px">MAIN</span>' : ''}
             <div class="company-card-name">${this._esc(s.name)}</div>
+            ${hasActiveScandal ? `<div class="scandal-alert">\u{1F4F0} ${this._esc(scandal.text)}<br><button class="scandal-suppress-btn" onclick="Companies.suppressScandal('${s.symbol}')">Suppress — ${suppressCost}</button></div>` : ''}
           </div>
-          <div style="text-align:right">
+          <div style="text-align:right;flex-shrink:0">
             <div class="csr-price">$${(s.price || 0) < 10 ? (s.price || 0).toFixed(2) : Math.round(s.price || 0).toLocaleString()}</div>
             <div class="csr-type ${s.type === 'public' ? 'csr-type-public' : 'csr-type-private'}">${s.type}</div>
           </div>
-          <div style="display:flex;flex-direction:column;gap:4px">
+          <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
             <button class="csr-toggle-btn" onclick="Companies.togglePublic(${cIdx},${sIdx})">${s.type === 'public' ? 'Make Private' : 'Go Public'}</button>
             ${!isMain ? `<button class="csr-toggle-btn" onclick="Companies.setMainStock(${cIdx},${sIdx})" style="font-size:10px">Set Main</button>` : ''}
-            <button class="csr-toggle-btn" onclick="Companies.issueDividend(${cIdx},${sIdx})" style="color:var(--gold);border-color:var(--gold)" title="Pay cash per-share to all holders. You cover the cost. Attracts buyers & rewards shareholders. Dividend Yield upgrade multiplies the payout.">Dividend \u{2139}\uFE0F</button>
+            <button class="csr-toggle-btn" onclick="Companies.issueDividend(${cIdx},${sIdx})" style="color:var(--gold);border-color:var(--gold)" title="Pay cash per-share to all holders.">Dividend \u{2139}\uFE0F</button>
+            ${c.stocks.length > 1 ? `<button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);font-size:10px" onclick="Companies.removeStock(${cIdx},${sIdx})">Remove</button>` : ''}
           </div>
         </div>`;
       });

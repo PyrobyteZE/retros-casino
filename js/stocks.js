@@ -178,6 +178,16 @@ const Stocks = {
       } else {
         // ── Standard random walk ──────────────────────────────────────────
         changes[i] = this.prices[i] * (Math.random() - 0.48) * s.volatility;
+
+        // Mania spike: 0.3% chance per tick — explosive upward frenzy
+        if (!tgt && Math.random() < 0.003) {
+          const mult = 3 + Math.random() * 8; // 3x to 11x
+          this._priceTargets[i] = { target: this.prices[i] * mult, stepsLeft: 5, isMania: true };
+          const pctUp = Math.round((mult - 1) * 100);
+          const msg = '\u{1F680} MANIA: ' + s.symbol + ' \u2014 irrational buying frenzy! +' + pctUp + '%!';
+          this._addNews(msg, true);
+          if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushStockNews(msg, true);
+        }
       }
     }
 
@@ -208,14 +218,15 @@ const Stocks = {
       if (!tgt || tgt.stepsLeft <= 0) {
         const ratio = this.prices[i] / s.basePrice;
 
-        // Gentle mean reversion toward basePrice (0.3% per 100% deviation per tick)
-        changes[i] -= this.prices[i] * (ratio - 1) * 0.003;
+        // Mean reversion — scales aggressively at extreme prices (post-mania fall)
+        const revStr = ratio > 5 ? 0.015 : 0.003;
+        changes[i] -= this.prices[i] * (ratio - 1) * revStr;
 
         // High-price crash risk — skip LUNA (has its own trend system)
         if (s.symbol !== 'LUNA' && ratio > 2.5) {
-          const crashChance = Math.min(0.15, (ratio - 2.5) * 0.015);
+          const crashChance = Math.min(0.20, (ratio - 2.5) * 0.025);
           if (Math.random() < crashChance) {
-            const snapPct = 0.08 + Math.random() * 0.12; // 8–20% snap down
+            const snapPct = ratio > 5 ? 0.15 + Math.random() * 0.20 : 0.08 + Math.random() * 0.12;
             changes[i] -= this.prices[i] * snapPct;
             if (ratio > 4) {
               this._addNews(s.symbol + ': Overvalued \u2014 market correction incoming!', false);
