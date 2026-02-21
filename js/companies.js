@@ -373,7 +373,7 @@ const Companies = {
       (Stocks.activeTab === 'players' || Stocks.activeTab === 'company' || Stocks.activeTab === 'market');
     // Don't wipe the company form while user is typing in an input/textarea
     const focusedEl = document.activeElement;
-    const userTyping = focusedEl && (focusedEl.tagName === 'INPUT' || focusedEl.tagName === 'TEXTAREA');
+    const userTyping = focusedEl && (focusedEl.tagName === 'INPUT' || focusedEl.tagName === 'TEXTAREA' || focusedEl.tagName === 'SELECT');
     if (inStocks && !userTyping) Stocks.render();
     else if (App.currentScreen === 'companies' && !userTyping) this.render();
     if (typeof Stocks !== 'undefined') Stocks.updateTicker();
@@ -1499,6 +1499,10 @@ const Companies = {
 
   _renderManage(container) {
     const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    // Preserve founding form values so price-update re-renders don't wipe user's typing
+    const _savedName     = document.getElementById('co-found-name')?.value     || '';
+    const _savedTicker   = document.getElementById('co-found-ticker')?.value   || '';
+    const _savedIndustry = document.getElementById('co-found-industry')?.value || '';
     let html = '';
 
     // Incoming private share offers
@@ -1767,6 +1771,10 @@ const Companies = {
     }
 
     container.innerHTML = html;
+    // Restore founding form values after re-render
+    if (_savedName)     { const el = document.getElementById('co-found-name');     if (el) el.value = _savedName; }
+    if (_savedTicker)   { const el = document.getElementById('co-found-ticker');   if (el) el.value = _savedTicker; }
+    if (_savedIndustry) { const el = document.getElementById('co-found-industry'); if (el) el.value = _savedIndustry; }
   },
 
   _esc(str) {
