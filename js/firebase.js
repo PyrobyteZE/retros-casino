@@ -168,6 +168,8 @@ const Firebase = {
     this._listenFriends();
     this._listenFriendRequests();
     this._listenDmUnread();
+    // Admin list — listen so granted players get admin automatically
+    this._listenAdmins();
     // Init Firebase-dependent features in other modules
     if (typeof Stocks !== 'undefined') Stocks._initFirebaseFeatures();
     if (typeof Loans !== 'undefined' && Loans._counterLoan && Loans._counterLoan.amount > 0) {
@@ -1812,5 +1814,26 @@ const Firebase = {
     symbols.forEach(sym => { upd[sym] = null; });
     this.db.ref('playerStockPrices').update(upd)
       .catch(err => console.error('removePlayerStockPrices error:', err));
+  },
+
+  // === ADMIN MANAGEMENT ===
+  _listenAdmins() {
+    if (!this.isOnline()) return;
+    this.db.ref('admins').on('value', snap => {
+      const data = snap.val() || {};
+      if (typeof Admin !== 'undefined') Admin.onAdminsUpdate(data);
+    }, err => console.warn('Firebase admins listen denied:', err.code));
+  },
+
+  grantAdmin(uid, name) {
+    if (!this.isOnline()) return;
+    this.db.ref('admins/' + uid).set({ name, grantedAt: Date.now() })
+      .catch(err => console.error('grantAdmin error:', err));
+  },
+
+  revokeAdmin(uid) {
+    if (!this.isOnline()) return;
+    this.db.ref('admins/' + uid).remove()
+      .catch(err => console.error('revokeAdmin error:', err));
   },
 };

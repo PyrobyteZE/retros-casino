@@ -133,11 +133,14 @@ const Admin = {
   adminPassword: '1984',
   adminName: 'RetroByte',
   _consoleUnlocked: false,
+  _adminsList: {},   // { [uid]: { name, grantedAt } } — from Firebase
 
   activeTab: 'cheats',
 
   isAdmin() {
-    return this.adminMode && (this._consoleUnlocked || (typeof Settings !== 'undefined' && Settings.profile.name === this.adminName));
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    const grantedViaFirebase = myUid && this._adminsList[myUid];
+    return this.adminMode && (this._consoleUnlocked || grantedViaFirebase || (typeof Settings !== 'undefined' && Settings.profile.name === this.adminName));
   },
 
   _consoleUnlock() {
@@ -240,6 +243,7 @@ const Admin = {
     } else if (tab === 'data') {
       this.renderHistory();
       this.renderAdminLeaderboard();
+      this.renderAdminsSection();
     }
   },
 
@@ -421,6 +425,10 @@ const Admin = {
           <button class="admin-btn win-btn" onclick="Properties.maxAll()">Max All Properties</button>
           <button class="admin-btn danger" onclick="Properties.resetAll()">Reset Properties</button>
         </div>
+      </div>
+      <div class="admin-section">
+        <h3>Manage Admins</h3>
+        <div id="admin-admins-list"></div>
       </div>
       <div class="admin-section">
         <h3>Leaderboard</h3>
@@ -1077,6 +1085,76 @@ const Admin = {
       if (App.currentScreen === 'leaderboard') Firebase.renderLeaderboard();
       alert('Player data purged.');
     }).catch(err => alert('Purge failed: ' + err.message));
+  },
+
+  // === ADMIN MANAGEMENT ===
+  onAdminsUpdate(data) {
+    this._adminsList = data || {};
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    // Auto-enable admin mode if this player was granted admin via Firebase
+    if (myUid && this._adminsList[myUid] && !this.adminMode) {
+      this.adminMode = true;
+      this.showGameAdmins();
+      if (!this.badgeHidden) {
+        document.getElementById('admin-indicator')?.classList.remove('hidden');
+      }
+    }
+    // Re-render the admins section if the data tab is open
+    if (this.activeTab === 'data') this.renderAdminsSection();
+  },
+
+  renderAdminsSection() {
+    const container = document.getElementById('admin-admins-list');
+    if (!container) return;
+    const isSuperAdmin = typeof Settings !== 'undefined' && Settings.profile.name === this.adminName;
+    const players = (typeof Firebase !== 'undefined' && Firebase.leaderboardData) || [];
+    const admins = this._adminsList;
+
+    // Dropdown: players NOT already admins
+    const eligiblePlayers = players.filter(p => p.uid && !admins[p.uid]);
+    const dropdownOpts = eligiblePlayers.length
+      ? eligiblePlayers.map(p => `<option value="${p.uid}">${p.name || 'Player'} (${p.uid.slice(0,6)})</option>`).join('')
+      : '<option value="">No eligible players</option>';
+
+    let html = '';
+    if (isSuperAdmin) {
+      html += `<div style="display:flex;gap:6px;margin-bottom:10px">
+        <select id="admin-grant-select" style="flex:1;padding:6px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:13px">
+          ${dropdownOpts}
+        </select>
+        <button class="admin-btn win-btn" onclick="Admin.grantAdminToSelected()" style="white-space:nowrap">Grant Admin</button>
+      </div>`;
+    }
+
+    const adminEntries = Object.entries(admins);
+    if (adminEntries.length === 0) {
+      html += '<div style="font-size:12px;color:var(--text-dim)">No granted admins.</div>';
+    } else {
+      html += adminEntries.map(([uid, info]) =>
+        `<div class="admin-lb-row">
+          <span class="admin-lb-name">${info.name || 'Player'} <span class="admin-lb-uid">(${uid.slice(0,6)})</span></span>
+          <span style="font-size:11px;color:var(--text-dim)">${new Date(info.grantedAt || 0).toLocaleDateString()}</span>
+          ${isSuperAdmin ? `<button class="admin-btn danger admin-lb-del" onclick="Admin.revokeAdmin('${uid}','${(info.name||'').replace(/'/g,"\\'")}')">Revoke</button>` : ''}
+        </div>`
+      ).join('');
+    }
+
+    container.innerHTML = html;
+  },
+
+  grantAdminToSelected() {
+    const sel = document.getElementById('admin-grant-select');
+    if (!sel || !sel.value) return;
+    const uid = sel.value;
+    const player = (Firebase.leaderboardData || []).find(p => p.uid === uid);
+    if (!player) return;
+    if (!confirm(`Grant admin to ${player.name || uid.slice(0,6)}?`)) return;
+    Firebase.grantAdmin(uid, player.name || 'Player');
+  },
+
+  revokeAdmin(uid, name) {
+    if (!confirm(`Revoke admin from ${name || uid.slice(0,6)}?`)) return;
+    Firebase.revokeAdmin(uid);
   },
 
   cleanDuplicateNames() {
