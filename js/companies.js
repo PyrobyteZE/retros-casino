@@ -8,6 +8,70 @@ const Companies = {
   MAX_COMPANIES_HARD: 10,
   SLOT_COSTS: [0, 5_000_000, 15_000_000], // cost to unlock slot 2 then 3
 
+  // === COMPANY PROPERTIES (4 tiers per industry, base income per 5 seconds) ===
+  COMPANY_PROPERTIES: {
+    energy: [
+      { key: 'energy_1', name: '⛽ Gas Station',          cost:    200_000, income:    400 },
+      { key: 'energy_2', name: '🛢️ Oil Rig',              cost:  1_000_000, income:  1_800 },
+      { key: 'energy_3', name: '⚡ Fusion Reactor',        cost:  4_000_000, income:  7_500 },
+      { key: 'energy_4', name: '🌞 Dyson Sphere Segment',  cost: 15_000_000, income: 28_000 },
+    ],
+    tech: [
+      { key: 'tech_1',   name: '🖥️ Server Rack',          cost:    150_000, income:    350 },
+      { key: 'tech_2',   name: '💾 Data Center',           cost:    800_000, income:  1_600 },
+      { key: 'tech_3',   name: '🤖 AI Cluster',            cost:  3_500_000, income:  6_500 },
+      { key: 'tech_4',   name: '⚛️ Quantum Core',          cost: 12_000_000, income: 24_000 },
+    ],
+    entertainment: [
+      { key: 'ent_1',    name: '🕹️ Arcade Cabinet',        cost:    100_000, income:    300 },
+      { key: 'ent_2',    name: '🎬 Movie Studio',           cost:    600_000, income:  1_400 },
+      { key: 'ent_3',    name: '🎡 Theme Park',             cost:  2_500_000, income:  5_500 },
+      { key: 'ent_4',    name: '📺 Global Media Empire',    cost: 10_000_000, income: 20_000 },
+    ],
+    finance: [
+      { key: 'fin_1',    name: '🏧 ATM Network',            cost:    250_000, income:    500 },
+      { key: 'fin_2',    name: '📊 Hedge Fund',             cost:  1_200_000, income:  2_200 },
+      { key: 'fin_3',    name: '🏦 Investment Bank',        cost:  5_000_000, income:  9_000 },
+      { key: 'fin_4',    name: '💳 Central Bank Seat',      cost: 18_000_000, income: 34_000 },
+    ],
+    space: [
+      { key: 'space_1',  name: '📡 Satellite Link',         cost:    300_000, income:    600 },
+      { key: 'space_2',  name: '🛸 Launch Pad',             cost:  1_500_000, income:  2_800 },
+      { key: 'space_3',  name: '🛰️ Orbital Station',        cost:  6_000_000, income: 11_000 },
+      { key: 'space_4',  name: '🌙 Mars Colony',            cost: 20_000_000, income: 38_000 },
+    ],
+    food: [
+      { key: 'food_1',   name: '🌮 Food Truck',             cost:    100_000, income:    280 },
+      { key: 'food_2',   name: '🍽️ Restaurant Chain',       cost:    500_000, income:  1_200 },
+      { key: 'food_3',   name: '🏭 Megafarm',               cost:  2_200_000, income:  4_800 },
+      { key: 'food_4',   name: '🌾 Global Food Corp',       cost:  9_000_000, income: 18_500 },
+    ],
+    military: [
+      { key: 'mil_1',    name: '🔫 Arms Depot',             cost:    350_000, income:    700 },
+      { key: 'mil_2',    name: '🏭 Weapons Factory',        cost:  1_800_000, income:  3_200 },
+      { key: 'mil_3',    name: '🛡️ Defense Contractor HQ', cost:  7_000_000, income: 13_000 },
+      { key: 'mil_4',    name: '🚀 Black Site',             cost: 18_000_000, income: 35_000 },
+    ],
+    pharma: [
+      { key: 'pha_1',    name: '🧪 Lab Bench',              cost:    120_000, income:    320 },
+      { key: 'pha_2',    name: '🏥 Clinical Trial Wing',    cost:    700_000, income:  1_500 },
+      { key: 'pha_3',    name: '💊 Biotech Campus',         cost:  3_000_000, income:  6_000 },
+      { key: 'pha_4',    name: '💉 Patent Monopoly',        cost: 11_000_000, income: 22_000 },
+    ],
+    crime: [
+      { key: 'cri_1',    name: '🏪 Shell Company',          cost:    180_000, income:    420 },
+      { key: 'cri_2',    name: '💸 Money Laundromat',       cost:    900_000, income:  1_900 },
+      { key: 'cri_3',    name: '🕶️ Smuggling Ring',         cost:  4_500_000, income:  8_500 },
+      { key: 'cri_4',    name: '🕵️ Shadow Syndicate',       cost: 16_000_000, income: 32_000 },
+    ],
+    vibes: [
+      { key: 'vib_1',    name: '✨ Good Energy Crystal',    cost:     80_000, income:    250 },
+      { key: 'vib_2',    name: '🪄 Vibe Consultancy',       cost:    450_000, income:  1_100 },
+      { key: 'vib_3',    name: '🌀 Manifestation Campus',   cost:  2_000_000, income:  4_200 },
+      { key: 'vib_4',    name: '🌌 The Vibes Dimension',    cost:  8_500_000, income: 17_000 },
+    ],
+  },
+
   // Per-company upgrades definition
   COMPANY_UPGRADES: {
     volatility: {
@@ -200,6 +264,8 @@ const Companies = {
             companyFoundedAt: company.foundedAt || 0,
             companyUpgrades: company.upgrades || {},
             companyIndustry: company.industry || 'tech',
+            companyProperties: Array.isArray(company.properties) ? company.properties : [],
+            companyIncomeShare: typeof company.incomeShare === 'number' ? company.incomeShare : 100,
           };
         });
       });
@@ -394,6 +460,30 @@ const Companies = {
         if ((s._lowTicks || 0) >= 5) this._declareBankruptcy(sym);
       }
     }
+
+    // === PROPERTY REINVEST → PLAYER STOCK MICRO-BOOST (authority only) ===
+    if (typeof Firebase !== 'undefined' && Firebase._isStockAuthority) {
+      for (const sym in this._allPlayerStocks) {
+        const s = this._allPlayerStocks[sym];
+        if (s._bankruptDeclared) continue;
+        const props = s.companyProperties;
+        if (!props || !props.length) continue;
+        const ind = s.companyIndustry || 'tech';
+        const defs = this.COMPANY_PROPERTIES[ind] || [];
+        let rawIncome = 0;
+        defs.forEach(def => { if (props.includes(def.key)) rawIncome += def.income; });
+        if (rawIncome <= 0) continue;
+        const worldMult = this._getWorldPriceMult(ind);
+        const reinvestPct = (100 - (typeof s.companyIncomeShare === 'number' ? s.companyIncomeShare : 100)) / 100;
+        const reinvestedIncome = rawIncome * worldMult * reinvestPct;
+        if (reinvestedIncome <= 0) continue;
+        // $1000 reinvested per tick → +0.001% price boost (micro but real)
+        const boostPct = reinvestedIncome * 0.00001;
+        s.price = Math.max(0.01, s.price * (1 + boostPct));
+        updates[sym] = s.price;
+      }
+    }
+
     if (typeof Firebase !== 'undefined' && Firebase.isOnline() && Firebase._isStockAuthority) {
       Firebase.pushPlayerStockPrices(updates);
       // Scandal trigger — authority fires at most once per stock per 5 min, public stocks only
@@ -1232,6 +1322,65 @@ const Companies = {
       }
       html += `</div></div>`;
 
+      // ── Company Properties ───────────────────────────────────────────────
+      {
+        const ind = c.industry || 'tech';
+        const indDef = this.INDUSTRIES.find(i => i.id === ind);
+        const indLabel = indDef ? indDef.label : ind;
+        const worldMult = this._getWorldPriceMult(ind);
+        const multPct = Math.round(worldMult * 100);
+        const multColor = worldMult >= 1.0 ? 'var(--green)' : 'var(--red)';
+        const propDefs = this.COMPANY_PROPERTIES[ind] || [];
+        const ownedProps = Array.isArray(c.properties) ? c.properties : [];
+        const incomeShareVal = typeof c.incomeShare === 'number' ? c.incomeShare : 100;
+        let totalBaseIncome = 0;
+        propDefs.forEach(def => { if (ownedProps.includes(def.key)) totalBaseIncome += def.income; });
+        const totalScaled = totalBaseIncome * worldMult;
+        const personalIncome = totalScaled * (incomeShareVal / 100);
+        const reinvestIncome = totalScaled - personalIncome;
+
+        html += `<div class="company-properties-section">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div style="font-weight:700">&#x1F3D7; Properties</div>
+            <div style="font-size:11px">
+              <span style="color:var(--text-dim)">${this._esc(indLabel)}</span>
+              &nbsp;&bull;&nbsp;
+              <span style="color:${multColor};font-weight:700">World: ${multPct}%</span>
+            </div>
+          </div>`;
+
+        if (totalBaseIncome > 0) {
+          html += `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">
+            /5s &mdash; <strong style="color:var(--green)">${App.formatMoney(personalIncome)} personal</strong>
+            &nbsp;+&nbsp;<strong style="color:var(--gold)">${App.formatMoney(reinvestIncome)} reinvest</strong>
+          </div>
+          <div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-bottom:3px">
+              <span>Personal ${incomeShareVal}%</span>
+              <span>Reinvest ${100 - incomeShareVal}%</span>
+            </div>
+            <input type="range" min="0" max="100" value="${incomeShareVal}"
+              style="width:100%;accent-color:var(--green)"
+              oninput="Companies.setIncomeShare(${cIdx}, this.value)">
+          </div>`;
+        } else {
+          html += `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Buy properties to earn passive income every 5 seconds.</div>`;
+        }
+
+        html += `<div class="company-property-grid">`;
+        propDefs.forEach(def => {
+          const owned = ownedProps.includes(def.key);
+          html += `<div class="company-property-card${owned ? ' owned' : ''}">
+            ${owned ? '<div class="cprop-owned-badge">&#x2713; Owned</div>' : ''}
+            <div class="cprop-name">${this._esc(def.name)}</div>
+            <div class="cprop-income">${App.formatMoney(def.income)}<span style="font-size:10px;color:var(--text-dim)">/5s</span></div>
+            ${owned ? '' : `<div class="cprop-cost">${App.formatMoney(def.cost)}</div>
+              <button class="cprop-buy-btn" onclick="Companies.buyProperty(${cIdx},'${def.key}')">Buy</button>`}
+          </div>`;
+        });
+        html += `</div></div>`;
+      }
+
       html += `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bg3);text-align:center">
         <button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);font-size:12px" onclick="Companies.deleteCompany(${cIdx})">&#x1F5D1; Delete Company</button>
       </div>`;
@@ -1314,6 +1463,76 @@ const Companies = {
       `<option value="${ind.id}">${ind.label}</option>`
     ).join('');
     return `<select id="co-found-industry" style="font-size:15px;padding:8px;border-radius:8px;background:var(--bg2);color:var(--text);border:1px solid var(--bg3);width:100%">${opts}</select>`;
+  },
+
+  // Returns 0.3–2.0 world price multiplier based on linked system stocks
+  _getWorldPriceMult(industry) {
+    const ind = this.INDUSTRIES.find(i => i.id === industry);
+    if (!ind || !ind.stocks.length || typeof Stocks === 'undefined') return 1.0;
+    let totalRatio = 0, count = 0;
+    ind.stocks.forEach(sym => {
+      const idx = Stocks.stocks.findIndex(s => s.symbol === sym);
+      if (idx < 0) return;
+      const base = Stocks.stocks[idx].basePrice;
+      const price = Stocks.prices[idx];
+      if (!base || !price) return;
+      totalRatio += price / base;
+      count++;
+    });
+    if (!count) return 1.0;
+    // Linear: ratio=1 → 1.0; ratio=2 → 1.7; ratio<1 → below 1.0; clamp [0.3, 2.0]
+    return Math.min(2.0, Math.max(0.3, 0.3 + (totalRatio / count) * 0.7));
+  },
+
+  // === SET INCOME SHARE ===
+  setIncomeShare(cIdx, val) {
+    const c = this._companies[cIdx];
+    if (!c) return;
+    c.incomeShare = Math.max(0, Math.min(100, parseInt(val, 10)));
+    this._saveLocal();
+    clearTimeout(this._incomeShareDebounce);
+    this._incomeShareDebounce = setTimeout(() => this._pushToFirebase(), 800);
+  },
+
+  // === BUY PROPERTY ===
+  buyProperty(cIdx, propKey) {
+    const c = this._companies[cIdx];
+    if (!c) return;
+    const ind = c.industry || 'tech';
+    const defs = this.COMPANY_PROPERTIES[ind] || [];
+    const def = defs.find(d => d.key === propKey);
+    if (!def) return;
+    if (!c.properties) c.properties = [];
+    if (c.properties.includes(propKey)) { alert('Already owned.'); return; }
+    if (App.balance < def.cost) { alert('Need ' + App.formatMoney(def.cost) + ' to buy this.'); return; }
+    App.addBalance(-def.cost);
+    c.properties.push(propKey);
+    this._saveLocal();
+    this._pushToFirebase();
+    App.save();
+    this._triggerRender();
+  },
+
+  // === PASSIVE PROPERTY INCOME (runs on all clients every 5s via Stocks timer) ===
+  tickPropertyIncome() {
+    if (!this._companies.length) return;
+    let totalIncome = 0;
+    this._companies.forEach(c => {
+      if (!c.properties || !c.properties.length) return;
+      const ind = c.industry || 'tech';
+      const defs = this.COMPANY_PROPERTIES[ind] || [];
+      const worldMult = this._getWorldPriceMult(ind);
+      const shareToOwner = typeof c.incomeShare === 'number' ? c.incomeShare / 100 : 1;
+      defs.forEach(def => {
+        if (c.properties.includes(def.key)) {
+          totalIncome += def.income * worldMult * shareToOwner;
+        }
+      });
+    });
+    if (totalIncome > 0) {
+      App.addBalance(totalIncome);
+      App.save();
+    }
   },
 
   _toast(msg) {

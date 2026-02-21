@@ -90,6 +90,11 @@ const Stocks = {
   startTick() {
     if (this.tickTimer) clearInterval(this.tickTimer);
     this.tickTimer = setInterval(() => this.tick(), 2000);
+    // Property income runs on all clients every 5 real seconds
+    if (this._propertyIncomeTimer) clearInterval(this._propertyIncomeTimer);
+    this._propertyIncomeTimer = setInterval(() => {
+      if (typeof Companies !== 'undefined') Companies.tickPropertyIncome();
+    }, 5000);
   },
 
   tick() {
