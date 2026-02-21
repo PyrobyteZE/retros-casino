@@ -793,12 +793,13 @@ const Companies = {
     const nameEl = document.getElementById('co-found-name');
     const tickerEl = document.getElementById('co-found-ticker');
     const industryEl = document.getElementById('co-found-industry');
-    const personalityEl = document.getElementById('co-found-personality');
     if (!nameEl || !tickerEl) return;
     const name = nameEl.value.trim();
     const ticker = tickerEl.value.trim().toUpperCase().replace(/[^A-Z]/g, '').slice(0, 5);
     const industry = industryEl ? industryEl.value : 'tech';
-    const personality = (personalityEl ? personalityEl.value : 'standard') || 'standard';
+    // Personality is randomly rolled at founding — 60% standard, 25% extreme, 15% penny
+    const _roll = Math.random();
+    const personality = _roll < 0.15 ? 'penny' : _roll < 0.40 ? 'extreme' : 'standard';
     const pd = this.PERSONALITY_DEFAULTS[personality] || this.PERSONALITY_DEFAULTS.standard;
     if (!name) { alert('Enter a company name.'); return; }
     if (!ticker || ticker.length < 2) { alert('Enter a ticker (2-5 letters).'); return; }
@@ -834,6 +835,14 @@ const Companies = {
     this._companies.push(newCompany);
     this._saveLocal();
     this._pushToFirebase();
+    // Reveal the personality roll
+    const _pInfo = {
+      standard: { color: 'var(--green-dark)', msg: '\u{1F4CA} Standard Stock! Balanced growth \u2014 Bull Propaganda will raise your base price over time.' },
+      extreme:  { color: '#8e44ad',           msg: '\u{1F30B} Extreme Stock! Wild swings, 3\u00D7 mania chance, higher cap. High risk, high reward!' },
+      penny:    { color: '#2980b9',            msg: '\u{1FA99} Penny Stock! Starts at $0.50 \u2014 hard cap $100. Cheap to buy, explosive upside.' },
+    };
+    const _pi = _pInfo[personality];
+    Toast.show(_pi.msg, _pi.color, 7000);
     this.render();
   },
 
@@ -1442,8 +1451,7 @@ const Companies = {
         <input type="text" id="co-found-ticker" placeholder="Ticker (e.g. RETRO)" maxlength="5" style="text-transform:uppercase;font-size:16px">
         <div style="font-size:12px;color:var(--text-dim);margin:4px 0 2px">Industry</div>
         ${this._industrySelectHtml()}
-        <div style="font-size:12px;color:var(--text-dim);margin:4px 0 2px">Stock Personality</div>
-        ${this._personalitySelectHtml()}
+        <div style="font-size:12px;color:var(--text-dim);margin:6px 0 2px">\u{1F3B2} Stock personality is randomly rolled on founding (60% Standard / 25% Extreme / 15% Penny)</div>
         <button class="company-found-btn" onclick="Companies.foundCompany()">Found Company — ${App.formatMoney(this.FOUND_COST)}</button>
       </div>`;
     }
@@ -1492,8 +1500,7 @@ const Companies = {
         <input type="text" id="co-found-ticker" placeholder="Ticker (e.g. RETRO)" maxlength="5" style="text-transform:uppercase;font-size:16px">
         <div style="font-size:12px;color:var(--text-dim);margin:4px 0 2px">Industry</div>
         ${this._industrySelectHtml()}
-        <div style="font-size:12px;color:var(--text-dim);margin:4px 0 2px">Stock Personality</div>
-        ${this._personalitySelectHtml()}
+        <div style="font-size:12px;color:var(--text-dim);margin:6px 0 2px">\u{1F3B2} Stock personality is randomly rolled on founding (60% Standard / 25% Extreme / 15% Penny)</div>
         <button class="company-found-btn" onclick="Companies.foundCompany()">Found Company — ${App.formatMoney(this.FOUND_COST)}</button>
       </div>`;
     }
@@ -1511,14 +1518,6 @@ const Companies = {
       `<option value="${ind.id}">${ind.label}</option>`
     ).join('');
     return `<select id="co-found-industry" style="font-size:15px;padding:8px;border-radius:8px;background:var(--bg2);color:var(--text);border:1px solid var(--bg3);width:100%">${opts}</select>`;
-  },
-
-  _personalitySelectHtml() {
-    return `<select id="co-found-personality" style="font-size:14px;padding:8px;border-radius:8px;background:var(--bg2);color:var(--text);border:1px solid var(--bg3);width:100%">
-      <option value="standard">📊 Standard — balanced growth, Bull Prop raises base price</option>
-      <option value="extreme">🌋 Extreme — wild swings both ways, higher cap, 3× mania chance</option>
-      <option value="penny">🪙 Penny Stock — starts at $0.50, hard cap $100</option>
-    </select>`;
   },
 
   // Compute the effective base price used for mean reversion and hard-cap logic.
