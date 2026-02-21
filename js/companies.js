@@ -225,6 +225,9 @@ const Companies = {
     }
     if (data.companySlots) this._companySlots = Math.max(1, data.companySlots);
     if (data.holdings) this._holdings = data.holdings;
+    // Immediately persist so a hard-refresh doesn't lose the imported data
+    this._saveLocal();
+    this._pushToFirebase();
   },
 
   // === FIREBASE CALLBACKS ===
@@ -271,19 +274,22 @@ const Companies = {
       });
     }
 
-    // Auto-restore own companies if localStorage was wiped
-    if (!this._companies.length && typeof Firebase !== 'undefined' && Firebase.uid && data[Firebase.uid]) {
+    // Auto-restore own companies + holdings if localStorage was wiped
+    if (typeof Firebase !== 'undefined' && Firebase.uid && data[Firebase.uid]) {
       const myComp = data[Firebase.uid];
       if (myComp) {
-        if (myComp.companies && myComp.companies.length) {
+        if (!this._companies.length && myComp.companies && myComp.companies.length) {
           this._companies = myComp.companies.map(c => ({ ...c }));
           this._companySlots = Math.max(this._companySlots, this._companies.length);
-          this._saveLocal();
-        } else if (myComp.stocks && myComp.stocks.length) {
+        } else if (!this._companies.length && myComp.stocks && myComp.stocks.length) {
           // old single-company format migration
           this._companies = [{ name: myComp.name, ticker: myComp.ticker, foundedAt: myComp.foundedAt || 0, stocks: myComp.stocks, mainIdx: myComp.mainIdx || 0 }];
-          this._saveLocal();
         }
+        // Restore holdings if local copy is empty but Firebase has them
+        if (!Object.keys(this._holdings).length && myComp.holdings) {
+          this._holdings = myComp.holdings;
+        }
+        this._saveLocal();
       }
     }
 
@@ -1038,6 +1044,7 @@ const Companies = {
     if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
     Firebase.postCompany(Firebase.uid, {
       companies: this._companies,
+      holdings: this._holdings,
       ownerName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Player',
     });
   },
