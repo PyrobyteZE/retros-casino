@@ -531,8 +531,9 @@ const Companies = {
         const reinvestPct = (100 - (typeof s.companyIncomeShare === 'number' ? s.companyIncomeShare : 100)) / 100;
         const reinvestedIncome = rawIncome * worldMult * reinvestPct;
         if (reinvestedIncome <= 0) continue;
-        // $1000 reinvested per tick → +0.001% price boost (micro but real)
-        const boostPct = reinvestedIncome * 0.00001;
+        // Property reinvest: micro boost capped at 0.05%/tick regardless of income
+        // (was 0.00001 per dollar — caused $419K prices at max properties)
+        const boostPct = Math.min(0.0005, reinvestedIncome * 0.000000007);
         s.price = Math.max(0.01, s.price * (1 + boostPct));
         updates[sym] = s.price;
       }

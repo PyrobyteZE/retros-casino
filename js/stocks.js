@@ -147,6 +147,20 @@ const Stocks = {
           }
         }
 
+        // Rare super-moon: LUNA blasts to 1000%+ (0.2% chance, 5min cooldown, only when not already mooning)
+        if (!this._lunaTrend?.isMoon && Date.now() - (this._lunaSuperMoonAt || 0) > 300000) {
+          if (Math.random() < 0.002) {
+            const moonMag = 1.5 + Math.random() * 1.5;  // 1.5–3.0 → 330%–1050% gain over run
+            const moonSteps = 40 + Math.floor(Math.random() * 20);
+            this._lunaTrend = { direction: 1, magnitude: moonMag, stepsLeft: moonSteps, totalSteps: moonSteps, isMoon: true };
+            this._lunaSuperMoonAt = Date.now();
+            const projPct = Math.round((Math.pow(1 + moonMag / moonSteps, moonSteps) - 1) * 100);
+            const moonMsg = '\u{1F315} LUNA SUPER MOON \u2014 buying frenzy! Projected +' + projPct + '% surge!';
+            this._addNews(moonMsg, true);
+            if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushStockNews(moonMsg, true);
+          }
+        }
+
         const t = this._lunaTrend;
         const directional = t.direction * (t.magnitude / t.totalSteps) * this.prices[i];
         const noise = this.prices[i] * (Math.random() - 0.5) * 0.04;
@@ -182,17 +196,22 @@ const Stocks = {
         // ── Standard random walk ──────────────────────────────────────────
         changes[i] = this.prices[i] * (Math.random() - 0.48) * s.volatility;
 
-        // Mania spike: 0.3% chance per tick — explosive upward frenzy (120s cooldown)
-        if (!this._maniaCooldowns) this._maniaCooldowns = {};
-        const maniaCooldownOk = (Date.now() - (this._maniaCooldowns[i] || 0)) > 120000;
-        if (!tgt && maniaCooldownOk && Math.random() < 0.003) {
-          const mult = 3 + Math.random() * 8; // 3x to 11x
-          this._priceTargets[i] = { target: this.prices[i] * mult, stepsLeft: 5, isMania: true };
-          this._maniaCooldowns[i] = Date.now();
-          const pctUp = Math.round((mult - 1) * 100);
-          const msg = '\u{1F680} MANIA: ' + s.symbol + ' \u2014 irrational buying frenzy! +' + pctUp + '%!';
-          this._addNews(msg, true);
-          if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushStockNews(msg, true);
+        // Mania spike — ROIL/JOIL are correlated derivatives, no standalone mania
+        const isDerivative = s.symbol === 'JOIL' || s.symbol === 'ROIL';
+        if (!isDerivative) {
+          if (!this._maniaCooldowns) this._maniaCooldowns = {};
+          const maniaCooldownOk = (Date.now() - (this._maniaCooldowns[i] || 0)) > 120000;
+          if (!tgt && maniaCooldownOk && Math.random() < 0.003) {
+            const mult = 1.5 + Math.random() * 2.5; // 1.5x–4x (was 3x–11x)
+            // Cap mania target at 5× base so correlated stocks can't compound to insane levels
+            const target = Math.min(this.prices[i] * mult, s.basePrice * 5);
+            this._priceTargets[i] = { target, stepsLeft: 5, isMania: true };
+            this._maniaCooldowns[i] = Date.now();
+            const pctUp = Math.round((target / this.prices[i] - 1) * 100);
+            const msg = '\u{1F680} MANIA: ' + s.symbol + ' \u2014 irrational buying frenzy! +' + pctUp + '%!';
+            this._addNews(msg, true);
+            if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushStockNews(msg, true);
+          }
         }
       }
     }
@@ -224,39 +243,42 @@ const Stocks = {
       if (!tgt || tgt.stepsLeft <= 0) {
         const ratio = this.prices[i] / s.basePrice;
 
-        // Hard price cap: if a stock exceeds 15× its base price, force it back down
-        if (s.symbol !== 'LUNA' && ratio > 15) {
-          this._priceTargets[i] = { target: s.basePrice * 10, stepsLeft: 8 };
+        // Hard price cap — non-LUNA stocks capped at 8× base, slow decay to 4× over 25 ticks
+        if (s.symbol !== 'LUNA' && ratio > 8) {
+          this._priceTargets[i] = { target: s.basePrice * 4, stepsLeft: 25 };
           if (!this._maniaCooldowns) this._maniaCooldowns = {};
-          this._maniaCooldowns[i] = Date.now(); // block new mania immediately after cap
+          this._maniaCooldowns[i] = Date.now();
         }
 
-        // Mean reversion — scales aggressively at extreme prices (post-mania fall)
-        const revStr = ratio > 5 ? 0.015 : 0.003;
-        changes[i] -= this.prices[i] * (ratio - 1) * revStr;
+        // LUNA has its own trend system — skip mean reversion so it can reach 1000%+
+        if (s.symbol !== 'LUNA') {
+          // Mean reversion — stronger at extreme ratios to prevent runaway prices
+          const revStr = ratio > 6 ? 0.030 : ratio > 4 ? 0.015 : ratio > 2 ? 0.005 : 0.002;
+          changes[i] -= this.prices[i] * (ratio - 1) * revStr;
 
-        // High-price crash risk — skip LUNA (has its own trend system)
-        if (s.symbol !== 'LUNA' && ratio > 2.5) {
-          const crashChance = Math.min(0.20, (ratio - 2.5) * 0.025);
-          if (Math.random() < crashChance) {
-            const snapPct = ratio > 5 ? 0.15 + Math.random() * 0.20 : 0.08 + Math.random() * 0.12;
-            changes[i] -= this.prices[i] * snapPct;
-            if (ratio > 4) {
-              if (!this._overvaluedNewsCooldowns) this._overvaluedNewsCooldowns = {};
-              if (Date.now() - (this._overvaluedNewsCooldowns[s.symbol] || 0) > 60000) {
-                this._overvaluedNewsCooldowns[s.symbol] = Date.now();
-                this._addNews(s.symbol + ': Overvalued \u2014 market correction incoming!', false);
-                if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
-                  Firebase.pushStockNews(s.symbol + ': Overvalued \u2014 market corrects hard!', false);
+          // High-price crash risk
+          if (ratio > 2.5) {
+            const crashChance = Math.min(0.20, (ratio - 2.5) * 0.025);
+            if (Math.random() < crashChance) {
+              const snapPct = ratio > 5 ? 0.15 + Math.random() * 0.20 : 0.08 + Math.random() * 0.12;
+              changes[i] -= this.prices[i] * snapPct;
+              if (ratio > 4) {
+                if (!this._overvaluedNewsCooldowns) this._overvaluedNewsCooldowns = {};
+                if (Date.now() - (this._overvaluedNewsCooldowns[s.symbol] || 0) > 60000) {
+                  this._overvaluedNewsCooldowns[s.symbol] = Date.now();
+                  this._addNews(s.symbol + ': Overvalued \u2014 market correction incoming!', false);
+                  if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+                    Firebase.pushStockNews(s.symbol + ': Overvalued \u2014 market corrects hard!', false);
+                  }
                 }
               }
             }
           }
-        }
 
-        // Low-price recovery bounce when very depressed
-        if (s.symbol !== 'LUNA' && ratio < 0.25) {
-          changes[i] += this.prices[i] * 0.04;
+          // Low-price recovery bounce when very depressed
+          if (ratio < 0.25) {
+            changes[i] += this.prices[i] * 0.04;
+          }
         }
       }
 
