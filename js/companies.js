@@ -47,12 +47,27 @@ const Companies = {
     },
   },
 
+  // === INDUSTRIES (each links to system stock symbols for cross-influence) ===
+  INDUSTRIES: [
+    { id: 'energy',        label: '\u26FD Energy',        stocks: ['JOIL', 'ROIL'] },
+    { id: 'tech',          label: '\u{1F4BB} Technology',    stocks: ['RETRO'] },
+    { id: 'entertainment', label: '\u{1F3AE} Entertainment', stocks: ['JOY'] },
+    { id: 'finance',       label: '\u{1F988} Finance',       stocks: ['SHARK'] },
+    { id: 'space',         label: '\u{1F680} Space',          stocks: ['LUNA'] },
+    { id: 'food',          label: '\u{1F354} Food',          stocks: [] },
+    { id: 'military',      label: '\u{1FAA6} Military',      stocks: ['JOY'] },
+    { id: 'pharma',        label: '\u{1F48A} Pharma',        stocks: [] },
+    { id: 'crime',         label: '\u{1F977} Crime',         stocks: [] },
+    { id: 'vibes',         label: '\u2728 Vibes-Based',     stocks: [] },
+  ],
+
   // === STATE ===
-  _companies: [],          // [{ name, ticker, foundedAt, stocks:[{symbol,name,type,price,vol,basePrice}], mainIdx }]
+  _companies: [],          // [{ name, ticker, industry, foundedAt, stocks:[{symbol,name,type,price,vol,basePrice}], mainIdx }]
   _companySlots: 1,        // number of slots unlocked (1–3); founding requires a free slot
-  _allPlayerStocks: {},    // { [symbol]: { ownerUid, ownerName, name, symbol, type, price, history:[], vol, basePrice, companyTicker, companyName, companyStocks, companyMainIdx, companyFoundedAt } }
+  _allPlayerStocks: {},    // { [symbol]: { ownerUid, ownerName, name, symbol, type, price, history:[], vol, basePrice, companyTicker, companyName, companyStocks, companyMainIdx, companyFoundedAt, companyIndustry } }
   _holdings: {},           // { [symbol]: { shares, avgCost } }
   _playerStockTargets: {}, // { [symbol]: { target, stepsLeft } }
+  _playerManiaCooldowns: {},// { [symbol]: timestamp } — prevent mania stacking
   _bankruptCompanies: {},  // { [ticker]: { ticker, name, debtCost, bankruptAt, originalOwnerUid, originalOwnerName, stocks, mainIdx, foundedAt } }
   _companyListings: {},    // { [ticker]: { ticker, name, company, salePrice, ownerUid, ownerName, listedAt } }
   _processedBankrupt: null,// Set<string> of tickers already handled locally
@@ -184,6 +199,7 @@ const Companies = {
             companyMainIdx: company.mainIdx || 0,
             companyFoundedAt: company.foundedAt || 0,
             companyUpgrades: company.upgrades || {},
+            companyIndustry: company.industry || 'tech',
           };
         });
       });
@@ -321,10 +337,22 @@ const Companies = {
         const bullLv = upg.bullBias || 0;
         if (bullLv > 0) delta += s.price * bullLv * 0.001; // +0.1–0.5%/tick
 
-        // --- Mania event: rare explosive spike (reversion handles the fall) ---
-        if (Math.random() < 0.002) {
+        // --- Hard price cap: if price exceeds 20× base, force it back down ---
+        if (ratio > 20) {
+          this._playerStockTargets[sym] = { target: base * 12, stepsLeft: 8 };
+          this._playerManiaCooldowns[sym] = Date.now(); // reset cooldown so no new mania immediately
+          s.price = Math.max(0.01, s.price + delta);
+          if (upg.resilience > 0) { const floor = base * 0.05 * upg.resilience; if (s.price < floor) s.price = floor; }
+          updates[sym] = s.price;
+          continue;
+        }
+
+        // --- Mania event: rare explosive spike (cooldown prevents stacking) ---
+        const maniaCooldownOk = (Date.now() - (this._playerManiaCooldowns[sym] || 0)) > 120000;
+        if (maniaCooldownOk && Math.random() < 0.002) {
           const mult = 3 + Math.random() * 8; // 3x to 11x spike
           this._playerStockTargets[sym] = { target: s.price * mult, stepsLeft: 5, isMania: true };
+          this._playerManiaCooldowns[sym] = Date.now();
           const pctUp = Math.round((mult - 1) * 100);
           const msg = '\u{1F680} MANIA: ' + sym + ' (\u200B' + (s.companyName || '') + ') \u2014 buying frenzy! +' + pctUp + '%!';
           if (typeof Stocks !== 'undefined') Stocks._addNews(msg, true);
@@ -376,6 +404,32 @@ const Companies = {
         if (existing && !existing.suppressed && Date.now() - (existing.firedAt || 0) < 120000) continue;
         if (Date.now() - (this._scandalCooldowns[sym] || 0) < 300000) continue;
         if (Math.random() < 0.002) this._triggerScandal(sym, s);
+      }
+    }
+
+    // === INDUSTRY → SYSTEM STOCK INFLUENCE ===
+    // Player company activity gently nudges linked system stocks.
+    // Nudge is proportional to ratio deviation from base; capped at ±0.3%/tick.
+    if (typeof Stocks !== 'undefined') {
+      for (const sym in this._allPlayerStocks) {
+        const s = this._allPlayerStocks[sym];
+        if (s._bankruptDeclared) continue;
+        const ind = this.INDUSTRIES.find(i => i.id === (s.companyIndustry || 'tech'));
+        if (!ind || !ind.stocks.length) continue;
+        const ratio = s.price / (s.basePrice || 100);
+        // Only nudge when the stock is meaningfully above/below base; cap nudge at ±0.3%
+        const raw = (ratio - 1) * 0.015;
+        const nudgePct = Math.max(-0.003, Math.min(0.003, raw));
+        if (Math.abs(nudgePct) < 0.0005) continue;
+        ind.stocks.forEach(stockSym => {
+          const idx = Stocks.stocks.findIndex(st => st.symbol === stockSym);
+          if (idx < 0) return;
+          const base = Stocks.stocks[idx].basePrice;
+          // Don't push the system stock above 8× its base via industry nudges alone
+          const sysRatio = Stocks.prices[idx] / base;
+          if (nudgePct > 0 && sysRatio > 8) return;
+          Stocks.prices[idx] = Math.max(1, Stocks.prices[idx] * (1 + nudgePct));
+        });
       }
     }
   },
@@ -632,9 +686,11 @@ const Companies = {
     }
     const nameEl = document.getElementById('co-found-name');
     const tickerEl = document.getElementById('co-found-ticker');
+    const industryEl = document.getElementById('co-found-industry');
     if (!nameEl || !tickerEl) return;
     const name = nameEl.value.trim();
     const ticker = tickerEl.value.trim().toUpperCase().replace(/[^A-Z]/g, '').slice(0, 5);
+    const industry = industryEl ? industryEl.value : 'tech';
     if (!name) { alert('Enter a company name.'); return; }
     if (!ticker || ticker.length < 2) { alert('Enter a ticker (2-5 letters).'); return; }
     if (App.balance < this.FOUND_COST) { alert('Not enough funds. You need ' + App.formatMoney(this.FOUND_COST)); return; }
@@ -652,6 +708,7 @@ const Companies = {
     const newCompany = {
       name,
       ticker,
+      industry,
       ownerName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Player',
       foundedAt: Date.now(),
       stocks: [{ symbol: ticker, name: name + ' Stock', type: 'private', price: 100, vol: 0.05, basePrice: 100 }],
@@ -1190,6 +1247,8 @@ const Companies = {
         <div class="company-found-cost">Cost: ${App.formatMoney(this.FOUND_COST)}</div>
         <input type="text" id="co-found-name" placeholder="Company Name (e.g. Retro Corp)" maxlength="32" style="font-size:16px">
         <input type="text" id="co-found-ticker" placeholder="Ticker (e.g. RETRO)" maxlength="5" style="text-transform:uppercase;font-size:16px">
+        <div style="font-size:12px;color:var(--text-dim);margin:4px 0 2px">Industry</div>
+        ${this._industrySelectHtml()}
         <button class="company-found-btn" onclick="Companies.foundCompany()">Found Company — ${App.formatMoney(this.FOUND_COST)}</button>
       </div>`;
     }
@@ -1236,6 +1295,8 @@ const Companies = {
         <div class="company-found-cost">Cost: ${App.formatMoney(this.FOUND_COST)}</div>
         <input type="text" id="co-found-name" placeholder="Company Name (e.g. Retro Corp)" maxlength="32" style="font-size:16px">
         <input type="text" id="co-found-ticker" placeholder="Ticker (e.g. RETRO)" maxlength="5" style="text-transform:uppercase;font-size:16px">
+        <div style="font-size:12px;color:var(--text-dim);margin:4px 0 2px">Industry</div>
+        ${this._industrySelectHtml()}
         <button class="company-found-btn" onclick="Companies.foundCompany()">Found Company — ${App.formatMoney(this.FOUND_COST)}</button>
       </div>`;
     }
@@ -1246,6 +1307,13 @@ const Companies = {
   _esc(str) {
     if (!str) return '';
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  },
+
+  _industrySelectHtml() {
+    const opts = this.INDUSTRIES.map(ind =>
+      `<option value="${ind.id}">${ind.label}</option>`
+    ).join('');
+    return `<select id="co-found-industry" style="font-size:15px;padding:8px;border-radius:8px;background:var(--bg2);color:var(--text);border:1px solid var(--bg3);width:100%">${opts}</select>`;
   },
 
   _toast(msg) {

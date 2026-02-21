@@ -179,10 +179,13 @@ const Stocks = {
         // ── Standard random walk ──────────────────────────────────────────
         changes[i] = this.prices[i] * (Math.random() - 0.48) * s.volatility;
 
-        // Mania spike: 0.3% chance per tick — explosive upward frenzy
-        if (!tgt && Math.random() < 0.003) {
+        // Mania spike: 0.3% chance per tick — explosive upward frenzy (120s cooldown)
+        if (!this._maniaCooldowns) this._maniaCooldowns = {};
+        const maniaCooldownOk = (Date.now() - (this._maniaCooldowns[i] || 0)) > 120000;
+        if (!tgt && maniaCooldownOk && Math.random() < 0.003) {
           const mult = 3 + Math.random() * 8; // 3x to 11x
           this._priceTargets[i] = { target: this.prices[i] * mult, stepsLeft: 5, isMania: true };
+          this._maniaCooldowns[i] = Date.now();
           const pctUp = Math.round((mult - 1) * 100);
           const msg = '\u{1F680} MANIA: ' + s.symbol + ' \u2014 irrational buying frenzy! +' + pctUp + '%!';
           this._addNews(msg, true);
@@ -217,6 +220,13 @@ const Stocks = {
       // Only apply reversion/crash logic when no admin target is running
       if (!tgt || tgt.stepsLeft <= 0) {
         const ratio = this.prices[i] / s.basePrice;
+
+        // Hard price cap: if a stock exceeds 15× its base price, force it back down
+        if (s.symbol !== 'LUNA' && ratio > 15) {
+          this._priceTargets[i] = { target: s.basePrice * 10, stepsLeft: 8 };
+          if (!this._maniaCooldowns) this._maniaCooldowns = {};
+          this._maniaCooldowns[i] = Date.now(); // block new mania immediately after cap
+        }
 
         // Mean reversion — scales aggressively at extreme prices (post-mania fall)
         const revStr = ratio > 5 ? 0.015 : 0.003;
