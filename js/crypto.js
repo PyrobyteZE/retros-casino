@@ -62,6 +62,7 @@ const Crypto = {
   _myPlayerCoin: null,    // local copy of own coin
   _playerCoinHoldings: {}, // { [SYM]: amount }
   _playerCoinTargets: {},  // { [SYM]: { target, stepsLeft, holdUntil } } — admin-set pinned prices
+  _coinPromotions: {},     // { [SYM]: { dir, pct, expiresAt } } — player-paid drift promotions
   _playerCoinTickTimer: null,
 
   init() {
@@ -218,7 +219,10 @@ const Crypto = {
         if (tgt) delete this._playerCoinTargets[sym];
         const drift = (base - price) * 0.005; // gentle mean reversion
         const noise = price * (Math.random() - 0.5) * 0.04;
-        newPrice = Math.max(0.001, price + drift + noise);
+        // Apply active promotion boost
+        const promo = this._coinPromotions[sym];
+        const promoBoost = (promo && Date.now() < promo.expiresAt) ? promo.pct * promo.dir : 0;
+        newPrice = Math.max(0.001, price + drift + noise + price * promoBoost);
       }
       this._playerCoinPrices[sym] = newPrice;
       if (!this._playerCoinHistory[sym]) this._playerCoinHistory[sym] = [newPrice];
@@ -592,7 +596,7 @@ const Crypto = {
       const cash = pct < 1 ? Math.floor(balance * pct) : Math.floor(balance);
       if (cash < 1) return;
       const coinAmt = cash / price;
-      const coinFmt = coinAmt < 0.0001 ? coinAmt.toExponential(2) : coinAmt.toFixed(4);
+      const coinFmt = this.formatCoin(coinAmt);
       btnHtml += `<button class="stock-trade-btn" onclick="Crypto.buyCoin('${symbol}',${cash});Crypto.closeModal()">
         <span class="trade-btn-label">${labels[i]}</span>
         <span class="trade-btn-value">${App.formatMoney(cash)}</span>
@@ -629,7 +633,7 @@ const Crypto = {
     const owned = sysIdx >= 0 ? (this.wallet[symbol] || 0) : (this._playerCoinHoldings[symbol] || 0);
     if (owned <= 0 || !price) return;
 
-    const ownedFmt  = owned < 0.0001 ? owned.toExponential(2) : owned.toFixed(4);
+    const ownedFmt = this.formatCoin(owned);
     const totalVal  = owned * price;
     const pcts      = [0.10, 0.25, 0.50, 1.0];
     const labels    = ['10%', '25%', '50%', 'All'];
@@ -691,7 +695,7 @@ const Crypto = {
     const price = this._playerCoinPrices[symbol] || 0;
     const html = `<div class="stock-trade-modal">
       <div class="stock-trade-title">\u{1FA99} Send ${symbol}</div>
-      <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">You hold: ${held.toFixed(4)} ${symbol} (${App.formatMoney(held * price)})</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">You hold: ${this.formatCoin(held)} ${symbol} (${App.formatMoney(held * price)})</div>
       <div class="admin-row"><label style="min-width:70px;font-size:12px">To:</label>
         <input type="text" id="send-coin-name" placeholder="Player name" style="flex:1;font-size:14px"></div>
       <div class="admin-row"><label style="min-width:70px;font-size:12px">Amount:</label>
@@ -735,7 +739,7 @@ const Crypto = {
     App.save();
     this.closeModal();
     this.render();
-    Toast.show('\u2705 Sent ' + sendAmt.toFixed(4) + ' ' + symbol + ' to ' + recipientName + '!', '#00e676', 3000);
+    Toast.show('\u2705 Sent ' + this.formatCoin(sendAmt) + ' ' + symbol + ' to ' + recipientName + '!', '#00e676', 3000);
   },
 
   _receiveCoinTransfer(transfer) {
@@ -756,7 +760,7 @@ const Crypto = {
     App.save();
     if (App.currentScreen === 'crypto') this.render();
     const price = this._playerCoinPrices[sym] || 0;
-    Toast.show('\u{1FA99} Received ' + amount.toFixed(4) + ' ' + sym + ' from ' + (fromName || 'someone') + (price > 0 ? ' (\u2248' + App.formatMoney(amount * price) + ')' : ''), '#9945ff', 5000);
+    Toast.show('\u{1FA99} Received ' + this.formatCoin(amount) + ' ' + sym + ' from ' + (fromName || 'someone') + (price > 0 ? ' (\u2248' + App.formatMoney(amount * price) + ')' : ''), '#9945ff', 5000);
   },
 
   sellCoin(symbol, amount) {
@@ -842,7 +846,7 @@ const Crypto = {
           <div class="stock-sector">CRYPTO</div>
         </div>
         <div class="stock-name">${coin.name}</div>
-        ${amount > 0 ? `<div style="font-size:10px;color:var(--text-dim);margin-bottom:2px">${amount.toFixed(4)} ${coin.symbol}</div>` : ''}
+        ${amount > 0 ? `<div style="font-size:10px;color:var(--text-dim);margin-bottom:2px">${this.formatCoin(amount)} ${coin.symbol}</div>` : ''}
         <div class="stock-price">${App.formatMoney(price)}</div>
         <div class="stock-change ${isUp ? 'stock-up' : 'stock-down'}">${pctStr}</div>
         <canvas id="spark-c-${coin.symbol}" class="stock-sparkline" width="80" height="30"></canvas>
@@ -867,6 +871,10 @@ const Crypto = {
         const pctStr = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
         const isUp = pct >= 0;
         const isOwn = typeof Firebase !== 'undefined' && Firebase.uid === uid;
+        const _p = this._coinPromotions[sym];
+        const promoBadge = (_p && Date.now() < _p.expiresAt)
+          ? `<div class="promo-badge ${_p.dir > 0 ? 'promo-bull' : 'promo-bear'}">${_p.dir > 0 ? '📈' : '📉'} ${Math.round(_p.pct * 100)}%/tick \u00B7 ${this._fmtPromoTime(_p.expiresAt - Date.now())}</div>`
+          : '';
 
         html += `<div class="stock-card">
           <div class="stock-card-header">
@@ -875,13 +883,15 @@ const Crypto = {
           </div>
           <div class="stock-name">${this._esc(coin.name)}</div>
           <div style="font-size:10px;color:var(--text-dim);margin-bottom:2px">by ${this._esc(coin.ownerName || 'Player')}</div>
-          ${held > 0 ? `<div style="font-size:10px;color:var(--text-dim);margin-bottom:2px">${held.toFixed(2)} ${sym}</div>` : ''}
+          ${promoBadge}
+          ${held > 0 ? `<div style="font-size:10px;color:var(--text-dim);margin-bottom:2px">${this.formatCoin(held)} ${sym}</div>` : ''}
           <div class="stock-price">${App.formatMoney(price)}</div>
           <div class="stock-change ${isUp ? 'stock-up' : 'stock-down'}">${pctStr}</div>
           <canvas id="spark-pc-${sym}" class="stock-sparkline" width="80" height="30"></canvas>
           <div class="stock-actions">
             <button class="stock-buy-btn" onclick="Crypto.promptBuyCoin('${sym}')">Buy</button>
             <button class="stock-sell-btn" onclick="Crypto.promptSellCoin('${sym}')" ${held > 0 ? '' : 'disabled'}>Sell</button>
+            <button class="admin-btn" style="font-size:10px;padding:2px 6px" onclick="Crypto._showPromoteModal('${sym}')">📣</button>
             ${held > 0 ? `<button class="admin-btn" style="font-size:10px;padding:2px 6px" onclick="Crypto.promptSendCoin('${sym}')">Send</button>` : ''}
           </div>
         </div>`;
@@ -1135,6 +1145,7 @@ const Crypto = {
   },
 
   _renderManageCoin(container, coin, myUid) {
+    if (container.contains(document.activeElement)) return; // don't reset inputs while typing
     const sym = coin.symbol;
     const price = this._playerCoinPrices[sym] || coin.baseValue || 100;
     const isOwner = typeof Firebase !== 'undefined' && Firebase.uid === myUid;
@@ -1172,9 +1183,17 @@ const Crypto = {
           <div>
             <div style="font-weight:700;font-size:16px">${this._esc(coin.name)} <span class="player-coin-badge">COIN</span></div>
             <div style="font-size:12px;color:#bb86fc">${sym} \u2022 ${App.formatMoney(price)}</div>
-            <div style="font-size:11px;color:var(--text-dim)">Supply: ${(coin.supply||0).toLocaleString()} \u2022 Reserve: ${(coin.reserveAmt||0).toLocaleString()}</div>
+            <div style="font-size:11px;color:var(--text-dim)">Supply: ${this.formatCoin(coin.supply||0)} \u2022 Reserve: ${this.formatCoin(coin.reserveAmt||0)}</div>
             ${(coin.reserveAmt || 0) <= 0 ? '<div style="font-size:11px;color:#ff9100;margin-top:2px">\u26A0\uFE0F No owner stake \u2014 buy back to regain stake</div>' : ''}
           </div>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <input type="number" id="mgcoin-buy-amt" placeholder="$ to buy" min="1" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--bg3);background:var(--bg3);color:var(--text);font-size:13px">
+          <button class="stock-buy-btn" style="flex-shrink:0;padding:8px 12px" onclick="Crypto._manageCoinBuy('${sym}')">Buy</button>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:12px">
+          <input type="number" id="mgcoin-sell-amt" placeholder="# coins to sell" min="0" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--bg3);background:var(--bg3);color:var(--text);font-size:13px">
+          <button class="stock-sell-btn" style="flex-shrink:0;padding:8px 12px" onclick="Crypto._manageCoinSell('${sym}')">Sell</button>
         </div>
         ${isOwner ? `
         <div class="exchange-actions" style="margin-bottom:12px">
@@ -1186,6 +1205,9 @@ const Crypto = {
         <div class="exchange-actions" style="margin-bottom:12px">
           <button class="admin-btn danger" onclick="Crypto._ownerAction('delist')" style="font-size:12px">${coin.type === 'private' ? 'Relist' : 'Delist'}</button>
         </div>` : ''}
+        <div style="margin-bottom:12px">
+          <button class="admin-btn" style="width:100%;padding:10px" onclick="Crypto._showPromoteModal('${sym}')">📣 Promote ${sym}</button>
+        </div>
         <div class="mine-upgrades"><h3>Upgrades</h3>${upgHtml}</div>
       </div>`;
   },
@@ -1284,6 +1306,68 @@ const Crypto = {
     }
   },
 
+  // Inline buy/sell from My Coin manage tab
+  _manageCoinBuy(sym) {
+    const input = document.getElementById('mgcoin-buy-amt');
+    if (!input) return;
+    const cash = parseFloat(input.value);
+    if (isNaN(cash) || cash < 1) { Toast.show('Enter a valid $ amount', '#ff5252'); return; }
+    if (cash > App.balance) { Toast.show('Not enough funds', '#ff5252'); return; }
+    this.buyCoin(sym, cash);
+    input.value = '';
+  },
+
+  _manageCoinSell(sym) {
+    const input = document.getElementById('mgcoin-sell-amt');
+    if (!input) return;
+    const amt = parseFloat(input.value);
+    if (isNaN(amt) || amt <= 0) { Toast.show('Enter a valid coin amount', '#ff5252'); return; }
+    this.sellCoin(sym, amt);
+    input.value = '';
+  },
+
+  // Pay for a temporary drift promotion on a player coin
+  promoteCoin(sym, dir, pct, durMs) {
+    const costs = { '0.005': 25000, '0.01': 100000, '0.02': 500000 };
+    const cost = costs[String(pct)] || 25000;
+    if (App.balance < cost) { Toast.show('Not enough funds', '#ff5252'); return; }
+    App.addBalance(-cost);
+    const promo = {
+      dir,
+      pct,
+      expiresAt: Date.now() + durMs,
+      promoterName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Player',
+    };
+    this._coinPromotions[sym] = promo;
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.setCoinPromotion(sym, promo);
+    App.save();
+    this.closeModal();
+    this.render();
+    Toast.show((dir > 0 ? '📈' : '📉') + ' ' + sym + ' promo running!', '#9945ff', 3000);
+  },
+
+  _showPromoteModal(sym) {
+    const promo = this._coinPromotions[sym];
+    const promoStatus = (promo && Date.now() < promo.expiresAt)
+      ? `<div class="promo-active-badge ${promo.dir > 0 ? 'promo-bull' : 'promo-bear'}" style="margin-bottom:10px">${promo.dir > 0 ? '📈' : '📉'} Active: ${Math.round(promo.pct * 100)}%/tick \u2014 ${this._fmtPromoTime(promo.expiresAt - Date.now())} left</div>`
+      : '';
+    const html = `<div class="stock-trade-modal">
+      <div class="stock-trade-title">📣 Promote ${sym}</div>
+      <div class="stock-trade-subtitle">Pay to push price up or down each tick for a limited time.</div>
+      ${promoStatus}
+      <div class="promo-grid">
+        <button class="promo-btn promo-bull" onclick="Crypto.promoteCoin('${sym}',1,0.005,300000)">📈 Weak<br><span style="font-size:11px">+0.5%/tick · 5m</span><br><span class="promo-cost">${App.formatMoney(25000)}</span></button>
+        <button class="promo-btn promo-bear" onclick="Crypto.promoteCoin('${sym}',-1,0.005,300000)">📉 Weak<br><span style="font-size:11px">-0.5%/tick · 5m</span><br><span class="promo-cost">${App.formatMoney(25000)}</span></button>
+        <button class="promo-btn promo-bull" onclick="Crypto.promoteCoin('${sym}',1,0.01,600000)">🚀 Strong<br><span style="font-size:11px">+1%/tick · 10m</span><br><span class="promo-cost">${App.formatMoney(100000)}</span></button>
+        <button class="promo-btn promo-bear" onclick="Crypto.promoteCoin('${sym}',-1,0.01,600000)">📉 Strong<br><span style="font-size:11px">-1%/tick · 10m</span><br><span class="promo-cost">${App.formatMoney(100000)}</span></button>
+        <button class="promo-btn promo-bull" onclick="Crypto.promoteCoin('${sym}',1,0.02,1200000)">💎 Ultra<br><span style="font-size:11px">+2%/tick · 20m</span><br><span class="promo-cost">${App.formatMoney(500000)}</span></button>
+        <button class="promo-btn promo-bear" onclick="Crypto.promoteCoin('${sym}',-1,0.02,1200000)">💀 Ultra<br><span style="font-size:11px">-2%/tick · 20m</span><br><span class="promo-cost">${App.formatMoney(500000)}</span></button>
+      </div>
+      <button class="stock-trade-cancel" style="margin-top:10px" onclick="Crypto.closeModal()">Cancel</button>
+    </div>`;
+    this._showModal(html);
+  },
+
   // ── Browse Tab ─────────────────────────────────────────────────────
   _renderBrowse(container) {
     const isOnline = typeof Firebase !== 'undefined' && Firebase.isOnline();
@@ -1304,22 +1388,28 @@ const Crypto = {
       const price = this._playerCoinPrices[sym] || coin.baseValue || 100;
       const held = this._playerCoinHoldings[sym] || 0;
       const isOwn = typeof Firebase !== 'undefined' && Firebase.uid === uid;
+      const _bp = this._coinPromotions[sym];
+      const bPromoBadge = (_bp && Date.now() < _bp.expiresAt)
+        ? `<span class="promo-badge ${_bp.dir > 0 ? 'promo-bull' : 'promo-bear'}" style="margin-left:4px">${_bp.dir > 0 ? '📈' : '📉'} ${Math.round(_bp.pct * 100)}%/tick \u00B7 ${this._fmtPromoTime(_bp.expiresAt - Date.now())}</span>`
+        : '';
       html += `<div class="exchange-card">
         <div class="exchange-header">
           <span style="font-size:18px">${coin.emoji || '\u{1FA99}'}</span>
           <span class="exchange-symbol" style="color:#bb86fc">${sym}</span>
           <span class="player-coin-badge">COIN</span>
           <span style="font-size:10px;color:var(--text-dim)">${this._esc(coin.name)}</span>
+          ${bPromoBadge}
           <span class="exchange-price">${App.formatMoney(price)}</span>
         </div>
-        <div style="font-size:11px;color:var(--text-dim);margin:4px 0">By ${this._esc(coin.ownerName || 'Player')} \u2022 Supply: ${(coin.supply||0).toLocaleString()}</div>
+        <div style="font-size:11px;color:var(--text-dim);margin:4px 0">By ${this._esc(coin.ownerName || 'Player')} \u2022 Supply: ${this.formatCoin(coin.supply||0)}</div>
         <div class="exchange-balance">
-          <span>Held: ${held.toFixed(2)} ${sym}</span>
+          <span>Held: ${this.formatCoin(held)} ${sym}</span>
           <span class="exchange-value">= ${App.formatMoney(held * price)}</span>
         </div>
         <div class="exchange-actions">
           <button class="stock-buy-btn" onclick="Crypto.promptBuyCoin('${sym}')">${isOwn ? 'Buy Back' : 'Buy'}</button>
           <button class="stock-sell-btn" onclick="Crypto.promptSellCoin('${sym}')" ${held > 0 ? '' : 'disabled'}>Sell</button>
+          <button class="admin-btn" style="font-size:11px" onclick="Crypto._showPromoteModal('${sym}')">📣</button>
           ${held > 0 ? `<button class="admin-btn" style="font-size:11px" onclick="Crypto.promptSendCoin('${sym}')">Send</button>` : ''}
         </div>
       </div>`;
@@ -1337,6 +1427,24 @@ const Crypto = {
       }
     }
     return result;
+  },
+
+  // Abbreviate coin amounts (e.g. 1500000 → "1.50M") to prevent UI overflow
+  formatCoin(n) {
+    if (!n || n === 0) return '0';
+    if (n < 0.0001) return n.toExponential(2);
+    if (n < 1) return n.toFixed(4);
+    if (n < 1000) return n.toFixed(2);
+    if (n < 1e6) return (n / 1e3).toFixed(2) + 'K';
+    if (n < 1e9) return (n / 1e6).toFixed(2) + 'M';
+    if (n < 1e12) return (n / 1e9).toFixed(2) + 'B';
+    return (n / 1e12).toFixed(2) + 'T';
+  },
+
+  _fmtPromoTime(ms) {
+    const s = Math.ceil(ms / 1000);
+    if (s < 60) return s + 's';
+    return Math.ceil(s / 60) + 'm';
   },
 
   _esc(str) {

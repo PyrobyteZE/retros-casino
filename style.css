@@ -5523,6 +5523,90 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   text-overflow: ellipsis;
 }
 
+/* ===== COIN PROMOTIONS ===== */
+.promo-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.promo-btn {
+  padding: 10px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--bg3);
+  background: var(--bg3);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.promo-btn.promo-bull {
+  border-color: rgba(0, 230, 118, 0.4);
+  background: rgba(0, 230, 118, 0.06);
+  color: var(--green);
+}
+
+.promo-btn.promo-bear {
+  border-color: rgba(255, 82, 82, 0.4);
+  background: rgba(255, 82, 82, 0.06);
+  color: var(--red);
+}
+
+.promo-btn:active {
+  opacity: 0.75;
+}
+
+.promo-cost {
+  font-size: 11px;
+  font-weight: 800;
+  opacity: 0.85;
+}
+
+.promo-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 2px 5px;
+  margin-bottom: 2px;
+}
+
+.promo-badge.promo-bull {
+  background: rgba(0, 230, 118, 0.15);
+  color: var(--green);
+  border: 1px solid rgba(0, 230, 118, 0.3);
+}
+
+.promo-badge.promo-bear {
+  background: rgba(255, 82, 82, 0.15);
+  color: var(--red);
+  border: 1px solid rgba(255, 82, 82, 0.3);
+}
+
+.promo-active-badge {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.promo-active-badge.promo-bull {
+  background: rgba(0, 230, 118, 0.12);
+  color: var(--green);
+  border: 1px solid rgba(0, 230, 118, 0.3);
+}
+
+.promo-active-badge.promo-bear {
+  background: rgba(255, 82, 82, 0.12);
+  color: var(--red);
+  border: 1px solid rgba(255, 82, 82, 0.3);
+}
+
 /* ===== SCANDALS ===== */
 .scandal-alert {
   margin-top: 6px;

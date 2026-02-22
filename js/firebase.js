@@ -182,6 +182,18 @@ const Firebase = {
     this.listenCoinTransfers(this.uid, transfer => {
       if (typeof Crypto !== 'undefined') Crypto._receiveCoinTransfer(transfer);
     });
+    // Coin promotions (live drift boosts)
+    this.db.ref('coinPromotions').on('value', snap => {
+      if (typeof Crypto !== 'undefined') {
+        const data = snap.val() || {};
+        // Prune expired locally and from Firebase
+        const now = Date.now();
+        for (const sym in data) {
+          if (data[sym].expiresAt < now) { this.db.ref('coinPromotions/' + sym).remove(); delete data[sym]; }
+        }
+        Crypto._coinPromotions = data;
+      }
+    });
     // Init Firebase-dependent features in other modules
     if (typeof Stocks !== 'undefined') Stocks._initFirebaseFeatures();
     if (typeof Loans !== 'undefined' && Loans._counterLoan && Loans._counterLoan.amount > 0) {
@@ -2048,5 +2060,10 @@ const Firebase = {
       const data = snap.val();
       if (data) { cb(data); snap.ref.remove(); }
     }, err => console.warn('listenCoinTransfers denied:', err.code));
+  },
+
+  setCoinPromotion(sym, promo) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('coinPromotions/' + sym).set(promo);
   },
 };
