@@ -283,8 +283,10 @@ const Crypto = {
     const btcBase = this.coins[0]; // BTC is the reference coin
     const safeTgt = Math.max(0, Math.min(this.coins.length - 1, this.clickTargetCoin || 0));
     const tgtCoin = this.coins[safeTgt];
-    // Normalize so clicking always yields the same dollar value regardless of coin
-    let amount = 0.001 * hashPower * (btcBase.baseValue / tgtCoin.baseValue);
+    // 10x less than before — clicking is slow grind, rigs are real income
+    // ±30% variance per click so it feels organic, not mechanical
+    const variance = 0.7 + Math.random() * 0.6;
+    let amount = 0.0001 * hashPower * variance * (btcBase.baseValue / tgtCoin.baseValue);
 
     const ocLevel = this.upgrades.overclock;
     if (ocLevel > 0 && Math.random() < ocLevel * 0.05) {
@@ -294,7 +296,8 @@ const Crypto = {
 
     this.wallet[tgtCoin.symbol] = (this.wallet[tgtCoin.symbol] || 0) + amount;
     this.totalMined[tgtCoin.symbol] = (this.totalMined[tgtCoin.symbol] || 0) + amount;
-    this.heat = Math.min(100, this.heat + 0.5);
+    // More heat per click — spam clicking overheats without proper cooling
+    this.heat = Math.min(100, this.heat + 2);
 
     this._animateMine();
     if (App.currentScreen === 'crypto') this.render();
@@ -684,7 +687,7 @@ const Crypto = {
     const safeTgt = Math.max(0, Math.min(this.coins.length - 1, this.clickTargetCoin || 0));
     const tgtCoin = this.coins[safeTgt];
     const btcBase = this.coins[0];
-    const clickAmt = 0.001 * hashPower * (btcBase.baseValue / tgtCoin.baseValue);
+    const clickAmt = 0.0001 * hashPower * (btcBase.baseValue / tgtCoin.baseValue);
     const clickFmt = clickAmt < 0.0001 ? clickAmt.toExponential(2) : clickAmt.toFixed(tgtCoin.baseValue < 1 ? 2 : 6);
 
     const coinSelector = `<select class="coin-selector" style="margin:6px auto;display:block;font-size:13px" onchange="Crypto.setClickCoin(+this.value)">
@@ -694,7 +697,7 @@ const Crypto = {
     let html = `
       <div class="mine-stats">
         <div class="mine-stat"><span class="stat-label">Hash Power</span><span>${hashPower.toFixed(1)}x</span></div>
-        <div class="mine-stat"><span class="stat-label">${tgtCoin.symbol}/Click</span><span>${clickFmt}</span></div>
+        <div class="mine-stat"><span class="stat-label">${tgtCoin.symbol}/Click</span><span>~${clickFmt}</span></div>
         <div class="mine-stat"><span class="stat-label">Heat</span><span class="${this.heat > 80 ? 'heat-danger' : ''}">${this.heat.toFixed(0)}%</span></div>
       </div>
       <div class="heat-bar-wrap">
