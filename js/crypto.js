@@ -596,33 +596,29 @@ const Crypto = {
 
   // ── Market Tab ─────────────────────────────────────────────────────
   _renderMarket(container) {
-    let html = '<div class="exchange-list">';
+    let html = '<div class="stock-grid">';
 
     // System coins
     this.coins.forEach((coin, i) => {
       const price = (typeof this.coinPrices[i] === 'number' && isFinite(this.coinPrices[i])) ? this.coinPrices[i] : coin.baseValue;
       const amount = this.wallet[coin.symbol] || 0;
-      const value = amount * price;
       const hist = this.priceHistory[i] || [price, price];
       const prev = hist.length >= 2 ? hist[hist.length - 2] : price;
       const pct = ((price - prev) / (prev || 1) * 100);
       const pctStr = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
-      const pctColor = pct >= 0 ? 'var(--green)' : 'var(--red)';
+      const isUp = pct >= 0;
 
-      html += `<div class="exchange-card">
-        <div class="exchange-header">
-          <span style="font-size:18px">${coin.emoji}</span>
-          <span class="exchange-symbol" style="color:${coin.color}">${coin.symbol}</span>
-          <span style="font-size:10px;color:var(--text-dim)">${coin.name}</span>
-          <span class="exchange-price">${App.formatMoney(price)}</span>
-          <span style="font-size:11px;color:${pctColor};font-weight:700">${pctStr}</span>
+      html += `<div class="stock-card">
+        <div class="stock-card-header">
+          <div class="stock-symbol" style="color:${coin.color}">${coin.emoji} ${coin.symbol}</div>
+          <div class="stock-sector">CRYPTO</div>
         </div>
-        <div class="exchange-balance">
-          <span>${amount.toFixed(4)} ${coin.symbol}</span>
-          <span class="exchange-value">= ${App.formatMoney(value)}</span>
-        </div>
-        <canvas id="crypto-chart-${coin.symbol}" class="crypto-chart" width="200" height="40"></canvas>
-        <div class="exchange-actions">
+        <div class="stock-name">${coin.name}</div>
+        ${amount > 0 ? `<div style="font-size:10px;color:var(--text-dim);margin-bottom:2px">${amount.toFixed(4)} ${coin.symbol}</div>` : ''}
+        <div class="stock-price">${App.formatMoney(price)}</div>
+        <div class="stock-change ${isUp ? 'stock-up' : 'stock-down'}">${pctStr}</div>
+        <canvas id="spark-c-${coin.symbol}" class="stock-sparkline" width="80" height="30"></canvas>
+        <div class="stock-actions">
           <button class="stock-buy-btn" onclick="Crypto.promptBuyCoin('${coin.symbol}')">Buy</button>
           <button class="stock-sell-btn" onclick="Crypto.promptSellCoin('${coin.symbol}')" ${amount > 0 ? '' : 'disabled'}>Sell</button>
         </div>
@@ -632,7 +628,7 @@ const Crypto = {
     // Player coins
     const publicCoins = this._getPublicPlayerCoins();
     if (publicCoins.length > 0) {
-      html += `<div class="player-stocks-market-header">\u{1F464} Player Coins</div>`;
+      html += `</div><div class="player-stocks-market-header">\u{1F464} Player Coins</div><div class="stock-grid">`;
       publicCoins.forEach(({ uid, coin }) => {
         const sym = coin.symbol;
         const price = this._playerCoinPrices[sym] || coin.baseValue || 100;
@@ -641,25 +637,22 @@ const Crypto = {
         const prev = hist.length >= 2 ? hist[hist.length - 2] : price;
         const pct = ((price - prev) / (prev || 1) * 100);
         const pctStr = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
-        const pctColor = pct >= 0 ? 'var(--green)' : 'var(--red)';
+        const isUp = pct >= 0;
         const isOwn = typeof Firebase !== 'undefined' && Firebase.uid === uid;
 
-        html += `<div class="exchange-card">
-          <div class="exchange-header">
-            <span style="font-size:18px">${coin.emoji || '\u{1FA99}'}</span>
-            <span class="exchange-symbol" style="color:#bb86fc">${sym}</span>
-            <span class="player-coin-badge">COIN</span>
-            <span style="font-size:10px;color:var(--text-dim)">${this._esc(coin.name)}</span>
-            <span class="exchange-price">${App.formatMoney(price)}</span>
-            <span style="font-size:11px;color:${pctColor};font-weight:700">${pctStr}</span>
+        html += `<div class="stock-card">
+          <div class="stock-card-header">
+            <div class="stock-symbol" style="color:#bb86fc">${coin.emoji || '\u{1FA99}'} ${sym}</div>
+            <div class="player-stock-badge">${isOwn ? 'YOURS' : 'COIN'}</div>
           </div>
-          <div class="exchange-balance">
-            <span>${held.toFixed(2)} ${sym}</span>
-            <span class="exchange-value">= ${App.formatMoney(held * price)}</span>
-          </div>
-          <canvas id="pcoin-chart-${sym}" class="crypto-chart" width="200" height="40"></canvas>
-          <div class="exchange-actions">
-            ${isOwn ? '<span style="font-size:11px;color:var(--gold)">Your Coin</span>' : `<button class="stock-buy-btn" onclick="Crypto.promptBuyCoin('${sym}')">Buy</button>`}
+          <div class="stock-name">${this._esc(coin.name)}</div>
+          <div style="font-size:10px;color:var(--text-dim);margin-bottom:2px">by ${this._esc(coin.ownerName || 'Player')}</div>
+          ${held > 0 ? `<div style="font-size:10px;color:var(--text-dim);margin-bottom:2px">${held.toFixed(2)} ${sym}</div>` : ''}
+          <div class="stock-price">${App.formatMoney(price)}</div>
+          <div class="stock-change ${isUp ? 'stock-up' : 'stock-down'}">${pctStr}</div>
+          <canvas id="spark-pc-${sym}" class="stock-sparkline" width="80" height="30"></canvas>
+          <div class="stock-actions">
+            <button class="stock-buy-btn" onclick="Crypto.promptBuyCoin('${sym}')">Buy</button>
             <button class="stock-sell-btn" onclick="Crypto.promptSellCoin('${sym}')" ${held > 0 ? '' : 'disabled'}>Sell</button>
           </div>
         </div>`;
@@ -669,14 +662,12 @@ const Crypto = {
     html += '</div>';
     container.innerHTML = html;
 
-    // Draw system coin charts
+    // Draw sparklines
     this.coins.forEach((coin, i) => {
-      this._drawPriceChart('crypto-chart-' + coin.symbol, this.priceHistory[i], coin.color);
+      this._drawPriceChart('spark-c-' + coin.symbol, this.priceHistory[i], coin.color);
     });
-    // Draw player coin charts
     publicCoins.forEach(({ coin }) => {
-      const hist = this._playerCoinHistory[coin.symbol] || [];
-      this._drawPriceChart('pcoin-chart-' + coin.symbol, hist, '#bb86fc');
+      this._drawPriceChart('spark-pc-' + coin.symbol, this._playerCoinHistory[coin.symbol] || [], '#bb86fc');
     });
   },
 
