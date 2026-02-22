@@ -433,9 +433,9 @@ const Companies = {
             const w = s.price * (Math.random() - 0.5) * 2 * vol * 0.25;
             s.price = Math.max(hardCap * 0.85, Math.min(hardCap * 1.02, s.price + w));
           } else {
-            // Plateau expired: start 50-step gradual decay toward 55% of cap
+            // Plateau expired: decay over 80 ticks back toward effectiveBase (not 55% of cap!)
             delete this._peakHolds[sym];
-            this._playerStockTargets[sym] = { target: hardCap * 0.55, stepsLeft: 50 };
+            this._playerStockTargets[sym] = { target: effectiveBase * 1.5, stepsLeft: 80 };
             this._playerManiaCooldowns[sym] = Date.now();
             s.price = Math.max(0.01, s.price + s.price * (Math.random() - 0.5) * 2 * vol);
           }
@@ -470,9 +470,9 @@ const Companies = {
         // Penny stocks: skip mania above $80 (let vol do the work near cap)
         const maniaAllowed = personality !== 'penny' || s.price < 80;
         if (maniaCooldownOk && maniaAllowed && Math.random() < maniaChance) {
-          const maxManiaMult = personality === 'penny' ? Math.min(4, 100 / Math.max(0.5, s.price)) : (3 + Math.random() * 8);
-          const mult = 1.5 + Math.random() * (maxManiaMult - 1.5);
-          this._playerStockTargets[sym] = { target: Math.min(s.price * mult, hardCap * 0.95), stepsLeft: 5, isMania: true };
+          const maxManiaMult = personality === 'penny' ? Math.min(3, 100 / Math.max(0.5, s.price)) : (1.2 + Math.random() * 1.8); // 1.2x–3x
+          const mult = 1.1 + Math.random() * (maxManiaMult - 1.1);
+          this._playerStockTargets[sym] = { target: Math.min(s.price * mult, hardCap * 0.90), stepsLeft: 20, isMania: true };
           this._playerManiaCooldowns[sym] = Date.now();
           const pctUp = Math.round((mult - 1) * 100);
           const msg = '\u{1F680} MANIA: ' + sym + ' (\u200B' + (s.companyName || '') + ') \u2014 buying frenzy! +' + pctUp + '%!';
@@ -488,8 +488,12 @@ const Companies = {
         // Penny: very gentle (revMult 0.15) — stocks drift but don't snap back hard
         // Extreme: weak (revMult 0.5) — more free-floating
         // Standard: full strength
-        const revMult = personality === 'penny' ? 0.15 : personality === 'extreme' ? 0.5 : 1.0;
-        const revStr = ratio > 5 ? 0.025 * revMult : 0.005 * revMult;
+        const revMult = personality === 'penny' ? 0.15 : personality === 'extreme' ? 0.6 : 1.0;
+        const revStr = ratio > 8 ? 0.060 * revMult
+          : ratio > 5 ? 0.035 * revMult
+          : ratio > 3 ? 0.015 * revMult
+          : ratio > 2 ? 0.008 * revMult
+          : 0.003 * revMult;
         delta -= s.price * (ratio - 1) * revStr;
 
         // --- High-price crash risk (disabled for penny — cap handles it) ---
@@ -608,6 +612,26 @@ const Companies = {
         for (const sym in this._allPlayerStocks)
           this._playerStockTargets[sym] = { target: this._allPlayerStocks[sym].price * 2, stepsLeft: 20 };
         break;
+      case 'resetAll': {
+        const resets = {};
+        for (const sym in this._allPlayerStocks) {
+          const s = this._allPlayerStocks[sym];
+          const base = s.basePrice || 100;
+          s.price = base;
+          s.history = [];
+          for (let j = 0; j < 60; j++) s.history.push(base);
+          delete this._playerStockTargets[sym];
+          delete this._peakHolds[sym];
+          delete s._lowTicks;
+          delete s._bankruptDeclared;
+          resets[sym] = base;
+        }
+        // Authority pushes the reset prices to Firebase
+        if (typeof Firebase !== 'undefined' && Firebase.isOnline() && Firebase._isStockAuthority) {
+          Firebase.pushPlayerStockPrices(resets);
+        }
+        break;
+      }
     }
   },
 
