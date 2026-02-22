@@ -197,6 +197,15 @@ const Companies = {
       Firebase.listenSaleReceipts(Firebase.uid, receipt => {
         App.addBalance(receipt.amount);
         App.save();
+        // Remove the sold company from seller's records so they don't remain ghost owner
+        if (receipt.ticker && receipt.type !== 'shares') {
+          const idx = this._companies.findIndex(co => co.ticker === receipt.ticker);
+          if (idx >= 0) {
+            this._companies.splice(idx, 1);
+            this._saveLocal();
+            this._pushToFirebase();
+          }
+        }
         const msg = receipt.type === 'shares'
           ? '\u{1F4C8} Shares sold! +' + App.formatMoney(receipt.amount) + (receipt.symbol ? ' for ' + receipt.symbol : '') + ' received.'
           : '\u{1F3E2} Company sold! +' + App.formatMoney(receipt.amount) + ' received.';

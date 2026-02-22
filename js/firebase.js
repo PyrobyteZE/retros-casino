@@ -1177,7 +1177,7 @@ const Firebase = {
     if (!this.isOnline()) return;
     this.db.ref('companySales/' + ticker).remove()
       .then(() => this.db.ref('companySaleReceipts/' + sellerUid).push({
-        amount: salePrice, ts: Date.now(),
+        amount: salePrice, ts: Date.now(), ticker,
       }))
       .catch(err => console.error('Firebase acquireListedCompany error:', err));
   },
