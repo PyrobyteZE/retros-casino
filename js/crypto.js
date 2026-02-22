@@ -576,6 +576,12 @@ const Crypto = {
   render() {
     const container = document.getElementById('crypto-content');
     if (!container) return;
+    // Don't rebuild while user is interacting with any input/select inside the crypto panel
+    const focused = document.activeElement;
+    if (focused && container.contains(focused) &&
+        (focused.tagName === 'SELECT' || focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA')) {
+      return;
+    }
     document.querySelectorAll('.crypto-tab-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.tab === this.activeTab);
     });
