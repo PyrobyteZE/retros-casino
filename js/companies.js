@@ -1686,7 +1686,27 @@ const Companies = {
       html += '</div>';
     }
 
+    // 🏦 Active Banks section
+    html += `<div style="margin-top:16px">
+      <div class="player-stocks-market-header">🏦 Active Banks</div>
+      <div id="banking-browse-section"><div style="font-size:12px;color:var(--text-dim);padding:8px 0">Loading...</div></div>
+    </div>`;
+
+    // My Deposits section
+    if (typeof Banking !== 'undefined') {
+      const myDeps = Object.keys(Banking._myVaults).length;
+      if (myDeps > 0) {
+        html += `<div style="margin-top:12px">
+          <div class="player-stocks-market-header">💰 My Deposits</div>
+          <div class="my-deposits-section">${Banking.renderMyDeposits()}</div>
+        </div>`;
+      }
+    }
+
     container.innerHTML = html;
+
+    // Now render bank cards into the injected div
+    if (typeof Banking !== 'undefined') Banking._renderBankCards();
   },
 
   _renderManage(container) {
@@ -1895,6 +1915,11 @@ const Companies = {
           </div>`;
         });
         html += `</div></div>`;
+      }
+
+      // Bank setup for Finance companies
+      if ((c.industry || 'tech') === 'finance' && typeof Banking !== 'undefined') {
+        html += Banking.renderBankSetup(cIdx);
       }
 
       html += `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bg3);text-align:center">

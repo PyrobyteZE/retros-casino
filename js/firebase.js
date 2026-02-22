@@ -178,6 +178,8 @@ const Firebase = {
     this.listenPlayerCoinPrices(prices => { if (typeof Crypto !== 'undefined') Crypto.applyServerPlayerCoinPrices(prices); });
     // Listen player coins catalog
     if (typeof Crypto !== 'undefined') this.listenPlayerCoins(data => Crypto.updatePlayerCoins(data));
+    if (typeof Crypto !== 'undefined') this.listenPlayerCoinSlots(data => Crypto.updatePlayerCoinSlots(data));
+    if (typeof Banking !== 'undefined') Banking.init();
     // Coin transfers (P2P sends)
     this.listenCoinTransfers(this.uid, transfer => {
       if (typeof Crypto !== 'undefined') Crypto._receiveCoinTransfer(transfer);
@@ -2074,5 +2076,89 @@ const Firebase = {
   updateCoinSold(sym, delta) {
     if (!this.isOnline()) return;
     this.db.ref('coinSold/' + sym).transaction(v => Math.max(0, (v || 0) + delta));
+  },
+
+  // === PLAYER COIN SLOTS ===
+  postPlayerCoinSlot(uid, slotN, coinData) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('playerCoinSlots/' + uid + '/' + slotN).set({ ...coinData, ownerUid: uid, foundedAt: Date.now() });
+  },
+
+  removePlayerCoinSlot(uid, slotN) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('playerCoinSlots/' + uid + '/' + slotN).remove();
+  },
+
+  updatePlayerCoinSlot(uid, slotN, updates) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('playerCoinSlots/' + uid + '/' + slotN).update(updates);
+  },
+
+  listenPlayerCoinSlots(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('playerCoinSlots').on('value', snap => cb(snap.val() || {}),
+      err => console.error('playerCoinSlots read error:', err.code));
+  },
+
+  // === PLAYER BANKS ===
+  createBank(ownerUid, bankData) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('playerBanks/' + ownerUid).set({ ...bankData, createdAt: Date.now() });
+  },
+
+  updateBank(ownerUid, updates) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('playerBanks/' + ownerUid).update(updates);
+  },
+
+  removeBank(ownerUid) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('playerBanks/' + ownerUid).remove();
+  },
+
+  listenBanks(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('playerBanks').on('value', snap => cb(snap.val() || {}),
+      err => console.error('playerBanks read error:', err.code));
+  },
+
+  // Bank vault (deposits)
+  depositToVault(ownerUid, depositorUid, vaultData) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('playerBankVaults/' + ownerUid + '/' + depositorUid).set(vaultData);
+  },
+
+  updateVault(ownerUid, depositorUid, updates) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('playerBankVaults/' + ownerUid + '/' + depositorUid).update(updates);
+  },
+
+  removeVault(ownerUid, depositorUid) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('playerBankVaults/' + ownerUid + '/' + depositorUid).remove();
+  },
+
+  removeAllVaults(ownerUid) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('playerBankVaults/' + ownerUid).remove();
+  },
+
+  listenMyVaults(depositorUid, cb) {
+    if (!this.isOnline()) return;
+    // Listen to all vaults where this depositorUid exists — we query per ownerUid as child
+    this.db.ref('playerBankVaults').on('value', snap => {
+      const all = snap.val() || {};
+      const mine = {};
+      for (const ownerUid in all) {
+        if (all[ownerUid][depositorUid]) mine[ownerUid] = all[ownerUid][depositorUid];
+      }
+      cb(mine);
+    }, err => console.error('playerBankVaults read error:', err.code));
+  },
+
+  listenBankVaults(ownerUid, cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('playerBankVaults/' + ownerUid).on('value', snap => cb(snap.val() || {}),
+      err => console.error('bankVaults read error:', err.code));
   },
 };

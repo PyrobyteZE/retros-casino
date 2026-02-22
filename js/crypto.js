@@ -65,6 +65,8 @@ const Crypto = {
   _coinPromotions: {},     // { [SYM]: { dir, pct, expiresAt } } — player-paid drift promotions
   _coinSold: {},           // { [SYM]: totalSold } — total coins in player hands (from Firebase)
   _playerCoinTickTimer: null,
+  _playerCoinSlots: {},   // { [uid]: { [n]: coinData } }  n = 1, 2, 3...
+  _activeCoinSlot: 0,     // which slot the player is managing (0 = slot0 = legacy playerCoins)
 
   init() {
     if (!this.initialized) {
@@ -242,12 +244,22 @@ const Crypto = {
     for (const uid in this._playerCoins) {
       if (this._playerCoins[uid].symbol === sym) return this._playerCoins[uid];
     }
+    for (const uid in this._playerCoinSlots) {
+      for (const n in this._playerCoinSlots[uid]) {
+        if (this._playerCoinSlots[uid][n].symbol === sym) return this._playerCoinSlots[uid][n];
+      }
+    }
     return null;
   },
 
   _getPlayerCoinUidBySym(sym) {
     for (const uid in this._playerCoins) {
       if (this._playerCoins[uid].symbol === sym) return uid;
+    }
+    for (const uid in this._playerCoinSlots) {
+      for (const n in this._playerCoinSlots[uid]) {
+        if (this._playerCoinSlots[uid][n].symbol === sym) return uid;
+      }
     }
     return null;
   },
@@ -284,6 +296,20 @@ const Crypto = {
       // Track my coin
       if (typeof Firebase !== 'undefined' && Firebase.uid === uid) {
         this._myPlayerCoin = coin;
+      }
+    }
+    if (App.currentScreen === 'crypto') this.render();
+  },
+
+  updatePlayerCoinSlots(data) {
+    this._playerCoinSlots = data || {};
+    // Merge prices for newly discovered slot coins
+    for (const uid in this._playerCoinSlots) {
+      for (const n in this._playerCoinSlots[uid]) {
+        const coin = this._playerCoinSlots[uid][n];
+        if (coin && coin.symbol && !this._playerCoinPrices[coin.symbol]) {
+          this._playerCoinPrices[coin.symbol] = coin.baseValue || 100;
+        }
       }
     }
     if (App.currentScreen === 'crypto') this.render();
@@ -1071,15 +1097,56 @@ const Crypto = {
   // ── My Coin Tab ────────────────────────────────────────────────────
   _renderMyCoin(container) {
     const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    const maxCoins = 1 + Math.floor((typeof App !== 'undefined' ? (App.rebirth || 0) : 0) / 10);
 
-    // Check if user has an existing coin
-    const existing = myUid && this._playerCoins[myUid] ? this._playerCoins[myUid] : this._myPlayerCoin;
+    // Build full slot list for this player
+    const slot0Coin = myUid && this._playerCoins[myUid] ? this._playerCoins[myUid] : this._myPlayerCoin;
+    const extraSlots = (myUid && this._playerCoinSlots[myUid]) ? this._playerCoinSlots[myUid] : {};
+    const slotCount = (slot0Coin ? 1 : 0) + Object.keys(extraSlots).length;
 
-    if (existing) {
-      this._renderManageCoin(container, existing, myUid);
-    } else {
-      this._renderCreateCoin(container);
+    // Clamp active slot
+    if (this._activeCoinSlot > 0 && !extraSlots[this._activeCoinSlot]) {
+      this._activeCoinSlot = 0;
     }
+
+    // Build tab HTML
+    let tabHtml = '<div class="coin-slot-tabs">';
+    // Slot 0 (always visible)
+    tabHtml += `<button class="coin-slot-tab${this._activeCoinSlot === 0 ? ' active' : ''}" onclick="Crypto._activeCoinSlot=0;Crypto.render()">Coin 1</button>`;
+    // Extra unlocked slots
+    for (let n = 1; n < maxCoins; n++) {
+      const hasCoin = !!extraSlots[n];
+      tabHtml += `<button class="coin-slot-tab${this._activeCoinSlot === n ? ' active' : ''}" onclick="Crypto._activeCoinSlot=${n};Crypto.render()">${hasCoin ? 'Coin ' + (n + 1) : 'Coin ' + (n + 1)}</button>`;
+    }
+    // Locked slots
+    for (let n = maxCoins; n <= 3; n++) {
+      const unlockRebirth = n * 10;
+      tabHtml += `<div class="coin-slot-locked">🔒 Rebirth ${unlockRebirth}</div>`;
+    }
+    tabHtml += '</div>';
+
+    // Determine which coin to show for active slot
+    let activeCoin = null;
+    let activeOwnerUid = myUid;
+    if (this._activeCoinSlot === 0) {
+      activeCoin = slot0Coin;
+    } else {
+      activeCoin = extraSlots[this._activeCoinSlot] || null;
+    }
+
+    // Wrap: tabs + content
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = tabHtml;
+    container.innerHTML = '';
+    container.appendChild(wrapper);
+
+    const contentDiv = document.createElement('div');
+    if (activeCoin) {
+      this._renderManageCoin(contentDiv, activeCoin, activeOwnerUid);
+    } else {
+      this._renderCreateCoin(contentDiv);
+    }
+    container.appendChild(contentDiv);
   },
 
   _renderCreateCoin(container) {
@@ -1157,12 +1224,22 @@ const Crypto = {
       upgrades: { pumpEngine: 0, stability: 0, marketing: 0, liquidity: 0 },
     };
 
+    // Determine slot
+    const myUid2 = Firebase.uid;
+    const s0 = this._playerCoins[myUid2] || this._myPlayerCoin;
+    const extra = this._playerCoinSlots[myUid2] || {};
+    const slotN = s0 ? (Object.keys(extra).length + 1) : 0;
+
     App.addBalance(-cost);
-    Firebase.createPlayerCoin(coinData).then(() => {
-      this._myPlayerCoin = coinData;
+    const writePromise = slotN === 0
+      ? Firebase.createPlayerCoin(coinData)
+      : Firebase.postPlayerCoinSlot(myUid2, slotN, coinData);
+    writePromise.then(() => {
+      if (slotN === 0) this._myPlayerCoin = coinData;
       this._playerCoinPrices[sym] = baseValue;
       App.save();
       Toast.show('\u{1FA99} Coin "' + name + '" (' + sym + ') launched!', '#9945ff', 4000);
+      this._activeCoinSlot = slotN;
       this.render();
     }).catch(err => { App.addBalance(cost); alert('Error: ' + err); });
   },
