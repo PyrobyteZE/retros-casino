@@ -528,11 +528,9 @@ const Crypto = {
         }
         break;
       case 'pcoin-rugPull': {
-        // Gradual crash to near-zero
+        // Gradual crash to near-zero — coin stays listed/public
         this._playerCoinTargets[sym] = { target: 0.0001, stepsLeft: 15, holdUntil: _hold };
         _syncBase(0.0001);
-        const coin = this._getPlayerCoinBySym(sym);
-        if (coin) coin.type = 'private';
         break;
       }
       case 'pcoin-delete': {
@@ -584,19 +582,45 @@ const Crypto = {
     const sysIdx = this.coins.findIndex(c => c.symbol === symbol);
     const price = sysIdx >= 0 ? this.coinPrices[sysIdx] : (this._playerCoinPrices[symbol] || 0);
     if (!price) return;
-    const maxCash = App.balance;
-    if (maxCash < 1) return;
-    const amounts = [100, 1000, 10000, Math.floor(maxCash)].filter(a => a > 0 && a <= maxCash);
-    const unique = [...new Set(amounts)];
-    let html = `<div class="stock-trade-modal">
-      <div class="stock-trade-title">Buy ${symbol} @ ${App.formatMoney(price)}</div>
-      <div class="stock-trade-buttons">`;
-    unique.forEach(a => {
-      const coins = a / price;
-      html += `<button class="stock-trade-btn" onclick="Crypto.buyCoin('${symbol}',${a});Crypto.closeModal()">${App.formatMoney(a)}<br>${coins.toFixed(4)} ${symbol}</button>`;
+    const balance = App.balance;
+    if (balance < 1) return;
+
+    const pcts   = [0.10, 0.25, 0.50, 1.0];
+    const labels = ['10%', '25%', '50%', 'All'];
+    let btnHtml = '';
+    pcts.forEach((pct, i) => {
+      const cash = pct < 1 ? Math.floor(balance * pct) : Math.floor(balance);
+      if (cash < 1) return;
+      const coinAmt = cash / price;
+      const coinFmt = coinAmt < 0.0001 ? coinAmt.toExponential(2) : coinAmt.toFixed(4);
+      btnHtml += `<button class="stock-trade-btn" onclick="Crypto.buyCoin('${symbol}',${cash});Crypto.closeModal()">
+        <span class="trade-btn-label">${labels[i]}</span>
+        <span class="trade-btn-value">${App.formatMoney(cash)}</span>
+        <span class="trade-btn-sub">${coinFmt} ${symbol}</span>
+      </button>`;
     });
-    html += `</div><button class="stock-trade-cancel" onclick="Crypto.closeModal()">Cancel</button></div>`;
+
+    const html = `<div class="stock-trade-modal">
+      <div class="stock-trade-title">\u2B06\uFE0F Buy ${symbol}</div>
+      <div class="stock-trade-subtitle">@ ${App.formatMoney(price)} &bull; ${App.formatMoney(balance)} available</div>
+      <div class="stock-trade-buttons">${btnHtml}</div>
+      <div class="coin-custom-row">
+        <input type="number" id="coin-buy-custom" placeholder="$ amount" min="1" max="${Math.floor(balance)}" step="1">
+        <button class="stock-trade-btn coin-custom-btn" onclick="Crypto._buyCoinCustom('${symbol}')">Buy</button>
+      </div>
+      <button class="stock-trade-cancel" onclick="Crypto.closeModal()">Cancel</button>
+    </div>`;
     this._showModal(html);
+  },
+
+  _buyCoinCustom(symbol) {
+    const input = document.getElementById('coin-buy-custom');
+    if (!input) return;
+    const cash = parseFloat(input.value);
+    if (isNaN(cash) || cash < 1) { Toast.show('Enter a valid amount', '#ff5252'); return; }
+    if (cash > App.balance) { Toast.show('Not enough funds', '#ff5252'); return; }
+    this.buyCoin(symbol, cash);
+    this.closeModal();
   },
 
   promptSellCoin(symbol) {
@@ -604,16 +628,41 @@ const Crypto = {
     const price = sysIdx >= 0 ? this.coinPrices[sysIdx] : (this._playerCoinPrices[symbol] || 0);
     const owned = sysIdx >= 0 ? (this.wallet[symbol] || 0) : (this._playerCoinHoldings[symbol] || 0);
     if (owned <= 0 || !price) return;
-    const amounts = [0.25, 0.5, 1.0].map(pct => owned * pct);
-    const labels = ['25%', '50%', 'All'];
-    let html = `<div class="stock-trade-modal">
-      <div class="stock-trade-title">Sell ${symbol} @ ${App.formatMoney(price)}</div>
-      <div class="stock-trade-buttons">`;
-    amounts.forEach((a, i) => {
-      html += `<button class="stock-trade-btn stock-sell-btn" onclick="Crypto.sellCoin('${symbol}',${a});Crypto.closeModal()">${labels[i]}<br>${App.formatMoney(a * price)}</button>`;
+
+    const ownedFmt  = owned < 0.0001 ? owned.toExponential(2) : owned.toFixed(4);
+    const totalVal  = owned * price;
+    const pcts      = [0.10, 0.25, 0.50, 1.0];
+    const labels    = ['10%', '25%', '50%', 'All'];
+    let btnHtml = '';
+    pcts.forEach((pct, i) => {
+      const coinAmt = owned * pct;
+      const val = coinAmt * price;
+      btnHtml += `<button class="stock-trade-btn stock-sell-btn" onclick="Crypto.sellCoin('${symbol}',${coinAmt});Crypto.closeModal()">
+        <span class="trade-btn-label">${labels[i]}</span>
+        <span class="trade-btn-value">${App.formatMoney(val)}</span>
+      </button>`;
     });
-    html += `</div><button class="stock-trade-cancel" onclick="Crypto.closeModal()">Cancel</button></div>`;
+
+    const html = `<div class="stock-trade-modal">
+      <div class="stock-trade-title" style="color:var(--red)">\u2B07\uFE0F Sell ${symbol}</div>
+      <div class="stock-trade-subtitle">@ ${App.formatMoney(price)} &bull; ${ownedFmt} ${symbol} &bull; ${App.formatMoney(totalVal)}</div>
+      <div class="stock-trade-buttons">${btnHtml}</div>
+      <div class="coin-custom-row">
+        <input type="number" id="coin-sell-custom" placeholder="# of coins" min="0" max="${owned}" step="any">
+        <button class="stock-trade-btn stock-sell-btn coin-custom-btn" onclick="Crypto._sellCoinCustom('${symbol}')">Sell</button>
+      </div>
+      <button class="stock-trade-cancel" onclick="Crypto.closeModal()">Cancel</button>
+    </div>`;
     this._showModal(html);
+  },
+
+  _sellCoinCustom(symbol) {
+    const input = document.getElementById('coin-sell-custom');
+    if (!input) return;
+    const amt = parseFloat(input.value);
+    if (isNaN(amt) || amt <= 0) { Toast.show('Enter a valid amount', '#ff5252'); return; }
+    this.sellCoin(symbol, amt);
+    this.closeModal();
   },
 
   _showModal(html) {

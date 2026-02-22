@@ -3323,6 +3323,54 @@ html[data-platform="desktop"] #screen-pets .game-container {
   cursor: pointer;
 }
 
+.stock-trade-subtitle {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.coin-custom-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.coin-custom-row input {
+  flex: 1;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--bg3);
+  background: var(--bg3);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.coin-custom-btn {
+  flex-shrink: 0;
+  padding: 9px 14px;
+  font-size: 14px;
+}
+
+.trade-btn-label {
+  display: block;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.trade-btn-value {
+  display: block;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.trade-btn-sub {
+  display: block;
+  font-size: 11px;
+  opacity: 0.65;
+}
+
 /* ====== CRYPTO MINING ====== */
 
 .mine-stats {
