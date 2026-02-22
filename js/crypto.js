@@ -42,6 +42,7 @@ const Crypto = {
   rigOwned: [],
   rigLevels: [],
   rigTargetCoins: [], // index into coins[] per rig
+  clickTargetCoin: 0, // index into coins[] for manual click mining
   upgrades: { cpu: 0, gpu: 0, overclock: 0 },
   cooling: [],
   heat: 0,
@@ -171,6 +172,7 @@ const Crypto = {
       }
 
       this.coinPrices[i] = Math.max(this.coins[i].baseValue * 0.1, this.coinPrices[i] + change);
+      if (!this.priceHistory[i]) this.priceHistory[i] = [this.coinPrices[i]];
       this.priceHistory[i].push(this.coinPrices[i]);
       if (this.priceHistory[i].length > 30) this.priceHistory[i].shift();
     }
@@ -278,7 +280,11 @@ const Crypto = {
   mine() {
     if (this.mineAnimating) return;
     const hashPower = this._getHashPower();
-    let amount = 0.001 * hashPower;
+    const btcBase = this.coins[0]; // BTC is the reference coin
+    const safeTgt = Math.max(0, Math.min(this.coins.length - 1, this.clickTargetCoin || 0));
+    const tgtCoin = this.coins[safeTgt];
+    // Normalize so clicking always yields the same dollar value regardless of coin
+    let amount = 0.001 * hashPower * (btcBase.baseValue / tgtCoin.baseValue);
 
     const ocLevel = this.upgrades.overclock;
     if (ocLevel > 0 && Math.random() < ocLevel * 0.05) {
@@ -286,11 +292,16 @@ const Crypto = {
       this._showMineResult('10x BLOCK!', true);
     }
 
-    this.wallet.BTC = (this.wallet.BTC || 0) + amount;
-    this.totalMined.BTC = (this.totalMined.BTC || 0) + amount;
+    this.wallet[tgtCoin.symbol] = (this.wallet[tgtCoin.symbol] || 0) + amount;
+    this.totalMined[tgtCoin.symbol] = (this.totalMined[tgtCoin.symbol] || 0) + amount;
     this.heat = Math.min(100, this.heat + 0.5);
 
     this._animateMine();
+    if (App.currentScreen === 'crypto') this.render();
+  },
+
+  setClickCoin(idx) {
+    this.clickTargetCoin = Math.max(0, Math.min(this.coins.length - 1, idx));
     if (App.currentScreen === 'crypto') this.render();
   },
 
@@ -583,7 +594,7 @@ const Crypto = {
       const price = this.coinPrices[i];
       const amount = this.wallet[coin.symbol] || 0;
       const value = amount * price;
-      const hist = this.priceHistory[i];
+      const hist = this.priceHistory[i] || [price, price];
       const prev = hist.length >= 2 ? hist[hist.length - 2] : price;
       const pct = ((price - prev) / (prev || 1) * 100);
       const pctStr = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
@@ -663,13 +674,21 @@ const Crypto = {
   // ── Mining Tab ─────────────────────────────────────────────────────
   _renderMining(container) {
     const hashPower = this._getHashPower();
-    const btcPerClick = 0.001 * hashPower;
     const efficiency = this._getHeatEfficiency();
+    const safeTgt = Math.max(0, Math.min(this.coins.length - 1, this.clickTargetCoin || 0));
+    const tgtCoin = this.coins[safeTgt];
+    const btcBase = this.coins[0];
+    const clickAmt = 0.001 * hashPower * (btcBase.baseValue / tgtCoin.baseValue);
+    const clickFmt = clickAmt < 0.0001 ? clickAmt.toExponential(2) : clickAmt.toFixed(tgtCoin.baseValue < 1 ? 2 : 6);
+
+    const coinSelector = `<select class="coin-selector" style="margin:6px auto;display:block;font-size:13px" onchange="Crypto.setClickCoin(+this.value)">
+      ${this.coins.map((c, i) => `<option value="${i}" ${i === safeTgt ? 'selected' : ''}>${c.emoji} ${c.symbol} — ${c.name}</option>`).join('')}
+    </select>`;
 
     let html = `
       <div class="mine-stats">
         <div class="mine-stat"><span class="stat-label">Hash Power</span><span>${hashPower.toFixed(1)}x</span></div>
-        <div class="mine-stat"><span class="stat-label">BTC/Click</span><span>${btcPerClick.toFixed(4)}</span></div>
+        <div class="mine-stat"><span class="stat-label">${tgtCoin.symbol}/Click</span><span>${clickFmt}</span></div>
         <div class="mine-stat"><span class="stat-label">Heat</span><span class="${this.heat > 80 ? 'heat-danger' : ''}">${this.heat.toFixed(0)}%</span></div>
       </div>
       <div class="heat-bar-wrap">
@@ -678,14 +697,15 @@ const Crypto = {
       <div class="mine-hash-display" id="mine-hash-display">
         <div class="hash-text">${this._randomHash()}</div>
       </div>
+      ${coinSelector}
       <button id="crypto-mine-btn" class="mine-btn" onclick="Crypto.mine()">
-        MINE<br><span class="mine-btn-sub">+${btcPerClick.toFixed(4)} BTC</span>
+        MINE<br><span class="mine-btn-sub" style="color:${tgtCoin.color}">+${clickFmt} ${tgtCoin.symbol}</span>
       </button>
       <div class="mine-wallet-mini">`;
 
     this.coins.forEach(c => {
       const amt = this.wallet[c.symbol] || 0;
-      if (amt > 0 || ['BTC','ETH','DOGE'].includes(c.symbol)) {
+      if (amt > 0) {
         const display = amt < 0.0001 ? amt.toExponential(2) : amt.toFixed(c.baseValue < 1 ? 2 : 4);
         html += `<span style="color:${c.color}">${display} ${c.symbol}</span>`;
       }
@@ -1130,6 +1150,7 @@ const Crypto = {
       rigOwned: this.rigOwned.slice(),
       rigLevels: this.rigLevels.slice(),
       rigTargetCoins: this.rigTargetCoins.slice(),
+      clickTargetCoin: this.clickTargetCoin,
       upgrades: { ...this.upgrades },
       cooling: this.cooling.slice(),
       heat: this.heat,
@@ -1154,11 +1175,15 @@ const Crypto = {
     if (data.rigOwned) this.rigOwned = data.rigOwned;
     if (data.rigLevels) this.rigLevels = data.rigLevels;
     if (data.rigTargetCoins) this.rigTargetCoins = data.rigTargetCoins;
+    if (data.clickTargetCoin !== undefined) this.clickTargetCoin = data.clickTargetCoin;
     if (data.upgrades) this.upgrades = { cpu: 0, gpu: 0, overclock: 0, ...data.upgrades };
     if (data.cooling) this.cooling = data.cooling;
     if (data.heat !== undefined) this.heat = data.heat;
-    if (data.coinPrices && data.coinPrices.length === this.coins.length) {
-      this.coinPrices = data.coinPrices;
+    if (data.coinPrices && data.coinPrices.length) {
+      // Migrate: map by index for existing coins, fall back to baseValue for new coins
+      this.coinPrices = this.coins.map((c, i) =>
+        (data.coinPrices[i] !== undefined ? data.coinPrices[i] : c.baseValue)
+      );
       this.priceHistory = this.coinPrices.map(p => {
         const arr = [];
         for (let i = 0; i < 30; i++) arr.push(p);
