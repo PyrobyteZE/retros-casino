@@ -710,6 +710,11 @@ const Stocks = {
     // Market influence: buying pushes price up slightly
     this._applyTradeInfluence(idx, 1, this._calcTradeImpact(idx, cost));
 
+    // Cooldown for large purchases (100+ shares)
+    if (amount >= 100) {
+      this._buyCooldowns[symbol] = Date.now() + 60000; // 60s cooldown
+    }
+
     App.save();
     this.render();
   },
@@ -754,9 +759,17 @@ const Stocks = {
   },
 
   // === Prompt-based buy/sell ===
+  _buyCooldowns: {},
+
   promptBuy(symbol) {
     const idx = this.stocks.findIndex(s => s.symbol === symbol);
     if (idx < 0) return;
+    // Check cooldown
+    const cd = this._buyCooldowns[symbol];
+    if (cd && Date.now() < cd) {
+      Toast.show('\u23F3 Wait ' + Math.ceil((cd - Date.now()) / 1000) + 's before buying ' + symbol + ' again', '#ff9100');
+      return;
+    }
     const price = this.prices[idx];
     const maxShares = Math.floor(App.balance / price * 100) / 100;
     if (maxShares <= 0) return;
@@ -765,9 +778,10 @@ const Stocks = {
       <div class="stock-trade-title">Buy ${symbol} @ ${App.formatMoney(price)}</div>
       <div class="stock-trade-custom-amount">
         <label for="stock-buy-amount-input">$</label>
-        <input type="number" id="stock-buy-amount-input" placeholder="Enter amount to invest" oninput="Stocks.updateBuyButton(this.value, '${symbol}')">
+        <input type="text" inputmode="decimal" id="stock-buy-amount-input" class="sh-input" placeholder="Amount (e.g. 10m)" oninput="Stocks.updateBuyButton(this.value, '${symbol}')">
         <button onclick="document.getElementById('stock-buy-amount-input').value = App.balance; Stocks.updateBuyButton(App.balance, '${symbol}')">Max</button>
       </div>
+      <div class="sh-preview" style="display:none;font-size:11px;color:var(--text-dim);margin:2px 0 4px 0"></div>
       <div id="stock-buy-summary"></div>
       <div class="stock-trade-buttons">
         <button id="stock-buy-confirm-btn" class="stock-trade-btn" onclick="Stocks.buyWithMoney('${symbol}')" disabled>Buy</button>
@@ -778,7 +792,7 @@ const Stocks = {
   },
 
   updateBuyButton(money, symbol) {
-    const amount = parseFloat(money);
+    const amount = App.parseAmount(money);
     const summaryEl = document.getElementById('stock-buy-summary');
     const buyBtn = document.getElementById('stock-buy-confirm-btn');
     if (!summaryEl || !buyBtn) return;
@@ -802,7 +816,7 @@ const Stocks = {
     const moneyInput = document.getElementById('stock-buy-amount-input');
     if (!moneyInput) return;
 
-    let amount = parseFloat(moneyInput.value);
+    let amount = App.parseAmount(moneyInput.value);
     if (isNaN(amount) || amount <= 0) return;
 
     // Always use the current live price — the stale modal price can cause
@@ -955,6 +969,9 @@ const Stocks = {
       const luckyBadge = s.symbol === 'LUCKY' && luckyShares > 0 && (App.rebirth || 0) >= 5
         ? `<div class="lucky-owner-badge" title="You earn ${(cutPct*100).toFixed(2)}% of casino losses">\u{1F3B0} ${(cutPct*100).toFixed(2)}% cut</div>`
         : '';
+      const _cd = this._buyCooldowns[s.symbol];
+      const _cdActive = _cd && Date.now() < _cd;
+      const _cdLabel = _cdActive ? '\u23F3 ' + Math.ceil((_cd - Date.now()) / 1000) + 's' : 'Buy';
       html += `<div class="stock-card">
         <div class="stock-card-header">
           <div class="stock-symbol">${s.symbol}</div>
@@ -966,7 +983,7 @@ const Stocks = {
         <div class="stock-change ${isUp ? 'stock-up' : 'stock-down'}">${isUp ? '+' : ''}${dayChange.toFixed(2)}%</div>
         <canvas id="spark-${s.symbol}" class="stock-sparkline" width="80" height="30"></canvas>
         <div class="stock-actions">
-          <button class="stock-buy-btn" onclick="Stocks.promptBuy('${s.symbol}')">Buy</button>
+          <button class="stock-buy-btn" onclick="Stocks.promptBuy('${s.symbol}')" ${_cdActive ? 'disabled style="opacity:0.5"' : ''}>${_cdLabel}</button>
           <button class="stock-sell-btn" onclick="Stocks.promptSell('${s.symbol}')" ${this.holdings[s.symbol] ? '' : 'disabled'}>Sell</button>
           ${(App.rebirth || 0) >= this.ATTACK_REBIRTH_REQ
               ? `<button class="stock-attack-btn" onclick="Stocks.promptAttack('${s.symbol}')" title="Market Sabotage">\u{1F3AF}</button>`

@@ -63,6 +63,7 @@ const Crypto = {
   _playerCoinHoldings: {}, // { [SYM]: amount }
   _playerCoinTargets: {},  // { [SYM]: { target, stepsLeft, holdUntil } } — admin-set pinned prices
   _coinPromotions: {},     // { [SYM]: { dir, pct, expiresAt } } — player-paid drift promotions
+  _coinSold: {},           // { [SYM]: totalSold } — total coins in player hands (from Firebase)
   _playerCoinTickTimer: null,
 
   init() {
@@ -565,20 +566,33 @@ const Crypto = {
     if (!price) return;
     if (cashAmount <= 0 || App.balance < cashAmount) return;
     const coinAmount = cashAmount / price;
-    App.addBalance(-cashAmount);
-    this._playerCoinHoldings[symbol] = (this._playerCoinHoldings[symbol] || 0) + coinAmount;
+    // Supply cap: check available before buying
+    const ownerCoinData = this._getPlayerCoinBySym(symbol);
+    const totalSupply = ownerCoinData ? (ownerCoinData.supply || 0) : 0;
+    const reserveAmt = ownerCoinData ? (ownerCoinData.reserveAmt || 0) : 0;
+    const sold = this._coinSold[symbol] || 0;
+    const available = Math.max(0, totalSupply - reserveAmt - sold);
+    if (available <= 0) { Toast.show('\u{1F6AB} No coins available — all in circulation', '#ff5252'); return; }
+    const actualCoinAmt = Math.min(coinAmount, available);
+    const actualCash = actualCoinAmt * price;
+    App.addBalance(-actualCash);
+    this._playerCoinHoldings[symbol] = (this._playerCoinHoldings[symbol] || 0) + actualCoinAmt;
+    this._coinSold[symbol] = sold + actualCoinAmt;
     // If owner buys their own coin — update reserve stake
     if (typeof Firebase !== 'undefined' && Firebase.uid) {
       const ownerUid = this._getPlayerCoinUidBySym(symbol);
       if (ownerUid === Firebase.uid) {
         const coin = this._playerCoins[ownerUid];
         if (coin) {
-          coin.reserveAmt = (coin.reserveAmt || 0) + coinAmount;
+          coin.reserveAmt = (coin.reserveAmt || 0) + actualCoinAmt;
           Firebase.updatePlayerCoin(ownerUid, { reserveAmt: coin.reserveAmt }).catch(() => {});
         }
       }
     }
-    if (typeof Firebase !== 'undefined') Firebase.tradeInfluenceCoin(symbol, 'buy');
+    if (typeof Firebase !== 'undefined') {
+      Firebase.tradeInfluenceCoin(symbol, 'buy');
+      Firebase.updateCoinSold(symbol, actualCoinAmt);
+    }
     App.save(); this.render();
   },
 
@@ -609,9 +623,10 @@ const Crypto = {
       <div class="stock-trade-subtitle">@ ${App.formatMoney(price)} &bull; ${App.formatMoney(balance)} available</div>
       <div class="stock-trade-buttons">${btnHtml}</div>
       <div class="coin-custom-row">
-        <input type="number" id="coin-buy-custom" placeholder="$ amount" min="1" max="${Math.floor(balance)}" step="1">
+        <input type="text" inputmode="decimal" id="coin-buy-custom" class="sh-input" placeholder="$ amount (e.g. 5m)">
         <button class="stock-trade-btn coin-custom-btn" onclick="Crypto._buyCoinCustom('${symbol}')">Buy</button>
       </div>
+      <div class="sh-preview" style="display:none;font-size:11px;color:var(--text-dim);margin-top:2px"></div>
       <button class="stock-trade-cancel" onclick="Crypto.closeModal()">Cancel</button>
     </div>`;
     this._showModal(html);
@@ -620,8 +635,8 @@ const Crypto = {
   _buyCoinCustom(symbol) {
     const input = document.getElementById('coin-buy-custom');
     if (!input) return;
-    const cash = parseFloat(input.value);
-    if (isNaN(cash) || cash < 1) { Toast.show('Enter a valid amount', '#ff5252'); return; }
+    const cash = App.parseAmount(input.value);
+    if (isNaN(cash) || cash < 1) { Toast.show('Enter a valid amount (e.g. 5m)', '#ff5252'); return; }
     if (cash > App.balance) { Toast.show('Not enough funds', '#ff5252'); return; }
     this.buyCoin(symbol, cash);
     this.closeModal();
@@ -652,9 +667,10 @@ const Crypto = {
       <div class="stock-trade-subtitle">@ ${App.formatMoney(price)} &bull; ${ownedFmt} ${symbol} &bull; ${App.formatMoney(totalVal)}</div>
       <div class="stock-trade-buttons">${btnHtml}</div>
       <div class="coin-custom-row">
-        <input type="number" id="coin-sell-custom" placeholder="# of coins" min="0" max="${owned}" step="any">
+        <input type="text" inputmode="decimal" id="coin-sell-custom" class="sh-input" placeholder="# coins (e.g. 1.5m)">
         <button class="stock-trade-btn stock-sell-btn coin-custom-btn" onclick="Crypto._sellCoinCustom('${symbol}')">Sell</button>
       </div>
+      <div class="sh-preview" style="display:none;font-size:11px;color:var(--text-dim);margin-top:2px"></div>
       <button class="stock-trade-cancel" onclick="Crypto.closeModal()">Cancel</button>
     </div>`;
     this._showModal(html);
@@ -663,8 +679,8 @@ const Crypto = {
   _sellCoinCustom(symbol) {
     const input = document.getElementById('coin-sell-custom');
     if (!input) return;
-    const amt = parseFloat(input.value);
-    if (isNaN(amt) || amt <= 0) { Toast.show('Enter a valid amount', '#ff5252'); return; }
+    const amt = App.parseAmount(input.value);
+    if (isNaN(amt) || amt <= 0) { Toast.show('Enter a valid amount (e.g. 1.5m)', '#ff5252'); return; }
     this.sellCoin(symbol, amt);
     this.closeModal();
   },
@@ -781,6 +797,7 @@ const Crypto = {
     if (amount <= 0) return;
     const value = amount * price;
     this._playerCoinHoldings[symbol] -= amount;
+    this._coinSold[symbol] = Math.max(0, (this._coinSold[symbol] || 0) - amount);
     App.addBalance(value);
     // If owner sells their own coin — update reserve stake
     if (typeof Firebase !== 'undefined' && Firebase.uid) {
@@ -796,6 +813,7 @@ const Crypto = {
           }
         }
       }
+      Firebase.updateCoinSold(symbol, -amount);
     }
     if (typeof Firebase !== 'undefined') Firebase.tradeInfluenceCoin(symbol, 'sell');
     App.save(); this.render();
@@ -871,15 +889,20 @@ const Crypto = {
         const pctStr = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
         const isUp = pct >= 0;
         const isOwn = typeof Firebase !== 'undefined' && Firebase.uid === uid;
+        const _avail = Math.max(0, (coin.supply || 0) - (coin.reserveAmt || 0) - (this._coinSold[sym] || 0));
+        const _soldOut = coin.supply > 0 && _avail <= 0;
         const _p = this._coinPromotions[sym];
         const promoBadge = (_p && Date.now() < _p.expiresAt)
-          ? `<div class="promo-badge ${_p.dir > 0 ? 'promo-bull' : 'promo-bear'}">${_p.dir > 0 ? '📈' : '📉'} ${Math.round(_p.pct * 100)}%/tick \u00B7 ${this._fmtPromoTime(_p.expiresAt - Date.now())}</div>`
+          ? `<div style="margin-bottom:2px"><span class="promo-badge ${_p.dir > 0 ? 'promo-bull' : 'promo-bear'}">${_p.dir > 0 ? '📈' : '📉'} ${Math.round(_p.pct * 100)}%/tick \u00B7 ${this._fmtPromoTime(_p.expiresAt - Date.now())}</span></div>`
           : '';
 
         html += `<div class="stock-card">
           <div class="stock-card-header">
             <div class="stock-symbol" style="color:#bb86fc">${coin.emoji || '\u{1FA99}'} ${sym}</div>
-            <div class="player-stock-badge">${isOwn ? 'YOURS' : 'COIN'}</div>
+            <div style="display:flex;align-items:center;gap:4px">
+              <button class="promo-icon-btn" onclick="Crypto._showPromoteModal('${sym}')" title="Promote">📣</button>
+              <div class="player-stock-badge">${isOwn ? 'YOURS' : 'COIN'}</div>
+            </div>
           </div>
           <div class="stock-name">${this._esc(coin.name)}</div>
           <div style="font-size:10px;color:var(--text-dim);margin-bottom:2px">by ${this._esc(coin.ownerName || 'Player')}</div>
@@ -888,11 +911,11 @@ const Crypto = {
           <div class="stock-price">${App.formatMoney(price)}</div>
           <div class="stock-change ${isUp ? 'stock-up' : 'stock-down'}">${pctStr}</div>
           <canvas id="spark-pc-${sym}" class="stock-sparkline" width="80" height="30"></canvas>
+          ${_soldOut ? '<div style="font-size:10px;color:#ff9100;font-weight:700;margin-bottom:2px">\u{1F6AB} Sold Out</div>' : (coin.supply > 0 ? `<div style="font-size:10px;color:var(--text-dim);margin-bottom:2px">${this.formatCoin(_avail)} avail</div>` : '')}
           <div class="stock-actions">
-            <button class="stock-buy-btn" onclick="Crypto.promptBuyCoin('${sym}')">Buy</button>
+            <button class="stock-buy-btn" onclick="Crypto.promptBuyCoin('${sym}')" ${_soldOut ? 'disabled style="opacity:0.4"' : ''}>Buy</button>
             <button class="stock-sell-btn" onclick="Crypto.promptSellCoin('${sym}')" ${held > 0 ? '' : 'disabled'}>Sell</button>
-            <button class="admin-btn" style="font-size:10px;padding:2px 6px" onclick="Crypto._showPromoteModal('${sym}')">📣</button>
-            ${held > 0 ? `<button class="admin-btn" style="font-size:10px;padding:2px 6px" onclick="Crypto.promptSendCoin('${sym}')">Send</button>` : ''}
+            ${held > 0 ? `<button class="admin-btn" style="font-size:11px;padding:4px 8px" onclick="Crypto.promptSendCoin('${sym}')">Send</button>` : ''}
           </div>
         </div>`;
       });
@@ -1187,14 +1210,16 @@ const Crypto = {
             ${(coin.reserveAmt || 0) <= 0 ? '<div style="font-size:11px;color:#ff9100;margin-top:2px">\u26A0\uFE0F No owner stake \u2014 buy back to regain stake</div>' : ''}
           </div>
         </div>
-        <div style="display:flex;gap:6px;margin-bottom:8px">
-          <input type="number" id="mgcoin-buy-amt" placeholder="$ to buy" min="1" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--bg3);background:var(--bg3);color:var(--text);font-size:13px">
+        <div style="display:flex;gap:6px;margin-bottom:4px">
+          <input type="text" inputmode="decimal" id="mgcoin-buy-amt" class="sh-input" placeholder="$ to buy (e.g. 10m)" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--bg3);background:var(--bg3);color:var(--text);font-size:13px">
           <button class="stock-buy-btn" style="flex-shrink:0;padding:8px 12px" onclick="Crypto._manageCoinBuy('${sym}')">Buy</button>
         </div>
-        <div style="display:flex;gap:6px;margin-bottom:12px">
-          <input type="number" id="mgcoin-sell-amt" placeholder="# coins to sell" min="0" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--bg3);background:var(--bg3);color:var(--text);font-size:13px">
+        <div class="sh-preview" style="display:none;font-size:11px;color:var(--text-dim);margin-bottom:2px"></div>
+        <div style="display:flex;gap:6px;margin-bottom:4px">
+          <input type="text" inputmode="decimal" id="mgcoin-sell-amt" class="sh-input" placeholder="# coins to sell (e.g. 1.5m)" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--bg3);background:var(--bg3);color:var(--text);font-size:13px">
           <button class="stock-sell-btn" style="flex-shrink:0;padding:8px 12px" onclick="Crypto._manageCoinSell('${sym}')">Sell</button>
         </div>
+        <div class="sh-preview" style="display:none;font-size:11px;color:var(--text-dim);margin-bottom:8px"></div>
         ${isOwner ? `
         <div class="exchange-actions" style="margin-bottom:12px">
           <button class="stock-buy-btn" onclick="Crypto._ownerAction('pump')">Pump</button>
@@ -1310,8 +1335,8 @@ const Crypto = {
   _manageCoinBuy(sym) {
     const input = document.getElementById('mgcoin-buy-amt');
     if (!input) return;
-    const cash = parseFloat(input.value);
-    if (isNaN(cash) || cash < 1) { Toast.show('Enter a valid $ amount', '#ff5252'); return; }
+    const cash = App.parseAmount(input.value);
+    if (isNaN(cash) || cash < 1) { Toast.show('Enter a valid $ amount (e.g. 10m)', '#ff5252'); return; }
     if (cash > App.balance) { Toast.show('Not enough funds', '#ff5252'); return; }
     this.buyCoin(sym, cash);
     input.value = '';
@@ -1320,8 +1345,8 @@ const Crypto = {
   _manageCoinSell(sym) {
     const input = document.getElementById('mgcoin-sell-amt');
     if (!input) return;
-    const amt = parseFloat(input.value);
-    if (isNaN(amt) || amt <= 0) { Toast.show('Enter a valid coin amount', '#ff5252'); return; }
+    const amt = App.parseAmount(input.value);
+    if (isNaN(amt) || amt <= 0) { Toast.show('Enter a valid coin amount (e.g. 1.5m)', '#ff5252'); return; }
     this.sellCoin(sym, amt);
     input.value = '';
   },
@@ -1390,7 +1415,7 @@ const Crypto = {
       const isOwn = typeof Firebase !== 'undefined' && Firebase.uid === uid;
       const _bp = this._coinPromotions[sym];
       const bPromoBadge = (_bp && Date.now() < _bp.expiresAt)
-        ? `<span class="promo-badge ${_bp.dir > 0 ? 'promo-bull' : 'promo-bear'}" style="margin-left:4px">${_bp.dir > 0 ? '📈' : '📉'} ${Math.round(_bp.pct * 100)}%/tick \u00B7 ${this._fmtPromoTime(_bp.expiresAt - Date.now())}</span>`
+        ? `<span class="promo-badge ${_bp.dir > 0 ? 'promo-bull' : 'promo-bear'}">${_bp.dir > 0 ? '📈' : '📉'} ${Math.round(_bp.pct * 100)}%/tick \u00B7 ${this._fmtPromoTime(_bp.expiresAt - Date.now())}</span>`
         : '';
       html += `<div class="exchange-card">
         <div class="exchange-header">

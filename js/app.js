@@ -40,6 +40,21 @@ const App = {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js').catch(() => {});
     }
+
+    // Live shorthand preview: show "$10M" hint when user types "10m" in any .sh-input
+    document.addEventListener('input', e => {
+      const inp = e.target;
+      if (!inp.classList || !inp.classList.contains('sh-input')) return;
+      const preview = inp.nextElementSibling;
+      if (!preview || !preview.classList.contains('sh-preview')) return;
+      const parsed = this.parseAmount(inp.value);
+      if (!isNaN(parsed) && /[kmbt]/i.test(inp.value)) {
+        preview.textContent = '= ' + this.formatMoney(parsed);
+        preview.style.display = 'block';
+      } else {
+        preview.style.display = 'none';
+      }
+    });
   },
 
   detectPlatform() {
@@ -70,6 +85,19 @@ const App = {
     if (val >= 100) return '$' + Math.floor(val) + this.suffixes[tier];
     if (val >= 10) return '$' + val.toFixed(1) + this.suffixes[tier];
     return '$' + val.toFixed(2) + this.suffixes[tier];
+  },
+
+  // Parse shorthand amounts: "10m" → 10_000_000, "2.5b" → 2_500_000_000 etc.
+  parseAmount(str) {
+    if (str === null || str === undefined) return NaN;
+    let s = String(str).trim().replace(/^\$/, '').replace(/,/g, '').toLowerCase();
+    if (!s) return NaN;
+    const match = s.match(/^(-?[\d.]+)\s*([kmbt]?)$/);
+    if (!match) return NaN;
+    const n = parseFloat(match[1]);
+    if (isNaN(n)) return NaN;
+    const mult = { '': 1, k: 1e3, m: 1e6, b: 1e9, t: 1e12 };
+    return n * (mult[match[2]] ?? 1);
   },
 
   // Safe add that avoids floating point drift on large numbers

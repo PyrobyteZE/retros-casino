@@ -182,6 +182,10 @@ const Firebase = {
     this.listenCoinTransfers(this.uid, transfer => {
       if (typeof Crypto !== 'undefined') Crypto._receiveCoinTransfer(transfer);
     });
+    // Coin sold counters (supply cap tracking)
+    this.db.ref('coinSold').on('value', snap => {
+      if (typeof Crypto !== 'undefined') Crypto._coinSold = snap.val() || {};
+    });
     // Coin promotions (live drift boosts)
     this.db.ref('coinPromotions').on('value', snap => {
       if (typeof Crypto !== 'undefined') {
@@ -2065,5 +2069,10 @@ const Firebase = {
   setCoinPromotion(sym, promo) {
     if (!this.isOnline()) return Promise.resolve();
     return this.db.ref('coinPromotions/' + sym).set(promo);
+  },
+
+  updateCoinSold(sym, delta) {
+    if (!this.isOnline()) return;
+    this.db.ref('coinSold/' + sym).transaction(v => Math.max(0, (v || 0) + delta));
   },
 };
