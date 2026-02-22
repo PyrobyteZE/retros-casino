@@ -413,18 +413,17 @@ const Companies = {
         const vol = s.vol || 0.05;
         const ratio = s.price / effectiveBase;
 
-        // Hard cap: penny=$100 absolute, standard=10× effectiveBase, extreme=15× effectiveBase
-        const hardCap = personality === 'penny' ? 100
-          : personality === 'extreme' ? effectiveBase * 15
-          : effectiveBase * 10;
+        // Hard cap scales with bull propaganda level (see _getHardCap)
+        const hardCap = this._getHardCap(s);
 
         // --- Hard price cap: plateau then gradual decay ---
         // Stock holds near the cap for ~20 ticks (~40s), then decays over 50 ticks (~100s)
         if (s.price > hardCap || this._peakHolds[sym] !== undefined) {
           const holdLeft = this._peakHolds[sym];
           if (holdLeft === undefined) {
-            // First cap hit: begin plateau
-            this._peakHolds[sym] = 20;
+            // First cap hit: plateau length scales with overshoot (admin $1M holds longer near peak)
+            const overshoot = Math.max(1, s.price / hardCap);
+            this._peakHolds[sym] = Math.min(80, Math.round(20 * Math.log10(overshoot + 1) + 20));
             this._playerManiaCooldowns[sym] = Date.now();
           }
           if ((this._peakHolds[sym] || 0) > 0) {
@@ -433,9 +432,13 @@ const Companies = {
             const w = s.price * (Math.random() - 0.5) * 2 * vol * 0.25;
             s.price = Math.max(hardCap * 0.85, Math.min(hardCap * 1.02, s.price + w));
           } else {
-            // Plateau expired: decay over 80 ticks back toward effectiveBase (not 55% of cap!)
+            // Plateau expired: decay back toward $150 (effectiveBase*1.5)
+            // Decay speed scales with how far above cap the stock is — admin-set $1M declines slowly
             delete this._peakHolds[sym];
-            this._playerStockTargets[sym] = { target: effectiveBase * 1.5, stepsLeft: 80 };
+            const decayTarget = effectiveBase * 1.5;
+            const overshootRatio = s.price / hardCap; // 1x = at cap, 10x = 10× above cap
+            const decaySteps = Math.min(300, Math.max(80, Math.round(overshootRatio * 25)));
+            this._playerStockTargets[sym] = { target: decayTarget, stepsLeft: decaySteps };
             this._playerManiaCooldowns[sym] = Date.now();
             s.price = Math.max(0.01, s.price + s.price * (Math.random() - 0.5) * 2 * vol);
           }
@@ -464,17 +467,21 @@ const Companies = {
         const bullLv = upg.bullBias || 0;
         if (bullLv > 0 && personality !== 'penny') delta += s.price * bullLv * 0.001;
 
-        // --- Mania event: rare explosive spike (cooldown prevents stacking) ---
+        // --- Mania event: spikes toward a random slice of the hard cap ---
+        // Bull Propaganda raises the cap AND makes mania more frequent
         const maniaCooldownOk = (Date.now() - (this._playerManiaCooldowns[sym] || 0)) > 120000;
-        const maniaChance = personality === 'extreme' ? 0.006 : 0.002;
+        const baseMania = personality === 'extreme' ? 0.006 : 0.002;
+        const maniaChance = Math.min(0.015, baseMania + bullLv * 0.002); // +0.2%/level, max 1.5%
         // Penny stocks: skip mania above $80 (let vol do the work near cap)
         const maniaAllowed = personality !== 'penny' || s.price < 80;
         if (maniaCooldownOk && maniaAllowed && Math.random() < maniaChance) {
-          const maxManiaMult = personality === 'penny' ? Math.min(3, 100 / Math.max(0.5, s.price)) : (1.2 + Math.random() * 1.8); // 1.2x–3x
-          const mult = 1.1 + Math.random() * (maxManiaMult - 1.1);
-          this._playerStockTargets[sym] = { target: Math.min(s.price * mult, hardCap * 0.90), stepsLeft: 20, isMania: true };
+          // Target a random 20–90% of the hard cap — high bull = huge potential spike
+          const maniaTarget = personality === 'penny'
+            ? Math.min(s.price * (1.5 + Math.random()), 95)
+            : Math.max(s.price * 1.1, hardCap * (0.20 + Math.random() * 0.70));
+          this._playerStockTargets[sym] = { target: Math.min(maniaTarget, hardCap * 0.95), stepsLeft: 30, isMania: true };
           this._playerManiaCooldowns[sym] = Date.now();
-          const pctUp = Math.round((mult - 1) * 100);
+          const pctUp = Math.round((maniaTarget / s.price - 1) * 100);
           const msg = '\u{1F680} MANIA: ' + sym + ' (\u200B' + (s.companyName || '') + ') \u2014 buying frenzy! +' + pctUp + '%!';
           // Global mania news cooldown: don't push more than 1 mania news per 20s across all player stocks
           if (Date.now() - (this._lastManiaPush || 0) > 20000) {
@@ -488,12 +495,15 @@ const Companies = {
         // Penny: very gentle (revMult 0.15) — stocks drift but don't snap back hard
         // Extreme: weak (revMult 0.5) — more free-floating
         // Standard: full strength
+        // Mean reversion: gentle pull toward $100 base; stocks naturally wander but
+        // extreme over-extension gets progressively corrected
         const revMult = personality === 'penny' ? 0.15 : personality === 'extreme' ? 0.6 : 1.0;
-        const revStr = ratio > 8 ? 0.060 * revMult
-          : ratio > 5 ? 0.035 * revMult
-          : ratio > 3 ? 0.015 * revMult
-          : ratio > 2 ? 0.008 * revMult
-          : 0.003 * revMult;
+        const revStr = ratio > 10 ? 0.040 * revMult
+          : ratio > 7 ? 0.018 * revMult
+          : ratio > 5 ? 0.008 * revMult
+          : ratio > 3 ? 0.003 * revMult
+          : ratio > 2 ? 0.001 * revMult
+          : 0.0003 * revMult;
         delta -= s.price * (ratio - 1) * revStr;
 
         // --- High-price crash risk (disabled for penny — cap handles it) ---
@@ -596,14 +606,28 @@ const Companies = {
   applyAdminCommand(cmd) {
     if (!cmd || !cmd.type) return;
     switch (cmd.type) {
-      case 'adjust':
-        if (this._allPlayerStocks[cmd.sym])
-          this._playerStockTargets[cmd.sym] = { target: Math.max(0.01, this._allPlayerStocks[cmd.sym].price * cmd.mult), stepsLeft: 15 };
+      case 'adjust': {
+        const sAdj = this._allPlayerStocks[cmd.sym];
+        if (sAdj) {
+          const adjTarget = Math.max(0.01, sAdj.price * cmd.mult);
+          const adjRatio = adjTarget / Math.max(1, sAdj.price);
+          // Scale steps with size of move: small nudge=15, huge jump=up to 100
+          const adjSteps = Math.min(100, Math.max(15, Math.round(Math.log10(Math.max(1.01, adjRatio)) * 40)));
+          this._playerStockTargets[cmd.sym] = { target: adjTarget, stepsLeft: adjSteps, isAdminSet: true };
+        }
         break;
-      case 'set':
-        if (this._allPlayerStocks[cmd.sym])
-          this._playerStockTargets[cmd.sym] = { target: Math.max(0.01, cmd.target), stepsLeft: 15 };
+      }
+      case 'set': {
+        const sSet = this._allPlayerStocks[cmd.sym];
+        if (sSet) {
+          const setTarget = Math.max(0.01, cmd.target);
+          const setRatio = setTarget / Math.max(1, sSet.price);
+          // Gradual incline: log-scaled steps so $1M doesn't arrive in 30s
+          const setSteps = Math.min(150, Math.max(20, Math.round(Math.log10(Math.max(1.01, setRatio)) * 45)));
+          this._playerStockTargets[cmd.sym] = { target: setTarget, stepsLeft: setSteps, isAdminSet: true };
+        }
         break;
+      }
       case 'crash':
         for (const sym in this._allPlayerStocks)
           this._playerStockTargets[sym] = { target: Math.max(0.01, this._allPlayerStocks[sym].price * 0.5), stepsLeft: 20 };
@@ -621,7 +645,7 @@ const Companies = {
         const resets = {};
         for (const sym in this._allPlayerStocks) {
           const s = this._allPlayerStocks[sym];
-          const base = s.basePrice || 100;
+          const base = 100; // Always reset to natural base ($100); bull propaganda only affects cap
           s.price = base;
           s.history = [];
           for (let j = 0; j < 60; j++) s.history.push(base);
@@ -1076,14 +1100,14 @@ const Companies = {
     App.addBalance(-cost);
     c.upgrades[upgradeKey] = current + 1;
 
-    // Bull Propaganda: permanently raise the basePrice anchor on all stocks in this company
+    // Bull Propaganda: raises the hard cap and mania frequency (does NOT change basePrice)
     if (upgradeKey === 'bullBias' && (c.personality || 'standard') !== 'penny') {
       const newLevel = c.upgrades.bullBias;
-      const newBase = this.BULL_PROP_BASE_CAPS[Math.min(newLevel, 5)];
-      (c.stocks || []).forEach(s => {
-        if ((s.basePrice || 100) < newBase) s.basePrice = newBase;
-      });
-      Toast.show('\u{1F4C8} Bull Prop Lv' + newLevel + ' — base price raised to ' + App.formatMoney(newBase), 'var(--green-dark)', 4500);
+      const CAPS = (c.personality || 'standard') === 'extreme'
+        ? [1500, 3000, 7500, 22000, 60000, 100000]
+        : [1000, 2000, 5000, 15000, 40000, 70000];
+      const newCap = CAPS[Math.min(newLevel, 5)];
+      Toast.show('\u{1F4C8} Bull Prop Lv' + newLevel + ' — stock cap raised to ' + App.formatMoney(newCap) + '! Mania more frequent.', 'var(--green-dark)', 4500);
     }
 
     this._saveLocal();
@@ -1616,7 +1640,7 @@ const Companies = {
           <div style="text-align:right;flex-shrink:0">
             <div class="csr-price">$${(s.price || 0) < 10 ? (s.price || 0).toFixed(2) : Math.round(s.price || 0).toLocaleString()}</div>
             <div class="csr-type ${s.type === 'public' ? 'csr-type-public' : 'csr-type-private'}">${s.type}</div>
-            ${(() => { const p = c.personality || 'standard'; const bullLv = (c.upgrades && c.upgrades.bullBias) || 0; const cap = p === 'penny' ? '$100' : '$' + App.formatMoney(this.BULL_PROP_BASE_CAPS[Math.min(bullLv,5)] * (p === 'extreme' ? 15 : 10)); return `<div style="font-size:10px;color:var(--text-dim)">cap ${cap}</div>`; })()}
+            ${(() => { const p = c.personality || 'standard'; const bl = (c.upgrades && c.upgrades.bullBias) || 0; const CAPS = p === 'extreme' ? [1500,3000,7500,22000,60000,100000] : [1000,2000,5000,15000,40000,70000]; const cap = p === 'penny' ? '$100' : '$' + App.formatMoney(CAPS[Math.min(bl,5)]); return `<div style="font-size:10px;color:var(--text-dim)">cap ${cap}</div>`; })()}
           </div>
           <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
             <button class="csr-toggle-btn" onclick="Companies.togglePublic(${cIdx},${sIdx})">${s.type === 'public' ? 'Make Private' : 'Go Public'}</button>
@@ -1849,14 +1873,26 @@ const Companies = {
     return `<select id="co-found-industry" style="font-size:15px;padding:8px;border-radius:8px;background:var(--bg2);color:var(--text);border:1px solid var(--bg3);width:100%">${opts}</select>`;
   },
 
-  // Compute the effective base price used for mean reversion and hard-cap logic.
-  // Standard/Extreme: driven by Bull Propaganda upgrade level (caps at $10K at Lv5).
-  // Penny: uses $5 as the reversion anchor; absolute hard cap is $100.
+  // Natural equilibrium is always $100 for standard/extreme.
+  // Bull Propaganda raises the HARD CAP and mania frequency, NOT the equilibrium.
+  // Penny: $5 reversion anchor; absolute hard cap $100.
   _getEffectiveBase(s) {
     const p = s.companyPersonality || 'standard';
     if (p === 'penny') return 5;
-    const bullLv = (s.companyUpgrades || {}).bullBias || 0;
-    return this.BULL_PROP_BASE_CAPS[Math.min(bullLv, 5)];
+    return 100;
+  },
+
+  // Hard cap per personality × bull propaganda level
+  //   Standard: $1K → $2K → $5K → $15K → $40K → $70K
+  //   Extreme:  $1.5K → $3K → $7.5K → $22K → $60K → $100K
+  _getHardCap(s) {
+    const p = s.companyPersonality || 'standard';
+    if (p === 'penny') return 100;
+    const bullLv = Math.min((s.companyUpgrades || {}).bullBias || 0, 5);
+    const CAPS = p === 'extreme'
+      ? [1500, 3000, 7500, 22000, 60000, 100000]
+      : [1000, 2000, 5000, 15000, 40000, 70000];
+    return CAPS[bullLv];
   },
 
   // Returns 0.3–2.0 world price multiplier based on linked system stocks
