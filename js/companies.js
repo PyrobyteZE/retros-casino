@@ -415,6 +415,11 @@ const Companies = {
         if (t.stepsLeft <= 0 && (!t.holdUntil || Date.now() >= t.holdUntil)) {
           delete this._playerStockTargets[sym];
         }
+        // If admin is pushing price above $1, cancel any active forced bankruptcy
+        if (t.isAdminSet && t.target > 1 && s._forceBankrupt) {
+          s._forceBankrupt = false;
+          s._lowTicks = 0;
+        }
       } else if (t && t.holdUntil && Date.now() < t.holdUntil) {
         // Hold phase: price stays near admin-set target with tiny wobble
         s.price = Math.max(0.01, t.target * (1 + (Math.random() - 0.5) * 0.04));
@@ -626,6 +631,11 @@ const Companies = {
           // Scale steps with size of move: small nudge=15, huge jump=up to 100
           const adjSteps = Math.min(100, Math.max(15, Math.round(Math.log10(Math.max(1.01, adjRatio)) * 40)));
           this._playerStockTargets[cmd.sym] = { target: adjTarget, stepsLeft: adjSteps, isAdminSet: true, holdUntil: Date.now() + 50000 };
+          // Cancel forced bankruptcy if price is being raised back above $1
+          if (adjTarget > 1 && sAdj._forceBankrupt) {
+            sAdj._forceBankrupt = false;
+            sAdj._lowTicks = 0;
+          }
         }
         break;
       }
@@ -637,6 +647,11 @@ const Companies = {
           // Gradual incline: log-scaled steps so $1M doesn't arrive in 30s
           const setSteps = Math.min(150, Math.max(20, Math.round(Math.log10(Math.max(1.01, setRatio)) * 45)));
           this._playerStockTargets[cmd.sym] = { target: setTarget, stepsLeft: setSteps, isAdminSet: true, holdUntil: Date.now() + 50000 };
+          // Cancel forced bankruptcy if price is being raised back above $1
+          if (setTarget > 1 && sSet._forceBankrupt) {
+            sSet._forceBankrupt = false;
+            sSet._lowTicks = 0;
+          }
         }
         break;
       }
@@ -645,8 +660,12 @@ const Companies = {
           this._playerStockTargets[sym] = { target: Math.max(0.01, this._allPlayerStocks[sym].price * 0.5), stepsLeft: 20, holdUntil: Date.now() + 50000 };
         break;
       case 'boom':
-        for (const sym in this._allPlayerStocks)
-          this._playerStockTargets[sym] = { target: this._allPlayerStocks[sym].price * 2, stepsLeft: 20, holdUntil: Date.now() + 50000 };
+        for (const sym in this._allPlayerStocks) {
+          const sB = this._allPlayerStocks[sym];
+          this._playerStockTargets[sym] = { target: sB.price * 2, stepsLeft: 20, holdUntil: Date.now() + 50000 };
+          // Boom bails out all stocks from forced bankruptcy
+          if (sB._forceBankrupt) { sB._forceBankrupt = false; sB._lowTicks = 0; }
+        }
         break;
       case 'personality': {
         // Update in-memory _allPlayerStocks for all stocks in this company

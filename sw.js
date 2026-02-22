@@ -1,4 +1,4 @@
-const CACHE_NAME = 'retros-casino-v70';
+const CACHE_NAME = 'retros-casino-v71';
 const ASSETS = [
   '/',
   '/index.html',

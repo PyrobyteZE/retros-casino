@@ -5461,6 +5461,20 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   font-size: 12px;
 }
 
+/* Inline insider hint on market stock card */
+.insider-inline-hint {
+  font-size: 10px;
+  color: #00bcd4;
+  background: rgba(0,188,212,0.10);
+  border: 1px solid rgba(0,188,212,0.25);
+  border-radius: 4px;
+  padding: 2px 5px;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ===== SCANDALS ===== */
 .scandal-alert {
   margin-top: 6px;

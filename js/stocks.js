@@ -980,6 +980,7 @@ const Stocks = {
 
     // Public player stocks — same card style, inline with system stocks
     if (typeof Companies !== 'undefined') {
+      const myUidForInsider = typeof Firebase !== 'undefined' ? Firebase.uid : null;
       Object.values(Companies._allPlayerStocks)
         .filter(s => s.type === 'public' && !s._bankruptDeclared)
         .forEach(s => {
@@ -988,6 +989,27 @@ const Stocks = {
           const pct = prev > 0 ? ((s.price - prev) / prev * 100) : 0;
           const isUp = pct >= 0;
           const ownedShares = (Companies._holdings[s.symbol] || {}).shares || 0;
+
+          // Insider Intel — only shown to the owner if they have the upgrade
+          let insiderHtml = '';
+          if (myUidForInsider && s.ownerUid === myUidForInsider) {
+            const myComp = Companies._companies.find(c => c.ticker === s.companyTicker);
+            const insLv = (myComp && myComp.upgrades && myComp.upgrades.insiderAccess) || 0;
+            if (insLv > 0) {
+              const tgt = Companies._playerStockTargets[s.symbol];
+              if (tgt && tgt.stepsLeft > 0) {
+                const dir = tgt.target > s.price ? '\u{1F4C8}' : '\u{1F4C9}';
+                const movePct = Math.abs((tgt.target - s.price) / (s.price || 1) * 100);
+                let hint = dir + ' ' + (tgt.target > s.price ? 'Buy' : 'Sell') + ' pressure';
+                if (insLv >= 2) hint += ' \u2248' + movePct.toFixed(1) + '%';
+                if (insLv >= 3) hint += ' \u2192 ' + App.formatMoney(tgt.target);
+                insiderHtml = `<div class="insider-inline-hint">\u{1F50D} ${hint}</div>`;
+              } else {
+                insiderHtml = `<div class="insider-inline-hint" style="color:var(--text-dim)">\u{1F50D} Neutral</div>`;
+              }
+            }
+          }
+
           html += `<div class="stock-card">
             <div class="stock-card-header">
               <div class="stock-symbol">${esc(s.symbol)}</div>
@@ -997,6 +1019,7 @@ const Stocks = {
             <div style="font-size:11px;color:var(--text-dim);margin-bottom:2px">by ${esc(s.ownerName)}</div>
             <div class="stock-price">${App.formatMoney(s.price)}</div>
             <div class="stock-change ${isUp ? 'stock-up' : 'stock-down'}">${isUp ? '+' : ''}${pct.toFixed(2)}%</div>
+            ${insiderHtml}
             <canvas id="spark-p-${esc(s.symbol)}" class="stock-sparkline" width="80" height="30"></canvas>
             <div class="stock-actions">
               <button class="stock-buy-btn" onclick="Companies.promptBuy('${s.symbol}')">Buy</button>
