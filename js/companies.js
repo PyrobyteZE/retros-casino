@@ -636,6 +636,30 @@ const Companies = {
         for (const sym in this._allPlayerStocks)
           this._playerStockTargets[sym] = { target: this._allPlayerStocks[sym].price * 2, stepsLeft: 20 };
         break;
+      case 'personality': {
+        // Update in-memory _allPlayerStocks for all stocks in this company
+        for (const sym in this._allPlayerStocks) {
+          const s = this._allPlayerStocks[sym];
+          if (s.companyTicker === cmd.ticker && s.ownerUid === cmd.ownerUid) {
+            s.companyPersonality = cmd.personality;
+            s.vol = cmd.vol;
+            if (cmd.basePrice) s.basePrice = cmd.basePrice;
+          }
+        }
+        // If this is the owner's client, also update _companies so _pushToFirebase doesn't revert the change
+        if (typeof Firebase !== 'undefined' && Firebase.uid === cmd.ownerUid) {
+          this._companies.forEach(c => {
+            if (c.ticker !== cmd.ticker) return;
+            c.personality = cmd.personality;
+            (c.stocks || []).forEach(s => {
+              s.vol = cmd.vol;
+              if (cmd.basePrice) s.basePrice = cmd.basePrice;
+            });
+          });
+          this._saveLocal();
+        }
+        break;
+      }
       case 'forceBankrupt':
         if (cmd.sym && this._allPlayerStocks[cmd.sym]) {
           this._declareBankruptcy(cmd.sym);
@@ -707,14 +731,30 @@ const Companies = {
       stocks: b.stocks || [{ symbol: ticker, name: (b.name || ticker) + ' Stock', type: 'private', price: 1, vol: 0.05, basePrice: b.stocks?.[0]?.basePrice || 100 }],
       mainIdx: b.mainIdx || 0,
     };
-    // Clear processed flag so future bankruptcies on this ticker are handled correctly
-    if (this._processedBankrupt) this._processedBankrupt.delete(ticker);
-    this._companies.push(company);
-    this._saveLocal();
-    this._pushToFirebase();
-    if (typeof Firebase !== 'undefined') Firebase.bailOutCompany(ticker);
-    App.save();
-    this._triggerRender();
+
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      // Atomically claim the bankruptcy record — if someone else already got it, abort
+      Firebase.bailOutCompany(ticker).then(claimed => {
+        if (!claimed) {
+          App.addBalance(b.debtCost); // Refund
+          Toast.show('\u26A0\uFE0F Already acquired by another player!', '#c0392b', 4000);
+          return;
+        }
+        if (this._processedBankrupt) this._processedBankrupt.delete(ticker);
+        this._companies.push(company);
+        this._saveLocal();
+        this._pushToFirebase();
+        App.save();
+        this._triggerRender();
+      });
+    } else {
+      // Offline fallback
+      if (this._processedBankrupt) this._processedBankrupt.delete(ticker);
+      this._companies.push(company);
+      this._saveLocal();
+      App.save();
+      this._triggerRender();
+    }
   },
 
   // === SCANDALS ===

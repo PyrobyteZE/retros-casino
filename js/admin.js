@@ -238,6 +238,7 @@ const Admin = {
       set('admin-clicks', App.totalClicks);
     } else if (tab === 'market') {
       this.renderPlayerStockControls();
+      this.renderPlayerCoinControls();
       this.renderStockControls();
       this.renderCryptoControls();
     } else if (tab === 'data') {
@@ -375,12 +376,28 @@ const Admin = {
   _renderMarketTab() {
     return `
       <div class="admin-section">
+        <h3>Hunger Controls</h3>
+        <div class="admin-actions">
+          <button class="admin-btn win-btn" onclick="Admin.feedEveryone(100)">Feed Everyone (100%)</button>
+          <button class="admin-btn danger" onclick="Admin.feedEveryone(10)">Starve Everyone (10%)</button>
+        </div>
+        <div class="admin-row">
+          <label>Set My Hunger:</label>
+          <input type="number" id="admin-hunger-val" min="0" max="100" value="100" style="width:60px">
+          <button onclick="Admin.setHunger()">Set</button>
+        </div>
+      </div>
+      <div class="admin-section">
         <h3>Player Stocks</h3>
         <div class="admin-actions">
           <button class="admin-btn win-btn" onclick="Admin.playerStocksBoom()">Player Boom (+100%)</button>
           <button class="admin-btn danger" onclick="Admin.playerStocksCrash()">Player Crash (-50%)</button>
         </div>
         <div id="admin-player-stock-controls" class="admin-stock-controls"></div>
+      </div>
+      <div class="admin-section">
+        <h3>Player Coins</h3>
+        <div id="admin-player-coin-controls" class="admin-stock-controls"></div>
       </div>
       <div class="admin-section">
         <h3>Stock Market</h3>
@@ -408,7 +425,7 @@ const Admin = {
         <div class="admin-actions">
           <button class="admin-btn win-btn" onclick="Admin.cryptoPump()">Pump All (3x)</button>
           <button class="admin-btn danger" onclick="Admin.cryptoDump()">Dump All (-70%)</button>
-          <button class="admin-btn win-btn" onclick="Admin.cryptoGiveCoins()">+10 BTC +100 ETH +100K DOGE</button>
+          <button class="admin-btn win-btn" onclick="Admin.cryptoGiveCoins()">Give Coins (BTC+ETH+DOGE+...)</button>
           <button class="admin-btn win-btn" onclick="Admin.cryptoMaxRigs()">Max All Rigs</button>
           <button class="admin-btn win-btn" onclick="Admin.cryptoMaxUpgrades()">Max Upgrades + Cooling</button>
           <button class="admin-btn" onclick="Admin.cryptoResetHeat()">Reset Heat</button>
@@ -862,6 +879,22 @@ const Admin = {
     this.renderPlayerStockControls();
   },
 
+  feedEveryone(value) {
+    // Broadcast admin hunger command to all players
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.db.ref('adminHunger').set({ value, ts: Date.now() });
+    }
+    // Apply locally
+    if (typeof Food !== 'undefined') Food.applyAdminHunger(value);
+    Toast.show(value >= 50 ? '\u{1F357} Admin: Everyone fed to ' + value + '%!' : '\u26A0\uFE0F Admin: Everyone starved to ' + value + '%!', '#27ae60');
+  },
+
+  setHunger() {
+    const val = parseInt(document.getElementById('admin-hunger-val')?.value) || 100;
+    const clamped = Math.max(0, Math.min(100, val));
+    if (typeof Food !== 'undefined') Food.applyAdminHunger(clamped);
+  },
+
   playerStocksBoom() {
     if (typeof Companies === 'undefined') return;
     const cmd = { type: 'boom' };
@@ -926,6 +959,67 @@ const Admin = {
     if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminCryptoCommand({ type: 'target', idx, target: val, steps: 10 });
   },
 
+  // === Player Coin Admin ===
+  renderPlayerCoinControls() {
+    const container = document.getElementById('admin-player-coin-controls');
+    if (!container || typeof Crypto === 'undefined') return;
+    const focused = document.activeElement;
+    if (focused && focused.id && focused.id.startsWith('admin-pcoin-price-')) return;
+    const coins = Crypto._getPublicPlayerCoins();
+    if (!coins.length) { container.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:8px">No public player coins</div>'; return; }
+    let html = '<div class="admin-stock-grid">';
+    coins.forEach(({ uid, coin }) => {
+      const sym = coin.symbol;
+      const price = Crypto._playerCoinPrices[sym] || coin.baseValue || 100;
+      const safeSym = sym.replace(/'/g, '');
+      html += `<div class="admin-stock-row">
+        <span class="admin-stock-sym">${coin.emoji || '\u{1FA99}'} ${safeSym}</span>
+        <span class="admin-stock-price" style="font-size:11px">${App.formatMoney(price)} <span style="color:var(--text-dim)">${coin.ownerName || ''}</span></span>
+        <div class="admin-stock-btns">
+          <button class="rig-btn lose" onclick="Admin.playerCoinAdjust('${safeSym}',0.5)">-50%</button>
+          <button class="rig-btn lose" onclick="Admin.playerCoinAdjust('${safeSym}',0.8)">-20%</button>
+          <button class="rig-btn win" onclick="Admin.playerCoinAdjust('${safeSym}',1.25)">+25%</button>
+          <button class="rig-btn win" onclick="Admin.playerCoinAdjust('${safeSym}',2)">+100%</button>
+          <button class="rig-btn danger" style="background:#8b0000;color:#fff" onclick="Admin.playerCoinRugPull('${safeSym}')">Rug Pull</button>
+        </div>
+        <div class="admin-stock-set">
+          <input type="number" id="admin-pcoin-price-${safeSym}" value="${price.toFixed(4)}" min="0.0001" step="0.0001" style="width:80px">
+          <button onclick="Admin.playerCoinSetPrice('${safeSym}')">Set</button>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+  },
+
+  playerCoinAdjust(sym, mult) {
+    if (typeof Crypto === 'undefined') return;
+    const cmd = { type: 'pcoin-adjust', sym, mult };
+    Crypto.applyPlayerCoinAdminCommand(cmd);
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminCoinCommand(cmd);
+    this.renderPlayerCoinControls();
+  },
+
+  playerCoinSetPrice(sym) {
+    const input = document.getElementById('admin-pcoin-price-' + sym);
+    if (!input) return;
+    const val = parseFloat(input.value);
+    if (isNaN(val) || val < 0.0001) return;
+    const cmd = { type: 'pcoin-set', sym, target: val };
+    if (typeof Crypto !== 'undefined') Crypto.applyPlayerCoinAdminCommand(cmd);
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminCoinCommand(cmd);
+    this.renderPlayerCoinControls();
+  },
+
+  playerCoinRugPull(sym) {
+    if (!confirm(`Rug pull ${sym}? This crashes the price to $0.0001 and delists the coin.`)) return;
+    const cmd = { type: 'pcoin-rugPull', sym };
+    if (typeof Crypto !== 'undefined') Crypto.applyPlayerCoinAdminCommand(cmd);
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminCoinCommand(cmd);
+    Toast.show(`\u{1F4A5} Rug pull executed on ${sym}!`, '#c0392b', 4000);
+    this.renderPlayerCoinControls();
+  },
+
   renderCryptoControls() {
     const container = document.getElementById('admin-crypto-controls');
     if (!container || typeof Crypto === 'undefined') return;
@@ -953,9 +1047,14 @@ const Admin = {
 
   cryptoGiveCoins() {
     if (typeof Crypto === 'undefined') return;
-    Crypto.wallet.BTC += 10;
-    Crypto.wallet.ETH += 100;
-    Crypto.wallet.DOGE += 100000;
+    Crypto.wallet.BTC = (Crypto.wallet.BTC || 0) + 10;
+    Crypto.wallet.ETH = (Crypto.wallet.ETH || 0) + 100;
+    Crypto.wallet.DOGE = (Crypto.wallet.DOGE || 0) + 100000;
+    Crypto.wallet.SOL = (Crypto.wallet.SOL || 0) + 50;
+    Crypto.wallet.XRP = (Crypto.wallet.XRP || 0) + 10000;
+    Crypto.wallet.PEPE = (Crypto.wallet.PEPE || 0) + 1000000000;
+    Crypto.wallet.LINK = (Crypto.wallet.LINK || 0) + 500;
+    Crypto.wallet.ADA = (Crypto.wallet.ADA || 0) + 5000;
     if (App.currentScreen === 'crypto') Crypto.render();
   },
 
@@ -987,10 +1086,13 @@ const Admin = {
 
   cryptoResetAll() {
     if (typeof Crypto === 'undefined') return;
-    Crypto.wallet = { BTC: 0, ETH: 0, DOGE: 0 };
-    Crypto.totalMined = { BTC: 0, ETH: 0, DOGE: 0 };
+    const emptyW = {};
+    Crypto.coins.forEach(c => { emptyW[c.symbol] = 0; });
+    Crypto.wallet = { ...emptyW };
+    Crypto.totalMined = { ...emptyW };
     Crypto.rigOwned = Crypto.rigs.map(() => false);
     Crypto.rigLevels = Crypto.rigs.map(() => 0);
+    Crypto.rigTargetCoins = Crypto.rigs.map((r, i) => Crypto.coins.findIndex(c => c.symbol === r.coin));
     Crypto.upgrades = { cpu: 0, gpu: 0, overclock: 0 };
     Crypto.cooling = Crypto.coolingUpgrades.map(() => false);
     Crypto.heat = 0;
@@ -1231,7 +1333,13 @@ const Admin = {
     const newPersonality = pSel.value;
     if (!confirm(`Change [${ticker}] personality to ${newPersonality}?`)) return;
     if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
+    const PD = { standard: { basePrice: 100, vol: 0.05 }, extreme: { basePrice: 100, vol: 0.18 }, penny: { basePrice: 0.50, vol: 0.25 } };
+    const pd = PD[newPersonality] || PD.standard;
+    const cmd = { type: 'personality', ticker, ownerUid, personality: newPersonality, vol: pd.vol, basePrice: pd.basePrice };
     Firebase.adminSetCompanyPersonality(ownerUid, ticker, newPersonality).then(() => {
+      // Broadcast so the owner's client updates _companies (prevents _pushToFirebase from reverting the change)
+      if (typeof Companies !== 'undefined') Companies.applyAdminCommand(cmd);
+      Firebase.pushAdminPlayerStockCommand(cmd);
       this.renderPersonalitySection();
       this.renderPlayerStockControls();
     });

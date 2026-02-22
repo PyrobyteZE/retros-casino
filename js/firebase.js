@@ -35,11 +35,13 @@ const Firebase = {
   // Stock/Crypto sync
   _isStockAuthority: false,
   _isCryptoAuthority: false,
+  _isPlayerCoinAuthority: false,
   _stockAuthorityInterval: null,
   _cryptoAuthorityInterval: null,
   _lastStockCmdTs: 0,
   _lastCryptoCmdTs: 0,
   _lastPlayerStockCmdTs: 0,
+  _lastPlayerCoinCmdTs: 0,
   _lastTradeInfluenceTs: {},
   _chatUnreadCount: 0,
   _lbTab: 'earned',
@@ -170,6 +172,12 @@ const Firebase = {
     this._listenDmUnread();
     // Admin list — listen so granted players get admin automatically
     this._listenAdmins();
+    // Admin hunger broadcast
+    if (typeof Food !== 'undefined') this.listenAdminHunger(val => Food.applyAdminHunger(val));
+    // Player coin prices
+    this.listenPlayerCoinPrices(prices => { if (typeof Crypto !== 'undefined') Crypto.applyServerPlayerCoinPrices(prices); });
+    // Listen player coins catalog
+    if (typeof Crypto !== 'undefined') this.listenPlayerCoins(data => Crypto.updatePlayerCoins(data));
     // Init Firebase-dependent features in other modules
     if (typeof Stocks !== 'undefined') Stocks._initFirebaseFeatures();
     if (typeof Loans !== 'undefined' && Loans._counterLoan && Loans._counterLoan.amount > 0) {
@@ -1007,6 +1015,13 @@ const Firebase = {
         if (isAdminTab && !this._isCryptoAuthority) this._tryClaimCryptoAuthority();
       }
     }, err => console.error('Firebase cryptoPrices/adminCommand read denied:', err.code));
+    // Player coin admin commands — all clients apply (no authority needed; just price adjustment)
+    this.db.ref('playerCoinPrices/adminCommand').on('value', snap => {
+      const cmd = snap.val();
+      if (!cmd || !cmd.ts || cmd.ts <= this._lastPlayerCoinCmdTs) return;
+      this._lastPlayerCoinCmdTs = cmd.ts;
+      if (typeof Crypto !== 'undefined') Crypto.applyPlayerCoinAdminCommand(cmd);
+    }, err => console.error('Firebase playerCoinPrices/adminCommand read denied:', err.code));
   },
 
   // === BOUNTY BOARD ===
@@ -1090,6 +1105,12 @@ const Firebase = {
       .catch(err => console.error('Firebase adminCryptoCommand write error:', err));
   },
 
+  pushAdminCoinCommand(cmd) {
+    if (!this.isOnline()) return;
+    this.db.ref('playerCoinPrices/adminCommand').set({ ...cmd, ts: Date.now() })
+      .catch(err => console.error('Firebase adminCoinCommand write error:', err));
+  },
+
   // === PLAYER COMPANIES ===
   listenPlayerStocks(callback) {
     if (!this.isOnline()) return;
@@ -1148,9 +1169,13 @@ const Firebase = {
   },
 
   bailOutCompany(ticker) {
-    if (!this.isOnline()) return Promise.resolve();
-    return this.db.ref('bankruptCompanies/' + ticker).remove()
-      .catch(err => console.error('Firebase bailOutCompany error:', err));
+    if (!this.isOnline()) return Promise.resolve(false);
+    const ref = this.db.ref('bankruptCompanies/' + ticker);
+    return ref.transaction(current => {
+      if (!current) return; // Already claimed — abort transaction
+      return null;          // Delete (claim it)
+    }).then(result => result.committed)
+      .catch(err => { console.error('Firebase bailOutCompany error:', err); return false; });
   },
 
   // === COMPANY SALES ===
@@ -1940,5 +1965,68 @@ const Firebase = {
   removeShareOffer(recipientUid, offerId) {
     if (!this.isOnline()) return Promise.resolve();
     return this.db.ref('privateShareOffers/' + recipientUid + '/' + offerId).remove();
+  },
+
+  // === HUNGER ADMIN BROADCAST ===
+  listenAdminHunger(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('adminHunger').on('value', snap => {
+      const data = snap.val();
+      if (data && typeof data.value === 'number') cb(data.value);
+    }, err => console.error('adminHunger read error:', err.code));
+  },
+
+  // === PLAYER COINS ===
+  createPlayerCoin(coinData) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('playerCoins/' + this.uid).set({ ...coinData, ownerUid: this.uid, foundedAt: Date.now() });
+  },
+
+  updatePlayerCoin(uid, updates) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('playerCoins/' + uid).update(updates);
+  },
+
+  removePlayerCoin(uid) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('playerCoins/' + uid).remove();
+  },
+
+  listenPlayerCoins(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('playerCoins').on('value', snap => cb(snap.val() || {}),
+      err => console.error('playerCoins read error:', err.code));
+  },
+
+  pushPlayerCoinPrices(prices, sessionId) {
+    if (!this.isOnline() || !this._isPlayerCoinAuthority) return;
+    this.db.ref('playerCoinPrices/data').set({
+      prices, timestamp: Date.now(), sessionId: sessionId || this._sessionId,
+    }).catch(err => console.error('playerCoinPrices write error:', err));
+  },
+
+  listenPlayerCoinPrices(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('playerCoinPrices/data').on('value', snap => {
+      const d = snap.val();
+      if (d && d.prices && d.sessionId !== this._sessionId) cb(d.prices);
+    }, err => console.error('playerCoinPrices read error:', err.code));
+  },
+
+  tradeInfluenceCoin(sym, dir) {
+    if (!this.isOnline()) return;
+    const ref = this.db.ref('tradeInfluenceCoin/' + sym);
+    ref.transaction(cur => {
+      const d = cur || { dir, sellCount: 0, buyCount: 0, pct: 0, ts: Date.now() };
+      if (dir === 'buy') d.buyCount = (d.buyCount || 0) + 1;
+      else d.sellCount = (d.sellCount || 0) + 1;
+      d.ts = Date.now();
+      return d;
+    });
+  },
+
+  listenTradeInfluenceCoin(sym, cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('tradeInfluenceCoin/' + sym).on('value', snap => cb(snap.val()));
   },
 };

@@ -183,7 +183,11 @@ const Slots = {
         strip.style.top = '0px';
       }
 
-      const payout = this.calculatePayout(newGrid, bet, lines);
+      let payout = this.calculatePayout(newGrid, bet, lines);
+      // Apply hunger penalty to payout
+      if (typeof App !== 'undefined' && payout > 0) {
+        payout = Math.floor(payout * (1 - App.getHungerPenalty()));
+      }
       if (payout > 0) {
         App.addBalance(payout);
         this.showResult('Won ' + App.formatMoney(payout) + '!', 'win');

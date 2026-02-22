@@ -359,14 +359,42 @@ const Stocks = {
       }
     }
 
+    // Add crypto coins section if enabled
+    const showCoins = typeof Settings === 'undefined' || Settings.options.showCoinTicker !== false;
+    if (showCoins && typeof Crypto !== 'undefined' && Crypto.coinPrices && Crypto.coinPrices.length) {
+      items.push({ text: '\u25CF COINS \u25CF', dir: 'flat', isSep: true });
+      Crypto.coins.forEach((coin, i) => {
+        const price = Crypto.coinPrices[i];
+        const hist = Crypto.priceHistory[i] || [];
+        const prev = hist.length >= 2 ? hist[hist.length - 2] : price;
+        const pct = prev > 0 ? ((price - prev) / prev * 100) : 0;
+        const dir = pct > 0.001 ? 'up' : pct < -0.001 ? 'dn' : 'flat';
+        const arrow = dir === 'up' ? '\u25B2' : dir === 'dn' ? '\u25BC' : '\u25A0';
+        const pctStr = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+        items.push({ text: `${coin.symbol} ${this._tickerFmtPrice(price)} ${arrow}${pctStr}`, dir });
+      });
+      // Public player coins
+      for (const sym in Crypto._playerCoinPrices) {
+        const price = Crypto._playerCoinPrices[sym];
+        const hist = Crypto._playerCoinHistory[sym] || [price, price];
+        const prev = hist.length >= 2 ? hist[hist.length - 2] : price;
+        const pct = prev > 0 ? ((price - prev) / prev * 100) : 0;
+        const dir = pct > 0.001 ? 'up' : pct < -0.001 ? 'dn' : 'flat';
+        const arrow = dir === 'up' ? '\u25B2' : dir === 'dn' ? '\u25BC' : '\u25A0';
+        const pctStr = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+        items.push({ text: `${sym} ${this._tickerFmtPrice(price)} ${arrow}${pctStr} \u{1F464}`, dir });
+      }
+    }
+
     // Update existing spans in-place — preserves scroll offset, no jump
-    const existing = el.querySelectorAll('.ticker-item');
+    const existing = el.querySelectorAll('.ticker-item, .ticker-separator');
     if (existing.length === items.length * 2) {
       items.forEach((item, i) => {
+        const cls = item.isSep ? 'ticker-separator' : `ticker-item ticker-${item.dir}`;
         existing[i].textContent = item.text;
-        existing[i].className = `ticker-item ticker-${item.dir}`;
+        existing[i].className = cls;
         existing[i + items.length].textContent = item.text;
-        existing[i + items.length].className = `ticker-item ticker-${item.dir}`;
+        existing[i + items.length].className = cls;
       });
       this._startTickerAnim();
       return;
@@ -378,9 +406,12 @@ const Stocks = {
       this._tickerAnimFrame = null;
     }
     this._tickerOffset = 0;
-    const html = items.map(item =>
-      `<span class="ticker-item ticker-${item.dir}">${item.text}</span>`
+    const buildHtml = (items) => items.map(item =>
+      item.isSep
+        ? `<span class="ticker-separator">${item.text}</span>`
+        : `<span class="ticker-item ticker-${item.dir}">${item.text}</span>`
     ).join('<span class="ticker-sep"> | </span>');
+    const html = buildHtml(items);
     el.innerHTML = `<div class="ticker-track">${html}<span class="ticker-sep">&nbsp;&nbsp;&nbsp;</span>${html}</div>`;
     this._startTickerAnim();
   },

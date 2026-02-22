@@ -61,6 +61,14 @@ const Crash = {
       this.crashPoint = Math.max(1, 0.99 / Math.random());
     }
 
+    // Apply hunger penalty: reduce crash point (game crashes sooner)
+    if (typeof App !== 'undefined') {
+      const penalty = App.getHungerPenalty();
+      if (penalty > 0 && this.crashPoint < 900000) {
+        this.crashPoint = Math.max(1.01, this.crashPoint * (1 - penalty * 0.5));
+      }
+    }
+
     const btn = document.getElementById('crash-btn');
     btn.textContent = 'Cash Out';
     btn.style.background = '#ff5252';

@@ -91,7 +91,9 @@ const Clicker = {
 
   getEarningsMultiplier() {
     const r = this.getRebirths();
-    return Math.min(5, 1 + r * 0.5); // +0.5x per rebirth, capped at 5x
+    let mult = Math.min(5, 1 + r * 0.5); // +0.5x per rebirth, capped at 5x
+    if (typeof App !== 'undefined') mult *= (1 - App.getHungerPenalty());
+    return mult;
   },
 
   getCostDiscount() {
@@ -192,10 +194,13 @@ const Clicker = {
 
     // Reset crypto
     if (typeof Crypto !== 'undefined') {
-      Crypto.wallet = { BTC: 0, ETH: 0, DOGE: 0 };
-      Crypto.totalMined = { BTC: 0, ETH: 0, DOGE: 0 };
+      const emptyWallet = {};
+      Crypto.coins.forEach(c => { emptyWallet[c.symbol] = 0; });
+      Crypto.wallet = { ...emptyWallet };
+      Crypto.totalMined = { ...emptyWallet };
       Crypto.rigOwned = Crypto.rigs.map(() => false);
       Crypto.rigLevels = Crypto.rigs.map(() => 0);
+      Crypto.rigTargetCoins = Crypto.rigs.map((r, i) => Crypto.coins.findIndex(c => c.symbol === r.coin));
       Crypto.upgrades = { cpu: 0, gpu: 0, overclock: 0 };
       Crypto.cooling = Crypto.coolingUpgrades.map(() => false);
       Crypto.heat = 0;

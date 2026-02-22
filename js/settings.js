@@ -25,6 +25,7 @@ const Settings = {
     showStreaks: true,
     fastAnimations: false,
     showStockTicker: false,
+    showCoinTicker: true,
     newsPopups: false,
   },
 
@@ -247,6 +248,14 @@ const Settings = {
             <span class="toggle-slider"></span>
           </label>
           <span class="rig-hint">Live price bar</span>
+        </div>
+        <div class="settings-row">
+          <label>Coin Ticker:</label>
+          <label class="toggle-switch">
+            <input type="checkbox" ${this.options.showCoinTicker !== false ? 'checked' : ''} onchange="Settings.setOption('showCoinTicker', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="rig-hint">Show crypto in ticker</span>
         </div>
         <div class="settings-row">
           <label>News Popups:</label>

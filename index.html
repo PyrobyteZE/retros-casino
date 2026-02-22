@@ -19,6 +19,10 @@
       <div id="profile-display" class="profile-display"></div>
       <div id="vip-level" class="hidden">VIP 0</div>
       <div id="debt-badge" class="hidden">-$0</div>
+      <div id="hunger-hud" class="hunger-hud" onclick="Food.openShop()" title="Hunger — tap to eat">
+        &#x1F357; <div class="hunger-bar-wrap"><div id="hunger-bar"></div></div>
+        <span id="hunger-pct">100%</span>
+      </div>
       <div id="balance-display">$<span id="balance">0</span></div>
       <button id="settings-btn" onclick="App.showScreen('settings')" title="Settings">&#x2699;&#xFE0F;</button>
     </header>
@@ -683,9 +687,10 @@
       <section id="screen-crypto" class="screen">
         <div class="game-container">
           <div class="crypto-tabs">
-            <button class="crypto-tab-btn active" data-tab="mine" onclick="Crypto.setTab('mine')">Mine</button>
-            <button class="crypto-tab-btn" data-tab="rigs" onclick="Crypto.setTab('rigs')">Rigs</button>
-            <button class="crypto-tab-btn" data-tab="exchange" onclick="Crypto.setTab('exchange')">Exchange</button>
+            <button class="crypto-tab-btn active" data-tab="market" onclick="Crypto.setTab('market')">Market</button>
+            <button class="crypto-tab-btn" data-tab="mining" onclick="Crypto.setTab('mining')">Mining</button>
+            <button class="crypto-tab-btn" data-tab="mycoin" onclick="Crypto.setTab('mycoin')">My Coin</button>
+            <button class="crypto-tab-btn" data-tab="browse" onclick="Crypto.setTab('browse')">Browse</button>
           </div>
           <div id="crypto-content"></div>
         </div>
@@ -829,6 +834,7 @@
   <script src="js/crime.js"></script>
   <script src="js/pets.js"></script>
   <script src="js/stocks.js"></script>
+  <script src="js/food.js"></script>
   <script src="js/crypto.js"></script>
   <script src="js/companies.js"></script>
   <script src="js/firebase.js"></script>

@@ -290,6 +290,15 @@ const CoinFlip = {
       if (typeof Loans !== 'undefined' && Loans.useRiggedDeck('coinflip')) {
         winChance = Math.min(0.95, winChance + 0.05);
       }
+      // Apply hunger penalty
+      if (typeof App !== 'undefined') {
+        const penalty = App.getHungerPenalty();
+        winChance = winChance * (1 - penalty);
+        // Apply active food luck boost
+        if (App.luckBoostPct > 0 && App.luckBoostUntil > Date.now()) {
+          winChance = Math.min(0.95, winChance + App.luckBoostPct);
+        }
+      }
       result = Math.random() < winChance ? choice : (choice === 'heads' ? 'tails' : 'heads');
     }
     const won = choice === result;

@@ -1,57 +1,79 @@
 // Crypto Mining System - Click + Idle
 const Crypto = {
-  // Minable coins
+  // System coins (8 total)
   coins: [
-    { symbol: 'BTC',  name: 'BitCoin',   baseValue: 500,  color: '#f7931a' },
-    { symbol: 'ETH',  name: 'EtherCoin', baseValue: 50,   color: '#627eea' },
-    { symbol: 'DOGE', name: 'DogeCoin',  baseValue: 0.10, color: '#c2a633' },
+    { symbol: 'BTC',  name: 'Bitcoin',    baseValue: 500,    vol: 0.03, color: '#f7931a', emoji: '\u20BF' },
+    { symbol: 'ETH',  name: 'Ethereum',   baseValue: 50,     vol: 0.04, color: '#627eea', emoji: '\u039E' },
+    { symbol: 'DOGE', name: 'Dogecoin',   baseValue: 0.10,   vol: 0.08, color: '#c2a633', emoji: '\u{1F436}' },
+    { symbol: 'SOL',  name: 'Solana',     baseValue: 150,    vol: 0.06, color: '#9945ff', emoji: '\u25CE' },
+    { symbol: 'XRP',  name: 'Ripple',     baseValue: 0.50,   vol: 0.04, color: '#346aa9', emoji: '\u2715' },
+    { symbol: 'PEPE', name: 'PepeCoin',   baseValue: 0.0001, vol: 0.20, color: '#479747', emoji: '\u{1F438}' },
+    { symbol: 'LINK', name: 'Chainlink',  baseValue: 15,     vol: 0.07, color: '#2a5ada', emoji: '\u2B21' },
+    { symbol: 'ADA',  name: 'Cardano',    baseValue: 0.45,   vol: 0.05, color: '#0d1e2d', emoji: '\u20B3' },
   ],
 
   // Mining rigs (idle income)
   rigs: [
-    { name: 'USB Miner',   icon: '\u{1F50C}', cost: 1000,     baseRate: 0.0001, coin: 'BTC',  maxLevel: 10 },
-    { name: 'Gaming PC',   icon: '\u{1F5A5}\uFE0F', cost: 10000,    baseRate: 0.001,  coin: 'ETH',  maxLevel: 10 },
-    { name: 'Mining Rig',  icon: '\u2699\uFE0F',  cost: 100000,   baseRate: 0.01,   coin: 'ETH',  maxLevel: 10 },
-    { name: 'ASIC Miner',  icon: '\u{1F4A0}', cost: 500000,   baseRate: 0.005,  coin: 'BTC',  maxLevel: 10 },
-    { name: 'Server Farm',icon: '\u{1F3ED}', cost: 5000000,  baseRate: 0.05,   coin: 'BTC',  maxLevel: 10 },
-    { name: 'DOGE Farm',   icon: '\u{1F436}', cost: 50000,    baseRate: 10,     coin: 'DOGE', maxLevel: 10 },
+    { name: 'USB Miner',   icon: '\u{1F50C}',        cost: 1000,    baseRate: 0.0001, coin: 'BTC',  maxLevel: 10 },
+    { name: 'Gaming PC',   icon: '\u{1F5A5}\uFE0F',  cost: 10000,   baseRate: 0.001,  coin: 'ETH',  maxLevel: 10 },
+    { name: 'Mining Rig',  icon: '\u2699\uFE0F',      cost: 100000,  baseRate: 0.01,   coin: 'ETH',  maxLevel: 10 },
+    { name: 'ASIC Miner',  icon: '\u{1F4A0}',         cost: 500000,  baseRate: 0.005,  coin: 'BTC',  maxLevel: 10 },
+    { name: 'Server Farm', icon: '\u{1F3ED}',         cost: 5000000, baseRate: 0.05,   coin: 'BTC',  maxLevel: 10 },
+    { name: 'DOGE Farm',   icon: '\u{1F436}',         cost: 50000,   baseRate: 10,     coin: 'DOGE', maxLevel: 10 },
   ],
 
   // Click mining upgrades
   clickUpgrades: [
-    { name: 'Better CPU',   desc: '+50% hash rate/level', maxLevel: 10, baseCost: 5000,    costMult: 2, effect: 0.5 },
-    { name: 'GPU Boost',    desc: '+100% hash rate/level', maxLevel: 5,  baseCost: 50000,   costMult: 3, effect: 1.0 },
-    { name: 'Overclocking', desc: '5% chance 10x block/level', maxLevel: 5,  baseCost: 100000,  costMult: 3, effect: 0.05 },
+    { name: 'Better CPU',   desc: '+50% hash rate/level', maxLevel: 10, baseCost: 5000,   costMult: 2, effect: 0.5 },
+    { name: 'GPU Boost',    desc: '+100% hash rate/level', maxLevel: 5,  baseCost: 50000,  costMult: 3, effect: 1.0 },
+    { name: 'Overclocking', desc: '5% chance 10x block/level', maxLevel: 5, baseCost: 100000, costMult: 3, effect: 0.05 },
   ],
 
   // Cooling upgrades
   coolingUpgrades: [
-    { name: 'Case Fans',     cost: 5000,     heatCapBonus: 20 },
-    { name: 'Liquid Cooling', cost: 50000,   heatCapBonus: 30 },
-    { name: 'Cryo System',   cost: 500000,  heatCapBonus: 50 },
+    { name: 'Case Fans',      cost: 5000,   heatCapBonus: 20 },
+    { name: 'Liquid Cooling', cost: 50000,  heatCapBonus: 30 },
+    { name: 'Cryo System',    cost: 500000, heatCapBonus: 50 },
   ],
 
   // State
-  wallet: { BTC: 0, ETH: 0, DOGE: 0 },
-  totalMined: { BTC: 0, ETH: 0, DOGE: 0 },
-  rigOwned: [],     // bool[]
-  rigLevels: [],    // number[]
+  wallet: {},
+  totalMined: {},
+  rigOwned: [],
+  rigLevels: [],
+  rigTargetCoins: [], // index into coins[] per rig
   upgrades: { cpu: 0, gpu: 0, overclock: 0 },
-  cooling: [],      // bool[] for cooling upgrades
-  heat: 0,          // 0-100
-  coinPrices: [],   // current exchange rates
-  priceHistory: [], // last 30 per coin
-  activeTab: 'mine',
+  cooling: [],
+  heat: 0,
+  coinPrices: [],
+  priceHistory: [],
+  activeTab: 'market',
   tickTimer: null,
   priceTimer: null,
   initialized: false,
   mineAnimating: false,
-  _priceTargets: [],  // admin gradual targets
+  _priceTargets: [],
+
+  // Player coins
+  _playerCoins: {},   // { [uid]: { name, symbol, emoji, supply, ... } }
+  _playerCoinPrices: {}, // { [SYM]: price }
+  _playerCoinHistory: {}, // { [SYM]: price[] }
+  _myPlayerCoin: null,    // local copy of own coin
+  _playerCoinHoldings: {}, // { [SYM]: amount }
+  _playerCoinTickTimer: null,
 
   init() {
     if (!this.initialized) {
+      // Init wallet for all system coins
+      this.wallet = {};
+      this.totalMined = {};
+      this.coins.forEach(c => {
+        this.wallet[c.symbol] = 0;
+        this.totalMined[c.symbol] = 0;
+      });
       this.rigOwned = this.rigs.map(() => false);
       this.rigLevels = this.rigs.map(() => 0);
+      this.rigTargetCoins = this.rigs.map((r, i) => this.coins.findIndex(c => c.symbol === r.coin));
       this.cooling = this.coolingUpgrades.map(() => false);
       this.coinPrices = this.coins.map(c => c.baseValue);
       this.priceHistory = this.coins.map(c => {
@@ -64,6 +86,7 @@ const Crypto = {
     }
     this.startTick();
     this.startPriceTick();
+    this._startPlayerCoinTick();
     this.render();
   },
 
@@ -77,16 +100,18 @@ const Crypto = {
     this.priceTimer = setInterval(() => this.priceTick(), 5000);
   },
 
+  _startPlayerCoinTick() {
+    if (this._playerCoinTickTimer) clearInterval(this._playerCoinTickTimer);
+    this._playerCoinTickTimer = setInterval(() => this._tickPlayerCoinPrices(), 6000);
+  },
+
   tick() {
-    // Heat management
     const totalHeatGen = this._getHeatGeneration();
     const heatDissipation = 2 + this._getCoolingBonus() * 0.5;
     this.heat = Math.max(0, Math.min(100, this.heat + totalHeatGen - heatDissipation));
 
-    // Efficiency based on heat
     const efficiency = this._getHeatEfficiency();
 
-    // Random rig shutdown at >95% heat
     if (this.heat > 95 && Math.random() < 0.1) {
       const ownedRigs = this.rigOwned.map((o, i) => o ? i : -1).filter(i => i >= 0);
       if (ownedRigs.length > 0) {
@@ -96,13 +121,25 @@ const Crypto = {
       }
     }
 
-    // Idle rig income
+    // Apply hunger penalty to passive income (half of base penalty)
+    const hungerMult = typeof App !== 'undefined' ? (1 - App.getHungerPenalty() * 0.5) : 1;
+
     for (let i = 0; i < this.rigs.length; i++) {
       if (!this.rigOwned[i]) continue;
       const rig = this.rigs[i];
-      const rate = rig.baseRate * (this.rigLevels[i] + 1) * efficiency;
-      this.wallet[rig.coin] += rate;
-      this.totalMined[rig.coin] += rate;
+      const targetIdx = (this.rigTargetCoins[i] !== undefined && this.rigTargetCoins[i] >= 0)
+        ? this.rigTargetCoins[i] : this.coins.findIndex(c => c.symbol === rig.coin);
+      const safeTgt = Math.max(0, Math.min(this.coins.length - 1, targetIdx));
+      const targetCoin = this.coins[safeTgt];
+      const origCoin = this.coins.find(c => c.symbol === rig.coin) || this.coins[0];
+
+      // Normalize: same dollar yield regardless of target coin
+      let rate = rig.baseRate * (this.rigLevels[i] + 1) * efficiency * hungerMult;
+      rate = rate * (origCoin.baseValue / targetCoin.baseValue);
+
+      const sym = targetCoin.symbol;
+      this.wallet[sym] = (this.wallet[sym] || 0) + rate;
+      this.totalMined[sym] = (this.totalMined[sym] || 0) + rate;
     }
 
     if (App.currentScreen === 'crypto') this.render();
@@ -113,11 +150,9 @@ const Crypto = {
     const isFollower = typeof Firebase !== 'undefined' && Firebase.isOnline() && !Firebase._isCryptoAuthority;
 
     if (isFollower && !this._hasActiveTargets()) {
-      // Follower: prices come from listener
       this._showOutOfSyncBanner(false);
       return;
     }
-
     if (!isAuthority && typeof Firebase !== 'undefined' && Firebase._hasConfig()) {
       this._showOutOfSyncBanner(true);
     } else {
@@ -125,9 +160,8 @@ const Crypto = {
     }
 
     for (let i = 0; i < this.coins.length; i++) {
-      let change = this.coinPrices[i] * (Math.random() - 0.5) * 0.03;
+      let change = this.coinPrices[i] * (Math.random() - 0.5) * (this.coins[i].vol || 0.03) * 2;
 
-      // Admin gradual price target drift
       const tgt = this._priceTargets[i];
       if (tgt && tgt.stepsLeft > 0) {
         const drift = (tgt.target - this.coinPrices[i]) / tgt.stepsLeft;
@@ -141,7 +175,6 @@ const Crypto = {
       if (this.priceHistory[i].length > 30) this.priceHistory[i].shift();
     }
 
-    // Authority pushes prices
     if (isAuthority) {
       Firebase.pushCryptoPrices(this.coinPrices.slice());
     }
@@ -149,15 +182,80 @@ const Crypto = {
     if (App.currentScreen === 'crypto') this.render();
   },
 
+  _tickPlayerCoinPrices() {
+    // Simple local tick for player coin prices — gentle drift toward base
+    const changed = Object.keys(this._playerCoinPrices);
+    if (!changed.length) return;
+    let any = false;
+    for (const sym of changed) {
+      const coin = this._getPlayerCoinBySym(sym);
+      if (!coin) continue;
+      const base = coin.baseValue || 100;
+      const price = this._playerCoinPrices[sym] || base;
+      const drift = (base - price) * 0.005; // gentle mean reversion
+      const noise = price * (Math.random() - 0.5) * 0.04;
+      const newPrice = Math.max(0.001, price + drift + noise);
+      this._playerCoinPrices[sym] = newPrice;
+      if (!this._playerCoinHistory[sym]) this._playerCoinHistory[sym] = [newPrice];
+      this._playerCoinHistory[sym].push(newPrice);
+      if (this._playerCoinHistory[sym].length > 30) this._playerCoinHistory[sym].shift();
+      any = true;
+    }
+    // Push if we're authority
+    if (any && typeof Firebase !== 'undefined' && Firebase._isPlayerCoinAuthority) {
+      Firebase.pushPlayerCoinPrices({ ...this._playerCoinPrices });
+    }
+    if (App.currentScreen === 'crypto') this.render();
+  },
+
+  _getPlayerCoinBySym(sym) {
+    for (const uid in this._playerCoins) {
+      if (this._playerCoins[uid].symbol === sym) return this._playerCoins[uid];
+    }
+    return null;
+  },
+
   applyServerPrices(prices) {
     if (!prices || prices.length !== this.coins.length) return;
     this.coinPrices = prices.slice();
     for (let i = 0; i < this.coins.length; i++) {
-      this.priceHistory[i].push(this.coinPrices[i]);
-      if (this.priceHistory[i].length > 30) this.priceHistory[i].shift();
+      this._safeHistoryPush(i, this.coinPrices[i]);
     }
     this._showOutOfSyncBanner(false);
     if (App.currentScreen === 'crypto') this.render();
+  },
+
+  applyServerPlayerCoinPrices(prices) {
+    if (!prices || typeof prices !== 'object') return;
+    for (const sym in prices) {
+      if (typeof prices[sym] === 'number') {
+        this._playerCoinPrices[sym] = prices[sym];
+      }
+    }
+    if (App.currentScreen === 'crypto') this.render();
+  },
+
+  updatePlayerCoins(data) {
+    this._playerCoins = data || {};
+    // Init prices for new coins
+    for (const uid in this._playerCoins) {
+      const coin = this._playerCoins[uid];
+      if (!coin || !coin.symbol) continue;
+      if (this._playerCoinPrices[coin.symbol] === undefined) {
+        this._playerCoinPrices[coin.symbol] = coin.baseValue || 100;
+      }
+      // Track my coin
+      if (typeof Firebase !== 'undefined' && Firebase.uid === uid) {
+        this._myPlayerCoin = coin;
+      }
+    }
+    if (App.currentScreen === 'crypto') this.render();
+  },
+
+  _safeHistoryPush(idx, val) {
+    if (!this.priceHistory[idx]) this.priceHistory[idx] = [];
+    this.priceHistory[idx].push(val);
+    if (this.priceHistory[idx].length > 30) this.priceHistory[idx].shift();
   },
 
   _showOutOfSyncBanner(show) {
@@ -167,7 +265,7 @@ const Crypto = {
         banner = document.createElement('div');
         banner.id = 'crypto-sync-banner';
         banner.className = 'out-of-sync-banner';
-        banner.textContent = 'Crypto exchange out of sync — prices are local only';
+        banner.textContent = 'Crypto exchange out of sync \u2014 prices are local only';
         const container = document.querySelector('#screen-crypto .game-container');
         if (container) container.insertBefore(banner, container.firstChild);
       }
@@ -182,17 +280,14 @@ const Crypto = {
     const hashPower = this._getHashPower();
     let amount = 0.001 * hashPower;
 
-    // Overclock chance
     const ocLevel = this.upgrades.overclock;
     if (ocLevel > 0 && Math.random() < ocLevel * 0.05) {
       amount *= 10;
       this._showMineResult('10x BLOCK!', true);
     }
 
-    this.wallet.BTC += amount;
-    this.totalMined.BTC += amount;
-
-    // Heat from clicking
+    this.wallet.BTC = (this.wallet.BTC || 0) + amount;
+    this.totalMined.BTC = (this.totalMined.BTC || 0) + amount;
     this.heat = Math.min(100, this.heat + 0.5);
 
     this._animateMine();
@@ -216,9 +311,7 @@ const Crypto = {
 
   _getCoolingBonus() {
     let bonus = 0;
-    this.coolingUpgrades.forEach((c, i) => {
-      if (this.cooling[i]) bonus += c.heatCapBonus;
-    });
+    this.coolingUpgrades.forEach((c, i) => { if (this.cooling[i]) bonus += c.heatCapBonus; });
     return bonus;
   },
 
@@ -239,15 +332,11 @@ const Crypto = {
   },
 
   _mineLogMessages: [],
-
   _addMineLog(msg) {
     this._mineLogMessages.unshift(msg);
     if (this._mineLogMessages.length > 5) this._mineLogMessages.pop();
   },
-
-  _showMineResult(text, special) {
-    this._addMineLog(text);
-  },
+  _showMineResult(text) { this._addMineLog(text); },
 
   // === Upgrades ===
   buyClickUpgrade(idx) {
@@ -286,6 +375,12 @@ const Crypto = {
     this.render();
   },
 
+  setRigCoin(idx, coinIdx) {
+    this.rigTargetCoins[idx] = coinIdx;
+    App.save();
+    this.render();
+  },
+
   // === Cooling ===
   buyCooling(idx) {
     if (this.cooling[idx]) return;
@@ -303,9 +398,7 @@ const Crypto = {
   },
 
   setGradualTarget(idx, targetPrice, steps) {
-    if (!this._priceTargets.length) {
-      this._priceTargets = this.coins.map(() => null);
-    }
+    if (!this._priceTargets.length) this._priceTargets = this.coins.map(() => null);
     this._priceTargets[idx] = { target: targetPrice, stepsLeft: steps || 10 };
     if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
       Firebase._isCryptoAuthority = true;
@@ -314,9 +407,7 @@ const Crypto = {
   },
 
   setGradualAll(multiplier, steps) {
-    if (!this._priceTargets.length) {
-      this._priceTargets = this.coins.map(() => null);
-    }
+    if (!this._priceTargets.length) this._priceTargets = this.coins.map(() => null);
     for (let i = 0; i < this.coins.length; i++) {
       this._priceTargets[i] = { target: this.coinPrices[i] * multiplier, stepsLeft: steps || 10 };
     }
@@ -331,46 +422,71 @@ const Crypto = {
     if (!this._priceTargets.length) this._priceTargets = this.coins.map(() => null);
     switch (cmd.type) {
       case 'target':
-        if (cmd.idx >= 0 && cmd.idx < this.coins.length) {
+        if (cmd.idx >= 0 && cmd.idx < this.coins.length)
           this.setGradualTarget(cmd.idx, cmd.target, cmd.steps || 10);
-        }
         break;
       case 'adjust':
-        if (cmd.idx >= 0 && cmd.idx < this.coins.length) {
+        if (cmd.idx >= 0 && cmd.idx < this.coins.length)
           this.setGradualTarget(cmd.idx, Math.max(0.01, this.coinPrices[cmd.idx] * cmd.mult), 10);
-        }
         break;
-      case 'pump':
-        this.setGradualAll(3, 12);
-        break;
-      case 'dump':
-        this.setGradualAll(0.3, 12);
-        break;
+      case 'pump': this.setGradualAll(3, 12); break;
+      case 'dump': this.setGradualAll(0.3, 12); break;
     }
+  },
+
+  applyPlayerCoinAdminCommand(cmd) {
+    if (!cmd || !cmd.type || !cmd.sym) return;
+    const sym = cmd.sym;
+    switch (cmd.type) {
+      case 'pcoin-adjust': {
+        const cur = this._playerCoinPrices[sym];
+        if (cur !== undefined) this._playerCoinPrices[sym] = Math.max(0.001, cur * cmd.mult);
+        break;
+      }
+      case 'pcoin-set':
+        if (cmd.target > 0) this._playerCoinPrices[sym] = cmd.target;
+        break;
+      case 'pcoin-rugPull': {
+        this._playerCoinPrices[sym] = 0.0001;
+        // Mark coin as private so it disappears from the market
+        const coin = this._getPlayerCoinBySym(sym);
+        if (coin) coin.type = 'private';
+        break;
+      }
+    }
+    if (App.currentScreen === 'crypto') this.render();
   },
 
   // === Exchange ===
   buyCoin(symbol, cashAmount) {
-    const idx = this.coins.findIndex(c => c.symbol === symbol);
-    if (idx < 0) return;
+    // Check both system and player coins
+    const sysIdx = this.coins.findIndex(c => c.symbol === symbol);
+    if (sysIdx >= 0) {
+      if (cashAmount <= 0 || App.balance < cashAmount) return;
+      const coinAmount = cashAmount / this.coinPrices[sysIdx];
+      App.addBalance(-cashAmount);
+      this.wallet[symbol] = (this.wallet[symbol] || 0) + coinAmount;
+      App.save(); this.render(); return;
+    }
+    // Player coin
+    const price = this._playerCoinPrices[symbol];
+    if (!price) return;
     if (cashAmount <= 0 || App.balance < cashAmount) return;
-    const coinAmount = cashAmount / this.coinPrices[idx];
+    const coinAmount = cashAmount / price;
     App.addBalance(-cashAmount);
-    this.wallet[symbol] += coinAmount;
-    App.save();
-    this.render();
+    this._playerCoinHoldings[symbol] = (this._playerCoinHoldings[symbol] || 0) + coinAmount;
+    if (typeof Firebase !== 'undefined') Firebase.tradeInfluenceCoin(symbol, 'buy');
+    App.save(); this.render();
   },
 
   promptBuyCoin(symbol) {
-    const idx = this.coins.findIndex(c => c.symbol === symbol);
-    if (idx < 0) return;
-    const price = this.coinPrices[idx];
+    const sysIdx = this.coins.findIndex(c => c.symbol === symbol);
+    const price = sysIdx >= 0 ? this.coinPrices[sysIdx] : (this._playerCoinPrices[symbol] || 0);
+    if (!price) return;
     const maxCash = App.balance;
     if (maxCash < 1) return;
-
     const amounts = [100, 1000, 10000, Math.floor(maxCash)].filter(a => a > 0 && a <= maxCash);
     const unique = [...new Set(amounts)];
-
     let html = `<div class="stock-trade-modal">
       <div class="stock-trade-title">Buy ${symbol} @ ${App.formatMoney(price)}</div>
       <div class="stock-trade-buttons">`;
@@ -383,17 +499,15 @@ const Crypto = {
   },
 
   promptSellCoin(symbol) {
-    const idx = this.coins.findIndex(c => c.symbol === symbol);
-    if (idx < 0) return;
-    const price = this.coinPrices[idx];
-    const owned = this.wallet[symbol];
-    if (owned <= 0) return;
-
-    const amounts = [0.25, 0.5, 1.0].map(pct => owned * pct).filter(a => a > 0);
+    const sysIdx = this.coins.findIndex(c => c.symbol === symbol);
+    const price = sysIdx >= 0 ? this.coinPrices[sysIdx] : (this._playerCoinPrices[symbol] || 0);
+    const owned = sysIdx >= 0 ? (this.wallet[symbol] || 0) : (this._playerCoinHoldings[symbol] || 0);
+    if (owned <= 0 || !price) return;
+    const amounts = [0.25, 0.5, 1.0].map(pct => owned * pct);
+    const labels = ['25%', '50%', 'All'];
     let html = `<div class="stock-trade-modal">
       <div class="stock-trade-title">Sell ${symbol} @ ${App.formatMoney(price)}</div>
       <div class="stock-trade-buttons">`;
-    const labels = ['25%', '50%', 'All'];
     amounts.forEach((a, i) => {
       html += `<button class="stock-trade-btn stock-sell-btn" onclick="Crypto.sellCoin('${symbol}',${a});Crypto.closeModal()">${labels[i]}<br>${App.formatMoney(a * price)}</button>`;
     });
@@ -419,19 +533,26 @@ const Crypto = {
   },
 
   sellCoin(symbol, amount) {
-    const idx = this.coins.findIndex(c => c.symbol === symbol);
-    if (idx < 0) return;
-    if (this.wallet[symbol] < amount) amount = this.wallet[symbol];
+    const sysIdx = this.coins.findIndex(c => c.symbol === symbol);
+    if (sysIdx >= 0) {
+      if ((this.wallet[symbol] || 0) < amount) amount = this.wallet[symbol] || 0;
+      if (amount <= 0) return;
+      const value = amount * this.coinPrices[sysIdx];
+      this.wallet[symbol] -= amount;
+      App.addBalance(value);
+      App.save(); this.render(); return;
+    }
+    // Player coin
+    const price = this._playerCoinPrices[symbol];
+    if (!price) return;
+    const owned = this._playerCoinHoldings[symbol] || 0;
+    if (owned < amount) amount = owned;
     if (amount <= 0) return;
-    const value = amount * this.coinPrices[idx];
-    this.wallet[symbol] -= amount;
+    const value = amount * price;
+    this._playerCoinHoldings[symbol] -= amount;
     App.addBalance(value);
-    App.save();
-    this.render();
-  },
-
-  sellAllCoin(symbol) {
-    this.sellCoin(symbol, this.wallet[symbol]);
+    if (typeof Firebase !== 'undefined') Firebase.tradeInfluenceCoin(symbol, 'sell');
+    App.save(); this.render();
   },
 
   // === Tabs ===
@@ -444,20 +565,106 @@ const Crypto = {
   render() {
     const container = document.getElementById('crypto-content');
     if (!container) return;
-
-    // Tab buttons
     document.querySelectorAll('.crypto-tab-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.tab === this.activeTab);
     });
-
-    if (this.activeTab === 'mine') this._renderMine(container);
-    else if (this.activeTab === 'rigs') this._renderRigs(container);
-    else if (this.activeTab === 'exchange') this._renderExchange(container);
+    if (this.activeTab === 'market')  this._renderMarket(container);
+    else if (this.activeTab === 'mining') this._renderMining(container);
+    else if (this.activeTab === 'mycoin') this._renderMyCoin(container);
+    else if (this.activeTab === 'browse') this._renderBrowse(container);
   },
 
-  _renderMine(container) {
+  // ── Market Tab ─────────────────────────────────────────────────────
+  _renderMarket(container) {
+    let html = '<div class="exchange-list">';
+
+    // System coins
+    this.coins.forEach((coin, i) => {
+      const price = this.coinPrices[i];
+      const amount = this.wallet[coin.symbol] || 0;
+      const value = amount * price;
+      const hist = this.priceHistory[i];
+      const prev = hist.length >= 2 ? hist[hist.length - 2] : price;
+      const pct = ((price - prev) / (prev || 1) * 100);
+      const pctStr = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+      const pctColor = pct >= 0 ? 'var(--green)' : 'var(--red)';
+
+      html += `<div class="exchange-card">
+        <div class="exchange-header">
+          <span style="font-size:18px">${coin.emoji}</span>
+          <span class="exchange-symbol" style="color:${coin.color}">${coin.symbol}</span>
+          <span style="font-size:10px;color:var(--text-dim)">${coin.name}</span>
+          <span class="exchange-price">${App.formatMoney(price)}</span>
+          <span style="font-size:11px;color:${pctColor};font-weight:700">${pctStr}</span>
+        </div>
+        <div class="exchange-balance">
+          <span>${amount.toFixed(4)} ${coin.symbol}</span>
+          <span class="exchange-value">= ${App.formatMoney(value)}</span>
+        </div>
+        <canvas id="crypto-chart-${coin.symbol}" class="crypto-chart" width="200" height="40"></canvas>
+        <div class="exchange-actions">
+          <button class="stock-buy-btn" onclick="Crypto.promptBuyCoin('${coin.symbol}')">Buy</button>
+          <button class="stock-sell-btn" onclick="Crypto.promptSellCoin('${coin.symbol}')" ${amount > 0 ? '' : 'disabled'}>Sell</button>
+        </div>
+      </div>`;
+    });
+
+    // Player coins
+    const publicCoins = this._getPublicPlayerCoins();
+    if (publicCoins.length > 0) {
+      html += `<div class="player-stocks-market-header">\u{1F464} Player Coins</div>`;
+      publicCoins.forEach(({ uid, coin }) => {
+        const sym = coin.symbol;
+        const price = this._playerCoinPrices[sym] || coin.baseValue || 100;
+        const held = this._playerCoinHoldings[sym] || 0;
+        const hist = this._playerCoinHistory[sym] || [price, price];
+        const prev = hist.length >= 2 ? hist[hist.length - 2] : price;
+        const pct = ((price - prev) / (prev || 1) * 100);
+        const pctStr = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+        const pctColor = pct >= 0 ? 'var(--green)' : 'var(--red)';
+        const isOwn = typeof Firebase !== 'undefined' && Firebase.uid === uid;
+
+        html += `<div class="exchange-card">
+          <div class="exchange-header">
+            <span style="font-size:18px">${coin.emoji || '\u{1FA99}'}</span>
+            <span class="exchange-symbol" style="color:#bb86fc">${sym}</span>
+            <span class="player-coin-badge">COIN</span>
+            <span style="font-size:10px;color:var(--text-dim)">${this._esc(coin.name)}</span>
+            <span class="exchange-price">${App.formatMoney(price)}</span>
+            <span style="font-size:11px;color:${pctColor};font-weight:700">${pctStr}</span>
+          </div>
+          <div class="exchange-balance">
+            <span>${held.toFixed(2)} ${sym}</span>
+            <span class="exchange-value">= ${App.formatMoney(held * price)}</span>
+          </div>
+          <canvas id="pcoin-chart-${sym}" class="crypto-chart" width="200" height="40"></canvas>
+          <div class="exchange-actions">
+            ${isOwn ? '<span style="font-size:11px;color:var(--gold)">Your Coin</span>' : `<button class="stock-buy-btn" onclick="Crypto.promptBuyCoin('${sym}')">Buy</button>`}
+            <button class="stock-sell-btn" onclick="Crypto.promptSellCoin('${sym}')" ${held > 0 ? '' : 'disabled'}>Sell</button>
+          </div>
+        </div>`;
+      });
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+
+    // Draw system coin charts
+    this.coins.forEach((coin, i) => {
+      this._drawPriceChart('crypto-chart-' + coin.symbol, this.priceHistory[i], coin.color);
+    });
+    // Draw player coin charts
+    publicCoins.forEach(({ coin }) => {
+      const hist = this._playerCoinHistory[coin.symbol] || [];
+      this._drawPriceChart('pcoin-chart-' + coin.symbol, hist, '#bb86fc');
+    });
+  },
+
+  // ── Mining Tab ─────────────────────────────────────────────────────
+  _renderMining(container) {
     const hashPower = this._getHashPower();
     const btcPerClick = 0.001 * hashPower;
+    const efficiency = this._getHeatEfficiency();
 
     let html = `
       <div class="mine-stats">
@@ -465,27 +672,27 @@ const Crypto = {
         <div class="mine-stat"><span class="stat-label">BTC/Click</span><span>${btcPerClick.toFixed(4)}</span></div>
         <div class="mine-stat"><span class="stat-label">Heat</span><span class="${this.heat > 80 ? 'heat-danger' : ''}">${this.heat.toFixed(0)}%</span></div>
       </div>
-
       <div class="heat-bar-wrap">
         <div class="heat-bar" style="width:${this.heat}%;background:${this.heat > 95 ? '#ff5252' : this.heat > 80 ? '#ff9100' : '#00e676'}"></div>
       </div>
-
       <div class="mine-hash-display" id="mine-hash-display">
         <div class="hash-text">${this._randomHash()}</div>
       </div>
-
       <button id="crypto-mine-btn" class="mine-btn" onclick="Crypto.mine()">
         MINE<br><span class="mine-btn-sub">+${btcPerClick.toFixed(4)} BTC</span>
       </button>
+      <div class="mine-wallet-mini">`;
 
-      <div class="mine-wallet-mini">
-        <span style="color:#f7931a">${this.wallet.BTC.toFixed(4)} BTC</span>
-        <span style="color:#627eea">${this.wallet.ETH.toFixed(4)} ETH</span>
-        <span style="color:#c2a633">${this.wallet.DOGE.toFixed(2)} DOGE</span>
-      </div>
+    this.coins.forEach(c => {
+      const amt = this.wallet[c.symbol] || 0;
+      if (amt > 0 || ['BTC','ETH','DOGE'].includes(c.symbol)) {
+        const display = amt < 0.0001 ? amt.toExponential(2) : amt.toFixed(c.baseValue < 1 ? 2 : 4);
+        html += `<span style="color:${c.color}">${display} ${c.symbol}</span>`;
+      }
+    });
 
-      <div class="mine-upgrades">
-        <h3>Hash Upgrades</h3>`;
+    html += `</div>
+      <div class="mine-upgrades"><h3>Hash Upgrades</h3>`;
 
     const keys = ['cpu', 'gpu', 'overclock'];
     this.clickUpgrades.forEach((up, i) => {
@@ -504,10 +711,9 @@ const Crypto = {
         }
       </div>`;
     });
-
     html += '</div>';
 
-    // Cooling section
+    // Cooling
     html += '<div class="mine-upgrades"><h3>Cooling</h3>';
     this.coolingUpgrades.forEach((c, i) => {
       const owned = this.cooling[i];
@@ -525,27 +731,30 @@ const Crypto = {
     });
     html += '</div>';
 
-    container.innerHTML = html;
-  },
-
-  _renderRigs(container) {
-    const efficiency = this._getHeatEfficiency();
-    let html = `<div class="rig-efficiency">Efficiency: <span class="${efficiency < 1 ? 'heat-danger' : ''}">${(efficiency * 100).toFixed(0)}%</span></div>`;
+    // Rigs section
+    html += `<div class="mine-upgrades"><h3>Mining Rigs <span style="font-size:12px;color:var(--text-dim)">Efficiency: ${(efficiency * 100).toFixed(0)}%</span></h3>`;
     html += '<div class="rig-grid">';
-
     this.rigs.forEach((rig, i) => {
       const owned = this.rigOwned[i];
       const level = this.rigLevels[i];
       const maxed = level >= rig.maxLevel;
-      const rate = rig.baseRate * (level + 1) * efficiency;
-      const coinColor = this.coins.find(c => c.symbol === rig.coin).color;
+      const tgtIdx = (this.rigTargetCoins[i] !== undefined && this.rigTargetCoins[i] >= 0)
+        ? this.rigTargetCoins[i] : this.coins.findIndex(c => c.symbol === rig.coin);
+      const safeTgt = Math.max(0, Math.min(this.coins.length - 1, tgtIdx));
+      const tgtCoin = this.coins[safeTgt];
+      const origCoin = this.coins.find(c => c.symbol === rig.coin) || this.coins[0];
+      const rate = rig.baseRate * (level + 1) * efficiency * (origCoin.baseValue / tgtCoin.baseValue);
+
+      const coinSelectorHtml = `<select class="coin-selector" onchange="Crypto.setRigCoin(${i},+this.value)">
+        ${this.coins.map((c, ci) => `<option value="${ci}" ${ci === safeTgt ? 'selected' : ''}>${c.symbol} ${c.emoji}</option>`).join('')}
+      </select>`;
 
       if (!owned) {
         const affordable = App.balance >= rig.cost;
         html += `<div class="rig-card ${affordable ? 'affordable' : ''}" onclick="Crypto.buyRig(${i})">
           <div class="rig-icon">${rig.icon}</div>
           <div class="rig-name">${rig.name}</div>
-          <div class="rig-detail" style="color:${coinColor}">${rig.baseRate} ${rig.coin}/s</div>
+          <div class="rig-detail" style="color:${origCoin.color}">${rig.baseRate} ${rig.coin}/s</div>
           <button class="prop-btn prop-buy-btn">Buy: ${App.formatMoney(rig.cost)}</button>
         </div>`;
       } else {
@@ -555,7 +764,8 @@ const Crypto = {
           <div class="rig-icon">${rig.icon}</div>
           <div class="rig-name">${rig.name}</div>
           <div class="rig-level">Lv ${level}/${rig.maxLevel}</div>
-          <div class="rig-detail" style="color:${coinColor}">${rate.toFixed(4)} ${rig.coin}/s</div>
+          <div class="rig-detail" style="color:${tgtCoin.color}">${rate.toFixed(4)} ${tgtCoin.symbol}/s</div>
+          ${coinSelectorHtml}
           ${maxed
             ? '<button class="prop-btn prop-maxed" disabled>MAXED</button>'
             : `<button class="prop-btn ${affordable ? 'affordable' : ''}" onclick="Crypto.upgradeRig(${i})">Upgrade: ${App.formatMoney(upgCost)}</button>`
@@ -563,49 +773,325 @@ const Crypto = {
         </div>`;
       }
     });
+    html += '</div></div>';
 
+    // Total mined
+    html += '<div class="mine-total-stats"><h3>Total Mined</h3>';
+    this.coins.forEach(c => {
+      const val = this.totalMined[c.symbol] || 0;
+      if (val > 0) html += `<div class="mine-total-row"><span style="color:${c.color}">${c.symbol}</span><span>${val.toFixed(4)}</span></div>`;
+    });
     html += '</div>';
+
     container.innerHTML = html;
   },
 
-  _renderExchange(container) {
-    let html = '<div class="exchange-list">';
-    this.coins.forEach((coin, i) => {
-      const price = this.coinPrices[i];
-      const amount = this.wallet[coin.symbol];
-      const value = amount * price;
+  // ── My Coin Tab ────────────────────────────────────────────────────
+  _renderMyCoin(container) {
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
 
+    // Check if user has an existing coin
+    const existing = myUid && this._playerCoins[myUid] ? this._playerCoins[myUid] : this._myPlayerCoin;
+
+    if (existing) {
+      this._renderManageCoin(container, existing, myUid);
+    } else {
+      this._renderCreateCoin(container);
+    }
+  },
+
+  _renderCreateCoin(container) {
+    const isOnline = typeof Firebase !== 'undefined' && Firebase.isOnline();
+    container.innerHTML = `
+      <div class="game-container" style="padding:12px">
+        <h3 style="color:var(--green);margin:0 0 8px">Create Your Coin</h3>
+        <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Launch your own crypto coin. Players can buy, hold, and trade it.</p>
+        ${!isOnline ? '<div class="out-of-sync-banner">Must be online to create a coin</div>' : ''}
+        <div class="admin-row"><label style="min-width:80px">Name:</label>
+          <input type="text" id="pcoin-name" maxlength="20" placeholder="e.g. RetroToken" style="flex:1"></div>
+        <div class="admin-row"><label style="min-width:80px">Ticker:</label>
+          <input type="text" id="pcoin-sym" maxlength="5" placeholder="e.g. RETK" style="flex:1;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+          <span id="pcoin-sym-err" style="font-size:11px;color:var(--red);margin-left:6px"></span>
+        </div>
+        <div class="admin-row"><label style="min-width:80px">Emoji:</label>
+          <input type="text" id="pcoin-emoji" maxlength="2" placeholder="\u{1FA99}" style="width:50px;font-size:20px"></div>
+        <div class="admin-row"><label style="min-width:80px">Supply:</label>
+          <select id="pcoin-supply" style="flex:1">
+            <option value="1000000">1M</option>
+            <option value="10000000">10M</option>
+            <option value="100000000">100M</option>
+            <option value="1000000000" selected>1B</option>
+            <option value="1000000000000">1T</option>
+          </select></div>
+        <div class="admin-row"><label style="min-width:80px">Start Price:</label>
+          <input type="number" id="pcoin-price" value="100" min="0.01" step="0.01" style="flex:1">
+          <span style="font-size:11px;color:var(--text-dim);margin-left:4px">per coin</span></div>
+        <div style="font-size:11px;color:var(--text-dim);margin:8px 0">Cost: ${App.formatMoney(500000)} • You keep 30% of supply as reserve</div>
+        <button class="game-btn" style="width:100%;margin-top:8px" onclick="Crypto._submitCreateCoin()" ${!isOnline ? 'disabled' : ''}>
+          Create Coin — ${App.formatMoney(500000)}
+        </button>
+      </div>`;
+  },
+
+  _submitCreateCoin() {
+    if (!Firebase || !Firebase.isOnline()) return;
+    const cost = 500000;
+    if (App.balance < cost) { alert('Need ' + App.formatMoney(cost)); return; }
+
+    const name = document.getElementById('pcoin-name')?.value?.trim();
+    const sym = document.getElementById('pcoin-sym')?.value?.trim().toUpperCase();
+    const emoji = document.getElementById('pcoin-emoji')?.value?.trim() || '\u{1FA99}';
+    const supply = parseInt(document.getElementById('pcoin-supply')?.value) || 1e9;
+    const baseValue = parseFloat(document.getElementById('pcoin-price')?.value) || 100;
+
+    if (!name) { alert('Enter a coin name.'); return; }
+    if (!sym || sym.length < 2) { alert('Enter a ticker (2-5 chars).'); return; }
+
+    // Validate ticker uniqueness
+    const sysSyms = this.coins.map(c => c.symbol);
+    if (sysSyms.includes(sym)) {
+      document.getElementById('pcoin-sym-err').textContent = 'Ticker taken';
+      return;
+    }
+    for (const uid in this._playerCoins) {
+      if (this._playerCoins[uid].symbol === sym) {
+        document.getElementById('pcoin-sym-err').textContent = 'Ticker taken';
+        return;
+      }
+    }
+    // Check against player stocks
+    if (typeof Companies !== 'undefined' && Companies._allPlayerStocks) {
+      if (Companies._allPlayerStocks[sym]) {
+        document.getElementById('pcoin-sym-err').textContent = 'Ticker taken by a stock';
+        return;
+      }
+    }
+
+    const coinData = {
+      name, symbol: sym, emoji, supply,
+      reserveAmt: Math.floor(supply * 0.30),
+      ownerName: (typeof Settings !== 'undefined') ? Settings.profile.name : 'Player',
+      baseValue, type: 'public',
+      upgrades: { pumpEngine: 0, stability: 0, marketing: 0, liquidity: 0 },
+    };
+
+    App.addBalance(-cost);
+    Firebase.createPlayerCoin(coinData).then(() => {
+      this._myPlayerCoin = coinData;
+      this._playerCoinPrices[sym] = baseValue;
+      App.save();
+      Toast.show('\u{1FA99} Coin "' + name + '" (' + sym + ') launched!', '#9945ff', 4000);
+      this.render();
+    }).catch(err => { App.addBalance(cost); alert('Error: ' + err); });
+  },
+
+  _renderManageCoin(container, coin, myUid) {
+    const sym = coin.symbol;
+    const price = this._playerCoinPrices[sym] || coin.baseValue || 100;
+    const isOwner = typeof Firebase !== 'undefined' && Firebase.uid === myUid;
+    const upgrades = coin.upgrades || {};
+
+    const upgradeList = [
+      { key: 'pumpEngine', name: '\u{1F680} Pump Engine', max: 3, desc: '+0.1% upward drift/tick per level', costs: [50000, 200000, 500000] },
+      { key: 'stability',  name: '\u{1F6E1}\uFE0F Stability',  max: 3, desc: 'Soft price floor; crash damping', costs: [50000, 200000, 500000] },
+      { key: 'marketing',  name: '\u{1F4E3} Marketing',  max: 3, desc: '+$1K/$5K/$20K cap; +0.1% mania/level', costs: [75000, 300000, 750000] },
+      { key: 'liquidity',  name: '\u{1F4A7} Liquidity',  max: 2, desc: 'Sells hurt 50%/25% less', costs: [100000, 400000] },
+      { key: 'burn',       name: '\u{1F525} Burn Protocol', max: 1, desc: 'One-time 10% supply burn; permanent', costs: [1000000] },
+    ];
+
+    const upgHtml = upgradeList.map(u => {
+      const lvl = upgrades[u.key] || 0;
+      const maxed = lvl >= u.max;
+      const nextCost = !maxed ? u.costs[lvl] : 0;
+      const affordable = !maxed && App.balance >= nextCost;
+      return `<div class="mine-upgrade-item ${affordable ? 'affordable' : ''}">
+        <div class="upgrade-info">
+          <div class="upgrade-name">${u.name} <span class="upgrade-level">Lv${lvl}/${u.max}</span></div>
+          <div class="upgrade-desc">${u.desc}</div>
+        </div>
+        ${maxed
+          ? '<div class="upgrade-cost" style="color:var(--green)">MAX</div>'
+          : `<button class="upgrade-cost" onclick="Crypto._buyCoinUpgrade('${u.key}')">${App.formatMoney(nextCost)}</button>`
+        }
+      </div>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div style="padding:10px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <span style="font-size:30px">${coin.emoji || '\u{1FA99}'}</span>
+          <div>
+            <div style="font-weight:700;font-size:16px">${this._esc(coin.name)} <span class="player-coin-badge">COIN</span></div>
+            <div style="font-size:12px;color:#bb86fc">${sym} \u2022 ${App.formatMoney(price)}</div>
+            <div style="font-size:11px;color:var(--text-dim)">Supply: ${(coin.supply||0).toLocaleString()} \u2022 Reserve: ${(coin.reserveAmt||0).toLocaleString()}</div>
+          </div>
+        </div>
+        ${isOwner ? `
+        <div class="exchange-actions" style="margin-bottom:12px">
+          <button class="stock-buy-btn" onclick="Crypto._ownerAction('pump')">Pump</button>
+          <button class="stock-sell-btn" onclick="Crypto._ownerAction('dump')">Dump</button>
+          <button class="admin-btn" onclick="Crypto._ownerAction('mint')" style="font-size:12px">Mint</button>
+          <button class="admin-btn" onclick="Crypto._ownerAction('burn')" style="font-size:12px">Burn Supply</button>
+        </div>
+        <div class="exchange-actions" style="margin-bottom:12px">
+          <button class="admin-btn danger" onclick="Crypto._ownerAction('delist')" style="font-size:12px">${coin.type === 'private' ? 'Relist' : 'Delist'}</button>
+        </div>` : ''}
+        <div class="mine-upgrades"><h3>Upgrades</h3>${upgHtml}</div>
+      </div>`;
+  },
+
+  _buyCoinUpgrade(key) {
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    if (!myUid || !Firebase.isOnline()) return;
+    const coin = this._playerCoins[myUid] || this._myPlayerCoin;
+    if (!coin) return;
+    const upgradeList = [
+      { key: 'pumpEngine', max: 3, costs: [50000, 200000, 500000] },
+      { key: 'stability',  max: 3, costs: [50000, 200000, 500000] },
+      { key: 'marketing',  max: 3, costs: [75000, 300000, 750000] },
+      { key: 'liquidity',  max: 2, costs: [100000, 400000] },
+      { key: 'burn',       max: 1, costs: [1000000] },
+    ];
+    const u = upgradeList.find(x => x.key === key);
+    if (!u) return;
+    const upgrades = coin.upgrades || {};
+    const lvl = upgrades[key] || 0;
+    if (lvl >= u.max) return;
+    const cost = u.costs[lvl];
+    if (App.balance < cost) { alert('Not enough funds.'); return; }
+    App.addBalance(-cost);
+    const newLevel = lvl + 1;
+    const updates = { ['upgrades/' + key]: newLevel };
+    Firebase.updatePlayerCoin(myUid, updates).then(() => {
+      if (!coin.upgrades) coin.upgrades = {};
+      coin.upgrades[key] = newLevel;
+      App.save();
+      this.render();
+    }).catch(err => { App.addBalance(cost); alert('Error: ' + err); });
+  },
+
+  _ownerAction(action) {
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    if (!myUid || !Firebase.isOnline()) return;
+    const coin = this._playerCoins[myUid] || this._myPlayerCoin;
+    if (!coin) return;
+    const sym = coin.symbol;
+
+    const now = Date.now();
+    const cooldowns = this._ownerCooldowns || (this._ownerCooldowns = {});
+    const COOL_SHORT = 2 * 60 * 1000;
+    const COOL_LONG = 10 * 60 * 1000;
+
+    if (action === 'pump') {
+      if (cooldowns.pump && now < cooldowns.pump) { Toast.show('Pump on cooldown!', '#ff5252'); return; }
+      const cost = Math.floor(this._playerCoinPrices[sym] * 100);
+      if (App.balance < cost) { alert('Need ' + App.formatMoney(cost)); return; }
+      App.addBalance(-cost);
+      const boost = 0.05 + Math.random() * 0.15;
+      this._playerCoinPrices[sym] *= (1 + boost);
+      cooldowns.pump = now + COOL_SHORT;
+      App.save(); this.render();
+      Toast.show('\u{1F680} Pumped ' + sym + ' +' + Math.round(boost * 100) + '%!', '#00e676', 3000);
+    } else if (action === 'dump') {
+      if (cooldowns.dump && now < cooldowns.dump) { Toast.show('Dump on cooldown!', '#ff5252'); return; }
+      const drop = 0.10 + Math.random() * 0.20;
+      this._playerCoinPrices[sym] = Math.max(0.001, this._playerCoinPrices[sym] * (1 - drop));
+      cooldowns.dump = now + COOL_SHORT;
+      App.save(); this.render();
+      Toast.show('\u{1F4C9} Dumped ' + sym + ' -' + Math.round(drop * 100) + '%', '#ff5252', 3000);
+    } else if (action === 'mint') {
+      if (cooldowns.mint && now < cooldowns.mint) { Toast.show('Mint on cooldown!', '#ff5252'); return; }
+      const mintPct = 0.05 + Math.random() * 0.05;
+      const newSupply = Math.floor((coin.supply || 1e9) * (1 + mintPct));
+      const earnings = Math.floor(newSupply - (coin.supply || 1e9)) * (this._playerCoinPrices[sym] || coin.baseValue);
+      App.addBalance(earnings * 0.1); // earn 10% of minted value
+      Firebase.updatePlayerCoin(myUid, { supply: newSupply }).then(() => { coin.supply = newSupply; });
+      cooldowns.mint = now + COOL_LONG;
+      App.save(); this.render();
+      Toast.show('\u{1F4B0} Minted ' + Math.round(mintPct * 100) + '% supply', '#9945ff', 3000);
+    } else if (action === 'burn') {
+      if (cooldowns.burnAct && now < cooldowns.burnAct) { Toast.show('Burn on cooldown!', '#ff5252'); return; }
+      const burnPct = 0.05;
+      const newSupply = Math.floor((coin.supply || 1e9) * (1 - burnPct));
+      const newReserve = Math.floor((coin.reserveAmt || 0) * (1 - burnPct));
+      this._playerCoinPrices[sym] = (this._playerCoinPrices[sym] || coin.baseValue) * (1 + burnPct * 0.8);
+      Firebase.updatePlayerCoin(myUid, { supply: newSupply, reserveAmt: newReserve });
+      cooldowns.burnAct = now + COOL_LONG;
+      App.save(); this.render();
+      Toast.show('\u{1F525} Burned 5% supply — price up!', '#ff9100', 3000);
+    } else if (action === 'delist') {
+      const newType = coin.type === 'private' ? 'public' : 'private';
+      if (newType === 'public') {
+        const fee = 50000;
+        if (App.balance < fee) { alert('Relist fee: ' + App.formatMoney(fee)); return; }
+        App.addBalance(-fee);
+      }
+      Firebase.updatePlayerCoin(myUid, { type: newType }).then(() => {
+        coin.type = newType;
+        App.save(); this.render();
+        Toast.show(newType === 'public' ? '\u2705 Coin relisted!' : '\u{1F4E4} Coin delisted (private)', '#9945ff', 3000);
+      });
+    }
+  },
+
+  // ── Browse Tab ─────────────────────────────────────────────────────
+  _renderBrowse(container) {
+    const isOnline = typeof Firebase !== 'undefined' && Firebase.isOnline();
+    if (!isOnline) {
+      container.innerHTML = '<div class="pvp-empty">Connect to Firebase to browse player coins</div>';
+      return;
+    }
+
+    const publicCoins = this._getPublicPlayerCoins();
+    if (publicCoins.length === 0) {
+      container.innerHTML = '<div class="pvp-empty">No player coins listed yet. Create one in My Coin!</div>';
+      return;
+    }
+
+    let html = '<div class="exchange-list">';
+    publicCoins.forEach(({ uid, coin }) => {
+      const sym = coin.symbol;
+      const price = this._playerCoinPrices[sym] || coin.baseValue || 100;
+      const held = this._playerCoinHoldings[sym] || 0;
+      const isOwn = typeof Firebase !== 'undefined' && Firebase.uid === uid;
       html += `<div class="exchange-card">
         <div class="exchange-header">
-          <span class="exchange-symbol" style="color:${coin.color}">${coin.symbol}</span>
-          <span class="exchange-price">${App.formatMoney(price)} / ${coin.symbol}</span>
+          <span style="font-size:18px">${coin.emoji || '\u{1FA99}'}</span>
+          <span class="exchange-symbol" style="color:#bb86fc">${sym}</span>
+          <span class="player-coin-badge">COIN</span>
+          <span style="font-size:10px;color:var(--text-dim)">${this._esc(coin.name)}</span>
+          <span class="exchange-price">${App.formatMoney(price)}</span>
         </div>
+        <div style="font-size:11px;color:var(--text-dim);margin:4px 0">By ${this._esc(coin.ownerName || 'Player')} \u2022 Supply: ${(coin.supply||0).toLocaleString()}</div>
         <div class="exchange-balance">
-          <span>${amount.toFixed(4)} ${coin.symbol}</span>
-          <span class="exchange-value">= ${App.formatMoney(value)}</span>
+          <span>Held: ${held.toFixed(2)} ${sym}</span>
+          <span class="exchange-value">= ${App.formatMoney(held * price)}</span>
         </div>
-        <canvas id="crypto-chart-${coin.symbol}" class="crypto-chart" width="200" height="40"></canvas>
         <div class="exchange-actions">
-          <button class="stock-buy-btn" onclick="Crypto.promptBuyCoin('${coin.symbol}')">Buy</button>
-          <button class="stock-sell-btn" onclick="Crypto.promptSellCoin('${coin.symbol}')" ${amount > 0 ? '' : 'disabled'}>Sell</button>
+          ${isOwn ? '<span style="font-size:11px;color:var(--gold)">Your Coin</span>' : `<button class="stock-buy-btn" onclick="Crypto.promptBuyCoin('${sym}')">Buy</button>`}
+          <button class="stock-sell-btn" onclick="Crypto.promptSellCoin('${sym}')" ${held > 0 ? '' : 'disabled'}>Sell</button>
         </div>
       </div>`;
     });
     html += '</div>';
-
-    // Total mined stats
-    html += '<div class="mine-total-stats"><h3>Total Mined</h3>';
-    this.coins.forEach(coin => {
-      html += `<div class="mine-total-row"><span style="color:${coin.color}">${coin.symbol}</span><span>${this.totalMined[coin.symbol].toFixed(4)}</span></div>`;
-    });
-    html += '</div>';
-
     container.innerHTML = html;
+  },
 
-    // Draw price charts
-    this.coins.forEach((coin, i) => {
-      this._drawPriceChart('crypto-chart-' + coin.symbol, this.priceHistory[i], coin.color);
-    });
+  _getPublicPlayerCoins() {
+    const result = [];
+    for (const uid in this._playerCoins) {
+      const coin = this._playerCoins[uid];
+      if (coin && coin.symbol && coin.type !== 'private') {
+        result.push({ uid, coin });
+      }
+    }
+    return result;
+  },
+
+  _esc(str) {
+    const d = document.createElement('div');
+    d.textContent = str || '';
+    return d.innerHTML;
   },
 
   _drawPriceChart(canvasId, data, color) {
@@ -614,20 +1100,17 @@ const Crypto = {
     const ctx = canvas.getContext('2d');
     const w = canvas.width, h = canvas.height;
     ctx.clearRect(0, 0, w, h);
-    if (data.length < 2) return;
-
+    if (!data || data.length < 2) return;
     const min = Math.min(...data);
     const max = Math.max(...data);
     const range = max - min || 1;
-
     ctx.strokeStyle = color;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     data.forEach((v, i) => {
       const x = (i / (data.length - 1)) * w;
       const y = h - ((v - min) / range) * (h - 4) - 2;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     });
     ctx.stroke();
   },
@@ -646,23 +1129,35 @@ const Crypto = {
       totalMined: { ...this.totalMined },
       rigOwned: this.rigOwned.slice(),
       rigLevels: this.rigLevels.slice(),
+      rigTargetCoins: this.rigTargetCoins.slice(),
       upgrades: { ...this.upgrades },
       cooling: this.cooling.slice(),
       heat: this.heat,
       coinPrices: this.coinPrices.slice(),
+      playerCoinHoldings: { ...this._playerCoinHoldings },
     };
   },
 
   loadSaveData(data) {
     if (!data) return;
-    if (data.wallet) this.wallet = { BTC: 0, ETH: 0, DOGE: 0, ...data.wallet };
-    if (data.totalMined) this.totalMined = { BTC: 0, ETH: 0, DOGE: 0, ...data.totalMined };
+    // Wallet: fill defaults for all system coins first
+    const defaultWallet = {};
+    this.coins.forEach(c => { defaultWallet[c.symbol] = 0; });
+    if (data.wallet) this.wallet = { ...defaultWallet, ...data.wallet };
+    else this.wallet = defaultWallet;
+
+    const defaultMined = {};
+    this.coins.forEach(c => { defaultMined[c.symbol] = 0; });
+    if (data.totalMined) this.totalMined = { ...defaultMined, ...data.totalMined };
+    else this.totalMined = defaultMined;
+
     if (data.rigOwned) this.rigOwned = data.rigOwned;
     if (data.rigLevels) this.rigLevels = data.rigLevels;
+    if (data.rigTargetCoins) this.rigTargetCoins = data.rigTargetCoins;
     if (data.upgrades) this.upgrades = { cpu: 0, gpu: 0, overclock: 0, ...data.upgrades };
     if (data.cooling) this.cooling = data.cooling;
     if (data.heat !== undefined) this.heat = data.heat;
-    if (data.coinPrices) {
+    if (data.coinPrices && data.coinPrices.length === this.coins.length) {
       this.coinPrices = data.coinPrices;
       this.priceHistory = this.coinPrices.map(p => {
         const arr = [];
@@ -670,9 +1165,15 @@ const Crypto = {
         return arr;
       });
     }
+    if (data.playerCoinHoldings) this._playerCoinHoldings = data.playerCoinHoldings;
+
     // Ensure correct lengths
     while (this.rigOwned.length < this.rigs.length) this.rigOwned.push(false);
     while (this.rigLevels.length < this.rigs.length) this.rigLevels.push(0);
+    while (this.rigTargetCoins.length < this.rigs.length) {
+      const i = this.rigTargetCoins.length;
+      this.rigTargetCoins.push(this.coins.findIndex(c => c.symbol === this.rigs[i]?.coin) ?? 0);
+    }
     while (this.cooling.length < this.coolingUpgrades.length) this.cooling.push(false);
     this.initialized = true;
   },

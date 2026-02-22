@@ -9,6 +9,13 @@ const App = {
   currentScreen: 'home',
   screenHistory: [],
 
+  // Hunger system
+  hunger: 100,
+  lastHungerTick: 0,
+  luckBoostUntil: 0,
+  luckBoostPct: 0,
+  decaySlowUntil: 0,
+
   // Suffixes for large numbers (goes up to 10^63)
   suffixes: [
     '', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc',
@@ -149,6 +156,15 @@ const App = {
     this.screenHistory.pop();
   },
 
+  getHungerPenalty() {
+    const h = this.hunger || 0;
+    if (h > 75) return 0;
+    if (h > 50) return 0.05;
+    if (h > 25) return 0.15;
+    if (h > 10) return 0.30;
+    return 0.50;
+  },
+
   save() {
     const data = {
       balance: this.balance,
@@ -157,6 +173,11 @@ const App = {
       upgrades: this.upgrades,
       rebirth: this.rebirth,
       stats: this.stats,
+      hunger: this.hunger,
+      lastHungerTick: this.lastHungerTick,
+      luckBoostUntil: this.luckBoostUntil,
+      luckBoostPct: this.luckBoostPct,
+      decaySlowUntil: this.decaySlowUntil,
       loans: typeof Loans !== 'undefined' ? Loans.getSaveData() : null,
       properties: typeof Properties !== 'undefined' ? Properties.getSaveData() : null,
       crime: typeof Crime !== 'undefined' ? Crime.getSaveData() : null,
@@ -184,6 +205,11 @@ const App = {
       this.upgrades = data.upgrades || { clickValue: 0, autoClicker: 0, luckyClick: 0, critClick: 0, autoBet: 0 };
       this.rebirth = data.rebirth || 0;
       this.stats = data.stats || { gamesWon: 0, gamesLost: 0 };
+      this.hunger = data.hunger !== undefined ? data.hunger : 100;
+      this.lastHungerTick = data.lastHungerTick || 0;
+      this.luckBoostUntil = data.luckBoostUntil || 0;
+      this.luckBoostPct = data.luckBoostPct || 0;
+      this.decaySlowUntil = data.decaySlowUntil || 0;
       if (typeof Loans !== 'undefined') {
         if (data.loans) Loans.loadSaveData(data.loans);
         else { Loans.debt = data.debt || 0; Loans.loanTime = data.loanTime || 0; } // legacy
@@ -258,6 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
   Loans.init();
   Properties.init();
   Pets.init();
+  if (typeof Food !== 'undefined') Food.init();
   if (typeof Stocks !== 'undefined') Stocks.init();
   if (typeof Crypto !== 'undefined') Crypto.init();
   if (typeof Firebase !== 'undefined') Firebase.init();
