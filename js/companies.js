@@ -1954,28 +1954,64 @@ const Companies = {
       </div>`;
     }
 
-    // Portfolio (holdings of other players' stocks)
-    const myHoldings = Object.entries(this._holdings).filter(([, h]) => h.shares > 0);
-    if (myHoldings.length > 0) {
-      html += `<div class="company-manage-section" style="margin-top:10px">
-        <h3>My Portfolio (Player Stocks)</h3>
-        <div style="display:flex;flex-direction:column;gap:6px">`;
-      myHoldings.forEach(([sym, h]) => {
-        const s = this._allPlayerStocks[sym];
-        const value = s ? s.price * h.shares : 0;
-        const pl = s ? (s.price - h.avgCost) * h.shares : 0;
-        html += `<div class="company-stock-row">
-          <div>
-            <span class="csr-sym">${this._esc(sym)}</span>
-            <div style="font-size:12px;color:var(--text-dim)">${h.shares} shares @ avg $${h.avgCost.toFixed(2)}</div>
+    // Portfolio — system stocks + player stocks
+    const playerHoldings = Object.entries(this._holdings).filter(([, h]) => h.shares > 0);
+    const systemHoldings = typeof Stocks !== 'undefined'
+      ? Object.entries(Stocks.holdings).filter(([, h]) => h.shares > 0)
+      : [];
+    if (playerHoldings.length > 0 || systemHoldings.length > 0) {
+      let totalValue = 0;
+      let rows = '';
+
+      systemHoldings.forEach(([sym, h]) => {
+        const idx = Stocks.stocks.findIndex(s => s.symbol === sym);
+        const price = idx >= 0 ? (Stocks.prices[idx] || 0) : 0;
+        const value = price * h.shares;
+        const pl = (price - (h.avgCost || 0)) * h.shares;
+        totalValue += value;
+        rows += `<div class="company-stock-row">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:4px">
+              <span class="csr-sym">${this._esc(sym)}</span>
+              <span style="font-size:10px;color:var(--text-dim);background:var(--bg3);border-radius:3px;padding:1px 4px">SYS</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-dim)">${h.shares.toLocaleString(undefined,{maximumFractionDigits:4})} shares &bull; avg ${App.formatMoney(h.avgCost || 0)}</div>
           </div>
-          <div style="text-align:right">
+          <div style="text-align:right;flex-shrink:0">
             <div class="csr-price">${App.formatMoney(value)}</div>
             <div style="font-size:12px;${pl >= 0 ? 'color:var(--green)' : 'color:var(--red)'}">${pl >= 0 ? '+' : ''}${App.formatMoney(pl)}</div>
           </div>
         </div>`;
       });
-      html += `</div></div>`;
+
+      playerHoldings.forEach(([sym, h]) => {
+        const s = this._allPlayerStocks[sym];
+        const price = s ? (s.price || 0) : 0;
+        const value = price * h.shares;
+        const pl = (price - (h.avgCost || 0)) * h.shares;
+        totalValue += value;
+        rows += `<div class="company-stock-row">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:4px">
+              <span class="csr-sym">${this._esc(sym)}</span>
+              <span style="font-size:10px;color:#bb86fc;background:rgba(155,89,182,0.15);border-radius:3px;padding:1px 4px">PLAYER</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-dim)">${h.shares.toLocaleString(undefined,{maximumFractionDigits:4})} shares &bull; avg ${App.formatMoney(h.avgCost || 0)}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div class="csr-price">${App.formatMoney(value)}</div>
+            <div style="font-size:12px;${pl >= 0 ? 'color:var(--green)' : 'color:var(--red)'}">${pl >= 0 ? '+' : ''}${App.formatMoney(pl)}</div>
+          </div>
+        </div>`;
+      });
+
+      html += `<div class="company-manage-section" style="margin-top:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <h3 style="margin:0">&#x1F4BC; Portfolio</h3>
+          <span style="font-size:13px;color:var(--gold);font-weight:700">${App.formatMoney(totalValue)}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">${rows}</div>
+      </div>`;
     }
 
     // Fallback: new player with no companies and slot available
