@@ -109,12 +109,12 @@
   - RIVAL badge shown on competitor cards in Browse tab
 - [x] **Remove Stock from Company** — owner can delete individual stocks (with optional shareholder refund)
 - [x] **Admin: Purge player** — admin can wipe a player's Firebase data from the leaderboard
-- [x] **Mania events** — rare 0.2–0.3% chance per tick for explosive price spikes (+300–1100%)
-  - Both system and player stocks eligible
-  - Coordinated pump (buy pressure > 15%) also broadcasts boom news
-- [x] **Mania cooldowns** — 120s cooldown per stock after a mania event; prevents stacking
-- [x] **Hard price caps** — system stocks capped at 15× base; player stocks at 20× base
-  - Automatically sets a recovery target when cap is hit
+- [x] **Mania events** — rare explosive price spikes on system and player stocks
+  - System stocks: 1.5–4× spike; LUNA has super moon events for 1000%+ surges
+  - Player stocks: spike to 20–90% of hard cap; frequency scales with Bull Propaganda level
+  - 120s cooldown per stock after mania to prevent stacking
+- [x] **Hard price caps** — system stocks capped at 8× base; player stocks by personality × bull level
+  - Plateau near cap for 20+ ticks then gradual decay back to base (never stays permanently high)
 - [x] **Industry picker** — companies now declare an industry on founding:
   - ⛽ Energy → nudges JOIL & ROIL
   - 💻 Technology → nudges RETRO
@@ -144,7 +144,44 @@
   - Reinvest portion micro-boosts the company's main stock price (stock authority)
 - [x] **Properties UI** in company Manage tab — 2-column grid, world price indicator (green/red)
 
-## v2.0 - Full Multiplayer
+## v2.0 - Company & Market Phase 2 (DONE)
+- [x] **Private share offers** — offer shares in your stock directly to a specific player (P2P deal)
+  - Set qty and price per share; recipient sees incoming offer panel and can accept/decline
+- [x] **Ally system** — mark another company as an ally (mutually exclusive with competitor)
+  - Ally badge shown on their card; pay to boost their stock price; they get notified
+  - Allies vs Rivals creates a faction-style company war dynamic
+- [x] **Sell modal redesign** — all stocks (system + player) now show: 10% / 25% / 50% / custom amount / All
+  - Each button shows dollar value; custom input for exact share count
+- [x] **Company sell system** — list your company for sale at a set price
+  - Listed companies appear in Players tab; buyer pays; seller receives receipt automatically
+  - Company ownership transfers fully in Firebase; seller's local record cleaned up
+- [x] **Bankruptcy system** — player stocks below $0.10 for 5 consecutive ticks go bankrupt
+  - Distressed Assets section appears in Players tab and Market tab
+  - Original owner can Bail Out / Reclaim; any player can Acquire the company
+  - Auto-expires after 24 hours
+- [x] **Admin: Force Bankruptcy** — dark red Bankrupt button per player stock in admin panel
+  - Broadcasts `forceBankrupt` command so stock authority + all clients trigger it
+- [x] **Count-based trade impact** — concurrent sellers within 20s compound the crash:
+  - 1 seller → raw individual impact; 2 → 1–10%; 3 → 5–20% + panic news; 4 → 10–30%; 5+ → 15–40%
+  - Applies to both system stocks and player stocks
+  - Panic/pump news shows player count ("3 players dumping!")
+- [x] **Bull Propaganda redesign** — raises the HARD CAP and mania frequency, not the equilibrium
+  - Natural price always reverts toward $100; bull propaganda makes spikes higher and more frequent
+  - Standard caps: $1K→$2K→$5K→$15K→$40K→$70K (lv0–5)
+  - Extreme caps: $1.5K→$3K→$7.5K→$22K→$60K→$100K
+  - Mania now targets 20–90% of the hard cap (not 3× current price)
+- [x] **Admin stock reset broadcasts to authority** — `resetAll` command via Firebase so the stock
+  authority clears its in-memory targets; prices actually stay at $100 instead of bouncing back
+- [x] **Admin set/adjust: gradual incline** — log-scaled steps; setting $1M takes ~5 min to reach
+  - Plateau hold and decay speed both scale with how far above cap the stock is
+- [x] **Stock price stability** — mean reversion tuned to allow natural movement without locking high:
+  - ratio>10→4%/tick, >7→1.8%, >5→0.8%, >3→0.3%, >2→0.1%; very gentle near base
+- [x] **LUNA super moon events** — 0.2% chance every 5 min of a 1.5–3.0 magnitude trend (330–1050% surge)
+- [x] **Stock plateau at cap** — stocks hold near their hard cap for 20+ ticks then decay gradually
+  - Always decays back toward $150 (effectiveBase × 1.5); never stays permanently high
+- [x] **Rename Blaze → Goose** — system stock BLAZE/Blaze Foods and horse Blaze both renamed
+
+## v3.0 - Full Multiplayer
 - [ ] Real-time multiplayer poker tables
 - [ ] Live dealer blackjack
 - [ ] Spectate other players' games
