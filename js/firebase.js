@@ -881,7 +881,7 @@ const Firebase = {
       }
     }, err => console.error('Firebase playerStockPrices/adminCommand read denied:', err.code));
 
-    // Trade influence — authority applies incoming trade nudges from all players
+    // Trade influence — count-based random impact (more concurrent traders = bigger swing)
     this.db.ref('tradeInfluence').on('child_changed', snap => {
       const sym = snap.key;
       const data = snap.val();
@@ -890,53 +890,58 @@ const Firebase = {
       if (data.ts <= lastTs) return;
       this._lastTradeInfluenceTs[sym] = data.ts;
 
+      // Determine impact magnitude based on how many players traded the same direction
+      const count = data.dir < 0 ? (data.sellCount || 1) : (data.buyCount || 1);
+      let impactPct;
+      if      (count >= 5) impactPct = 0.15 + Math.random() * 0.25; // 15–40%
+      else if (count >= 4) impactPct = 0.10 + Math.random() * 0.20; // 10–30%
+      else if (count >= 3) impactPct = 0.05 + Math.random() * 0.15; // 5–20%
+      else if (count >= 2) impactPct = 0.01 + Math.random() * 0.09; // 1–10%
+      else                 impactPct = data.pct || 0;                // 1 trader: use their raw pct
+
+      const isPanic = count >= 3 && data.dir < 0;
+      const isPump  = count >= 3 && data.dir > 0;
+
       // Apply to system stocks (authority only — they push prices)
       if (this._isStockAuthority && typeof Stocks !== 'undefined') {
         const idx = Stocks.stocks.findIndex(s => s.symbol === sym);
         if (idx >= 0) {
           const price = Stocks.prices[idx];
-          if (data.dir < 0 && data.pct > 0.15) {
-            // Coordinated dump → panic crash 25–35%
-            const panicDrop = 0.25 + Math.random() * 0.10;
-            Stocks._priceTargets[idx] = { target: Math.max(1, price * (1 - panicDrop)), stepsLeft: 10 };
-            const msg = '\u{1F4C9} PANIC SELL: ' + sym + ' \u2014 coordinated dump! Price in freefall!';
+          const newTarget = Math.max(1, price * (1 + data.dir * impactPct));
+          const existing = Stocks._priceTargets[idx];
+          Stocks._priceTargets[idx] = {
+            target: existing ? (existing.target + newTarget) / 2 : newTarget,
+            stepsLeft: count >= 3 ? 12 : 8,
+          };
+          if (isPanic) {
+            const msg = '\u{1F4C9} PANIC SELL: ' + sym + ' \u2014 ' + count + ' players dumping! Price in freefall!';
             Stocks._addNews(msg, false);
             if (this.isOnline()) this.pushStockNews(msg, false);
-          } else if (data.dir > 0 && data.pct > 0.15) {
-            // Coordinated pump → boom 25–35%
-            const boom = 0.25 + Math.random() * 0.10;
-            Stocks._priceTargets[idx] = { target: price * (1 + boom), stepsLeft: 10 };
-            const msg = '\u{1F4C8} PUMP: ' + sym + ' \u2014 coordinated buying surge! Price skyrocketing!';
+          } else if (isPump) {
+            const msg = '\u{1F4C8} PUMP: ' + sym + ' \u2014 ' + count + ' players buying! Price skyrocketing!';
             Stocks._addNews(msg, true);
             if (this.isOnline()) this.pushStockNews(msg, true);
-          } else {
-            const newTarget = Math.max(1, price * (1 + data.dir * data.pct));
-            const existing = Stocks._priceTargets[idx];
-            Stocks._priceTargets[idx] = { target: existing ? (existing.target + newTarget) / 2 : newTarget, stepsLeft: 8 };
           }
         }
       }
-      // Apply to player stocks (all clients update target; Companies authority applies via tickPrices)
+
+      // Apply to player stocks (all clients update local target; authority pushes prices)
       if (typeof Companies !== 'undefined' && Companies._allPlayerStocks[sym]) {
         const s = Companies._allPlayerStocks[sym];
-        if (data.dir < 0 && data.pct > 0.15) {
-          // Coordinated dump → panic crash
-          const panicDrop = 0.25 + Math.random() * 0.10;
-          Companies._playerStockTargets[sym] = { target: Math.max(0.01, s.price * (1 - panicDrop)), stepsLeft: 10 };
-          const msg = '\u{1F4C9} PANIC SELL: ' + sym + ' \u2014 coordinated dump! Price in freefall!';
+        const newTarget = Math.max(0.01, s.price * (1 + data.dir * impactPct));
+        const existing = Companies._playerStockTargets[sym];
+        Companies._playerStockTargets[sym] = {
+          target: existing ? (existing.target + newTarget) / 2 : newTarget,
+          stepsLeft: count >= 3 ? 12 : 8,
+        };
+        if (isPanic) {
+          const msg = '\u{1F4C9} PANIC SELL: ' + sym + ' \u2014 ' + count + ' players dumping! Price in freefall!';
           if (typeof Stocks !== 'undefined') Stocks._addNews(msg, false);
-          if (this.isOnline()) this.pushStockNews(msg, false);
-        } else if (data.dir > 0 && data.pct > 0.15) {
-          // Coordinated pump → boom
-          const boom = 0.25 + Math.random() * 0.10;
-          Companies._playerStockTargets[sym] = { target: s.price * (1 + boom), stepsLeft: 10 };
-          const msg = '\u{1F4C8} PUMP: ' + sym + ' \u2014 coordinated buying surge! Price skyrocketing!';
+          if (this._isStockAuthority && this.isOnline()) this.pushStockNews(msg, false);
+        } else if (isPump) {
+          const msg = '\u{1F4C8} PUMP: ' + sym + ' \u2014 ' + count + ' players buying! Price skyrocketing!';
           if (typeof Stocks !== 'undefined') Stocks._addNews(msg, true);
-          if (this.isOnline()) this.pushStockNews(msg, true);
-        } else {
-          const newTarget = Math.max(0.01, s.price * (1 + data.dir * data.pct));
-          const existing = Companies._playerStockTargets[sym];
-          Companies._playerStockTargets[sym] = { target: existing ? (existing.target + newTarget) / 2 : newTarget, stepsLeft: 8 };
+          if (this._isStockAuthority && this.isOnline()) this.pushStockNews(msg, true);
         }
       }
     });
@@ -1059,18 +1064,22 @@ const Firebase = {
     ref.transaction(curr => {
       const now = Date.now();
       if (!curr || now - (curr.ts || 0) > 20000) {
-        return { dir, pct, ts: now };
+        // Fresh 20s window — first trader
+        return { dir, pct, ts: now, sellCount: dir < 0 ? 1 : 0, buyCount: dir > 0 ? 1 : 0 };
       }
-      // Same direction: accumulate (cap 0.30); opposite direction: cancel out
+      // Accumulate trader counts per direction
+      const sellCount = (curr.sellCount || 0) + (dir < 0 ? 1 : 0);
+      const buyCount  = (curr.buyCount  || 0) + (dir > 0 ? 1 : 0);
+      // pct: same direction accumulates (cap 0.40), opposite cancels out
       let combinedPct, combinedDir;
       if (curr.dir === dir) {
-        combinedPct = Math.min(0.30, (curr.pct || 0) + pct);
+        combinedPct = Math.min(0.40, (curr.pct || 0) + pct);
         combinedDir = dir;
       } else {
         combinedPct = Math.max(0, (curr.pct || 0) - pct);
-        combinedDir = combinedPct > 0 ? curr.dir : dir; // keep dominant dir; flip to new if fully cancelled
+        combinedDir = combinedPct > 0 ? curr.dir : dir;
       }
-      return { dir: combinedDir, pct: combinedPct, ts: now };
+      return { dir: combinedDir, pct: combinedPct, ts: now, sellCount, buyCount };
     }).catch(err => console.error('Firebase tradeInfluence write error:', err));
   },
 
