@@ -299,6 +299,7 @@ const Stocks = {
   },
 
   _tickerFmtPrice(price) {
+    if (typeof price !== 'number' || !isFinite(price)) return '$0.00';
     // Short compact format: $1.23, $999, $1.5K, $2.3M, etc.
     if (price < 10)    return '$' + price.toFixed(2);
     if (price < 1000)  return '$' + Math.round(price);
@@ -364,7 +365,7 @@ const Stocks = {
     if (showCoins && typeof Crypto !== 'undefined' && Crypto.coinPrices && Crypto.coinPrices.length) {
       items.push({ text: '\u25CF COINS \u25CF', dir: 'flat', isSep: true });
       Crypto.coins.forEach((coin, i) => {
-        const price = Crypto.coinPrices[i];
+        const price = (typeof Crypto.coinPrices[i] === 'number' && isFinite(Crypto.coinPrices[i])) ? Crypto.coinPrices[i] : coin.baseValue;
         const hist = Crypto.priceHistory[i] || [];
         const prev = hist.length >= 2 ? hist[hist.length - 2] : price;
         const pct = prev > 0 ? ((price - prev) / prev * 100) : 0;

@@ -591,7 +591,7 @@ const Crypto = {
 
     // System coins
     this.coins.forEach((coin, i) => {
-      const price = this.coinPrices[i];
+      const price = (typeof this.coinPrices[i] === 'number' && isFinite(this.coinPrices[i])) ? this.coinPrices[i] : coin.baseValue;
       const amount = this.wallet[coin.symbol] || 0;
       const value = amount * price;
       const hist = this.priceHistory[i] || [price, price];
@@ -1181,9 +1181,10 @@ const Crypto = {
     if (data.heat !== undefined) this.heat = data.heat;
     if (data.coinPrices && data.coinPrices.length) {
       // Migrate: map by index for existing coins, fall back to baseValue for new coins
-      this.coinPrices = this.coins.map((c, i) =>
-        (data.coinPrices[i] !== undefined ? data.coinPrices[i] : c.baseValue)
-      );
+      this.coinPrices = this.coins.map((c, i) => {
+        const saved = data.coinPrices[i];
+        return (typeof saved === 'number' && isFinite(saved) && saved > 0) ? saved : c.baseValue;
+      });
       this.priceHistory = this.coinPrices.map(p => {
         const arr = [];
         for (let i = 0; i < 30; i++) arr.push(p);
