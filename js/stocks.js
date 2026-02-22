@@ -125,8 +125,16 @@ const Stocks = {
         const drift = (tgt.target - this.prices[i]) / tgt.stepsLeft;
         changes[i] = drift + this.prices[i] * (Math.random() - 0.5) * s.volatility * 0.3;
         tgt.stepsLeft--;
-        if (tgt.stepsLeft <= 0) this._priceTargets[i] = null;
+        if (tgt.stepsLeft <= 0 && (!tgt.holdUntil || Date.now() >= tgt.holdUntil)) {
+          this._priceTargets[i] = null;
+        }
         continue;
+      } else if (tgt && tgt.holdUntil && Date.now() < tgt.holdUntil) {
+        // Hold phase: stay pinned near admin target with tiny wobble
+        this.prices[i] = Math.max(0.01, tgt.target * (1 + (Math.random() - 0.5) * 0.02));
+        continue;
+      } else if (tgt) {
+        this._priceTargets[i] = null;
       }
 
       if (s.symbol === 'LUNA') {
@@ -622,25 +630,26 @@ const Stocks = {
     if (!this._priceTargets.length) this._priceTargets = this.stocks.map(() => null);
     // NOTE: directly set targets without calling setGradualTarget() — that function steals
     // stock authority, which would cause every tab to fight for authority simultaneously.
+    const _hold = () => Date.now() + 50000; // 50s hold after arriving at admin target
     switch (cmd.type) {
       case 'target':
         if (cmd.idx >= 0 && cmd.idx < this.stocks.length) {
-          this._priceTargets[cmd.idx] = { target: cmd.target, stepsLeft: cmd.steps || 15 };
+          this._priceTargets[cmd.idx] = { target: cmd.target, stepsLeft: cmd.steps || 15, holdUntil: _hold() };
         }
         break;
       case 'adjust':
         if (cmd.idx >= 0 && cmd.idx < this.stocks.length) {
-          this._priceTargets[cmd.idx] = { target: Math.max(1, this.prices[cmd.idx] * cmd.mult), stepsLeft: 15 };
+          this._priceTargets[cmd.idx] = { target: Math.max(1, this.prices[cmd.idx] * cmd.mult), stepsLeft: 15, holdUntil: _hold() };
         }
         break;
       case 'crash':
         for (let i = 0; i < this.stocks.length; i++) {
-          this._priceTargets[i] = { target: Math.max(1, this.prices[i] * 0.5), stepsLeft: 20 };
+          this._priceTargets[i] = { target: Math.max(1, this.prices[i] * 0.5), stepsLeft: 20, holdUntil: _hold() };
         }
         break;
       case 'boom':
         for (let i = 0; i < this.stocks.length; i++) {
-          this._priceTargets[i] = { target: this.prices[i] * 2.0, stepsLeft: 20 };
+          this._priceTargets[i] = { target: this.prices[i] * 2.0, stepsLeft: 20, holdUntil: _hold() };
         }
         break;
     }

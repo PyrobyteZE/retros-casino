@@ -61,6 +61,7 @@ const Crypto = {
   _playerCoinHistory: {}, // { [SYM]: price[] }
   _myPlayerCoin: null,    // local copy of own coin
   _playerCoinHoldings: {}, // { [SYM]: amount }
+  _playerCoinTargets: {},  // { [SYM]: { target, stepsLeft, holdUntil } } — admin-set pinned prices
   _playerCoinTickTimer: null,
 
   init() {
@@ -168,7 +169,14 @@ const Crypto = {
         const drift = (tgt.target - this.coinPrices[i]) / tgt.stepsLeft;
         change = drift + this.coinPrices[i] * (Math.random() - 0.5) * 0.01;
         tgt.stepsLeft--;
-        if (tgt.stepsLeft <= 0) this._priceTargets[i] = null;
+        if (tgt.stepsLeft <= 0 && (!tgt.holdUntil || Date.now() >= tgt.holdUntil)) {
+          this._priceTargets[i] = null;
+        }
+      } else if (tgt && tgt.holdUntil && Date.now() < tgt.holdUntil) {
+        // Hold phase: pull strongly back toward admin target each tick
+        change = (tgt.target - this.coinPrices[i]) * 0.6 + this.coinPrices[i] * (Math.random() - 0.5) * 0.01;
+      } else if (tgt) {
+        this._priceTargets[i] = null;
       }
 
       this.coinPrices[i] = Math.max(this.coins[i].baseValue * 0.1, this.coinPrices[i] + change);
@@ -194,9 +202,24 @@ const Crypto = {
       if (!coin) continue;
       const base = coin.baseValue || 100;
       const price = this._playerCoinPrices[sym] || base;
-      const drift = (base - price) * 0.005; // gentle mean reversion
-      const noise = price * (Math.random() - 0.5) * 0.04;
-      const newPrice = Math.max(0.001, price + drift + noise);
+      let newPrice;
+      const tgt = this._playerCoinTargets[sym];
+      if (tgt && tgt.stepsLeft > 0) {
+        // Gradual glide toward admin-set target
+        newPrice = Math.max(0.001, price + (tgt.target - price) / tgt.stepsLeft);
+        tgt.stepsLeft--;
+        if (tgt.stepsLeft <= 0 && (!tgt.holdUntil || Date.now() >= tgt.holdUntil)) {
+          delete this._playerCoinTargets[sym];
+        }
+      } else if (tgt && tgt.holdUntil && Date.now() < tgt.holdUntil) {
+        // Hold phase: stay near admin target with tiny wobble
+        newPrice = Math.max(0.001, tgt.target * (1 + (Math.random() - 0.5) * 0.02));
+      } else {
+        if (tgt) delete this._playerCoinTargets[sym];
+        const drift = (base - price) * 0.005; // gentle mean reversion
+        const noise = price * (Math.random() - 0.5) * 0.04;
+        newPrice = Math.max(0.001, price + drift + noise);
+      }
       this._playerCoinPrices[sym] = newPrice;
       if (!this._playerCoinHistory[sym]) this._playerCoinHistory[sym] = [newPrice];
       this._playerCoinHistory[sym].push(newPrice);
@@ -441,17 +464,30 @@ const Crypto = {
   applyAdminCommand(cmd) {
     if (!cmd || !cmd.type) return;
     if (!this._priceTargets.length) this._priceTargets = this.coins.map(() => null);
+    const _hold = Date.now() + 50000;
     switch (cmd.type) {
       case 'target':
-        if (cmd.idx >= 0 && cmd.idx < this.coins.length)
-          this.setGradualTarget(cmd.idx, cmd.target, cmd.steps || 10);
+        if (cmd.idx >= 0 && cmd.idx < this.coins.length) {
+          this._priceTargets[cmd.idx] = { target: cmd.target, stepsLeft: cmd.steps || 10, holdUntil: _hold };
+        }
         break;
       case 'adjust':
-        if (cmd.idx >= 0 && cmd.idx < this.coins.length)
-          this.setGradualTarget(cmd.idx, Math.max(0.01, this.coinPrices[cmd.idx] * cmd.mult), 10);
+        if (cmd.idx >= 0 && cmd.idx < this.coins.length) {
+          this._priceTargets[cmd.idx] = { target: Math.max(0.01, this.coinPrices[cmd.idx] * cmd.mult), stepsLeft: 10, holdUntil: _hold };
+        }
         break;
-      case 'pump': this.setGradualAll(3, 12); break;
-      case 'dump': this.setGradualAll(0.3, 12); break;
+      case 'pump':
+        for (let i = 0; i < this.coins.length; i++)
+          this._priceTargets[i] = { target: this.coinPrices[i] * 3, stepsLeft: 12, holdUntil: _hold };
+        break;
+      case 'dump':
+        for (let i = 0; i < this.coins.length; i++)
+          this._priceTargets[i] = { target: this.coinPrices[i] * 0.3, stepsLeft: 12, holdUntil: _hold };
+        break;
+    }
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase._isCryptoAuthority = true;
+      Firebase._tryClaimCryptoAuthority();
     }
   },
 
@@ -471,24 +507,29 @@ const Crypto = {
         }
       }
     };
+    const _hold = Date.now() + 50000;
     switch (cmd.type) {
       case 'pcoin-adjust': {
         const cur = this._playerCoinPrices[sym];
         if (cur !== undefined) {
           const newPrice = Math.max(0.001, cur * cmd.mult);
-          this._playerCoinPrices[sym] = newPrice;
+          const steps = Math.min(30, Math.max(8, Math.round(Math.abs(Math.log(newPrice / cur)) * 15)));
+          this._playerCoinTargets[sym] = { target: newPrice, stepsLeft: steps, holdUntil: _hold };
           _syncBase(newPrice);
         }
         break;
       }
       case 'pcoin-set':
         if (cmd.target > 0) {
-          this._playerCoinPrices[sym] = cmd.target;
+          const cur = this._playerCoinPrices[sym] || cmd.target;
+          const steps = Math.min(40, Math.max(10, Math.round(Math.abs(Math.log(cmd.target / cur)) * 18)));
+          this._playerCoinTargets[sym] = { target: cmd.target, stepsLeft: steps, holdUntil: _hold };
           _syncBase(cmd.target);
         }
         break;
       case 'pcoin-rugPull': {
-        this._playerCoinPrices[sym] = 0.0001;
+        // Gradual crash to near-zero
+        this._playerCoinTargets[sym] = { target: 0.0001, stepsLeft: 15, holdUntil: _hold };
         _syncBase(0.0001);
         const coin = this._getPlayerCoinBySym(sym);
         if (coin) coin.type = 'private';

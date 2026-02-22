@@ -402,12 +402,24 @@ const Companies = {
       const upg = s.companyUpgrades || {};
       const t = this._playerStockTargets[sym];
 
-      if (t && t.stepsLeft > 0) {
+      // Forced crash — admin command: heavy downward pressure until bankruptcy triggers
+      if (s._forceBankrupt && !s._bankruptDeclared) {
+        const drop = 0.40 + Math.random() * 0.15; // -40% to -55% per tick
+        s.price = Math.max(0.005, s.price * (1 - drop));
+        updates[sym] = s.price;
+        // Fall through to normal bankruptcy check below
+      } else if (t && t.stepsLeft > 0) {
         // Admin / trade-influence gradual target
         s.price = Math.max(0.01, s.price + (t.target - s.price) / t.stepsLeft);
         t.stepsLeft--;
-        if (t.stepsLeft <= 0) delete this._playerStockTargets[sym];
+        if (t.stepsLeft <= 0 && (!t.holdUntil || Date.now() >= t.holdUntil)) {
+          delete this._playerStockTargets[sym];
+        }
+      } else if (t && t.holdUntil && Date.now() < t.holdUntil) {
+        // Hold phase: price stays near admin-set target with tiny wobble
+        s.price = Math.max(0.01, t.target * (1 + (Math.random() - 0.5) * 0.04));
       } else {
+        if (t) delete this._playerStockTargets[sym]; // clean up expired
         const personality = s.companyPersonality || 'standard';
         const effectiveBase = this._getEffectiveBase(s);
         const vol = s.vol || 0.05;
@@ -613,7 +625,7 @@ const Companies = {
           const adjRatio = adjTarget / Math.max(1, sAdj.price);
           // Scale steps with size of move: small nudge=15, huge jump=up to 100
           const adjSteps = Math.min(100, Math.max(15, Math.round(Math.log10(Math.max(1.01, adjRatio)) * 40)));
-          this._playerStockTargets[cmd.sym] = { target: adjTarget, stepsLeft: adjSteps, isAdminSet: true };
+          this._playerStockTargets[cmd.sym] = { target: adjTarget, stepsLeft: adjSteps, isAdminSet: true, holdUntil: Date.now() + 50000 };
         }
         break;
       }
@@ -624,17 +636,17 @@ const Companies = {
           const setRatio = setTarget / Math.max(1, sSet.price);
           // Gradual incline: log-scaled steps so $1M doesn't arrive in 30s
           const setSteps = Math.min(150, Math.max(20, Math.round(Math.log10(Math.max(1.01, setRatio)) * 45)));
-          this._playerStockTargets[cmd.sym] = { target: setTarget, stepsLeft: setSteps, isAdminSet: true };
+          this._playerStockTargets[cmd.sym] = { target: setTarget, stepsLeft: setSteps, isAdminSet: true, holdUntil: Date.now() + 50000 };
         }
         break;
       }
       case 'crash':
         for (const sym in this._allPlayerStocks)
-          this._playerStockTargets[sym] = { target: Math.max(0.01, this._allPlayerStocks[sym].price * 0.5), stepsLeft: 20 };
+          this._playerStockTargets[sym] = { target: Math.max(0.01, this._allPlayerStocks[sym].price * 0.5), stepsLeft: 20, holdUntil: Date.now() + 50000 };
         break;
       case 'boom':
         for (const sym in this._allPlayerStocks)
-          this._playerStockTargets[sym] = { target: this._allPlayerStocks[sym].price * 2, stepsLeft: 20 };
+          this._playerStockTargets[sym] = { target: this._allPlayerStocks[sym].price * 2, stepsLeft: 20, holdUntil: Date.now() + 50000 };
         break;
       case 'personality': {
         // Update in-memory _allPlayerStocks for all stocks in this company
@@ -660,11 +672,20 @@ const Companies = {
         }
         break;
       }
-      case 'forceBankrupt':
-        if (cmd.sym && this._allPlayerStocks[cmd.sym]) {
-          this._declareBankruptcy(cmd.sym);
+      case 'forceBankrupt': {
+        // Gradual crash — set flag so tickPrices drives price down until bankruptcy fires naturally
+        const fSym = cmd.sym;
+        if (fSym && this._allPlayerStocks[fSym]) {
+          const compTicker = this._allPlayerStocks[fSym].companyTicker;
+          for (const sym in this._allPlayerStocks) {
+            const s = this._allPlayerStocks[sym];
+            if (s.companyTicker === compTicker && !s._bankruptDeclared) {
+              s._forceBankrupt = true;
+            }
+          }
         }
         break;
+      }
       case 'resetAll': {
         const resets = {};
         for (const sym in this._allPlayerStocks) {
@@ -1169,6 +1190,34 @@ const Companies = {
     this.render();
   },
 
+  // === RENAME COMPANY ===
+  renameCompany(cIdx) {
+    const c = this._companies[cIdx];
+    if (!c) return;
+    const input = document.getElementById('co-rename-' + cIdx);
+    if (!input) return;
+    const newName = input.value.trim();
+    if (!newName) { Toast.show('Enter a new name.', '#ff5252'); return; }
+    if (newName.length > 24) { Toast.show('Name too long (max 24 chars).', '#ff5252'); return; }
+    if (newName === c.name) { Toast.show('Same name — nothing changed.', '#ff9100'); return; }
+    const cost = 100000;
+    if (App.balance < cost) { alert('Need ' + App.formatMoney(cost) + ' to rename.'); return; }
+    if (!confirm('Rename "' + c.name + '" to "' + newName + '" for ' + App.formatMoney(cost) + '?')) return;
+    App.addBalance(-cost);
+    c.name = newName;
+    // Sync companyName on all matching stocks so market/ticker updates immediately
+    for (const sym in this._allPlayerStocks) {
+      if (this._allPlayerStocks[sym].companyTicker === c.ticker) {
+        this._allPlayerStocks[sym].companyName = newName;
+      }
+    }
+    this._saveLocal();
+    this._pushToFirebase();
+    App.save();
+    this._triggerRender();
+    Toast.show('\u{1F3E2} Renamed to "' + newName + '"!', 'var(--green-dark)', 3000);
+  },
+
   // === SELL COMPANY ===
   listForSale(cIdx) {
     const c = this._companies[cIdx];
@@ -1660,8 +1709,14 @@ const Companies = {
         : '';
       html += `<div class="company-manage-section" style="margin-bottom:10px">
         <h3>&#x1F3E2; ${this._esc(c.name)} <span style="color:var(--text-dim);font-weight:400">(${this._esc(c.ticker)})</span>${pBadge}</h3>
-        <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">
           Founded ${new Date(c.foundedAt || 0).toLocaleDateString()}
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+          <input id="co-rename-${cIdx}" type="text" maxlength="24" placeholder="Rename company…"
+            value="${this._esc(c.name)}"
+            style="flex:1;font-size:13px;padding:5px 8px;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text)">
+          <button class="csr-toggle-btn" style="font-size:11px;white-space:nowrap" onclick="Companies.renameCompany(${cIdx})">Rename — ${App.formatMoney(100000)}</button>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px">`;
 
