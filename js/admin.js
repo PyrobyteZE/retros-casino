@@ -1050,22 +1050,44 @@ const Admin = {
       container.innerHTML = '<span style="color:#888;font-size:13px">No active player banks.</span>';
       return;
     }
+
+    const banks = Object.entries(Banking._banks);
+
+    // Fast path: same banks already rendered — update stress in-place (CSS transition animates it)
+    const existingRows = container.querySelectorAll('[data-admin-bank-uid]');
+    const existingUids = new Set([...existingRows].map(el => el.dataset.adminBankUid));
+    const newUids = new Set(banks.map(([uid]) => uid));
+    const sameSet = existingUids.size === newUids.size && [...newUids].every(u => existingUids.has(u));
+
+    if (sameSet && existingRows.length > 0) {
+      banks.forEach(([ownerUid, bank]) => {
+        const stress = bank.stressLevel || 0;
+        const color = stress >= 70 ? '#e74c3c' : stress >= 40 ? '#f39c12' : '#27ae60';
+        const fill = container.querySelector(`[data-admin-bank-uid="${ownerUid}"] .admin-bank-fill`);
+        const label = container.querySelector(`[data-admin-bank-uid="${ownerUid}"] .admin-bank-label`);
+        if (fill) { fill.style.width = stress + '%'; fill.style.background = color; }
+        if (label) { label.style.color = color; label.textContent = stress + '%'; }
+      });
+      return;
+    }
+
     let html = '<div class="admin-stock-grid">';
-    Object.entries(Banking._banks).forEach(([ownerUid, bank]) => {
+    banks.forEach(([ownerUid, bank]) => {
       const stress = bank.stressLevel || 0;
       const stressColor = stress >= 70 ? '#e74c3c' : stress >= 40 ? '#f39c12' : '#27ae60';
       const safeName = (bank.ownerName || 'Unknown').replace(/'/g, '');
-      html += `<div class="admin-stock-row" style="flex-wrap:wrap;gap:4px">
+      html += `<div class="admin-stock-row" data-admin-bank-uid="${ownerUid}" style="flex-wrap:wrap;gap:4px">
         <div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:4px">
           <span class="admin-stock-sym" style="font-size:12px">🏦 ${safeName}</span>
           <span style="font-size:11px;color:var(--text-dim)">${bank.companyTicker || ''}</span>
           <div style="flex:1;height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;min-width:60px">
-            <div style="width:${stress}%;height:100%;background:${stressColor};border-radius:4px"></div>
+            <div class="admin-bank-fill bank-stress-fill" style="--stress-w:${stress}%;background:${stressColor}"></div>
           </div>
-          <span style="font-size:12px;color:${stressColor};font-weight:700">${stress}%</span>
+          <span class="admin-bank-label" style="font-size:12px;color:${stressColor};font-weight:700">${stress}%</span>
         </div>
         <div class="admin-stock-btns">
           <button class="rig-btn win" onclick="Admin.adminBankStress('${ownerUid}', -20)">-20 Stress</button>
+          <button class="rig-btn win" onclick="Admin.adminBankStress('${ownerUid}', -100)">Zero Stress</button>
           <button class="rig-btn lose" onclick="Admin.adminBankStress('${ownerUid}', 20)">+20 Stress</button>
           <button class="rig-btn lose" onclick="Admin.adminBankStress('${ownerUid}', 100)">Max Stress</button>
           <button class="rig-btn lose" style="background:#7B0000;border-color:#7B0000;color:#fff" onclick="Admin.adminForceCloseBank('${ownerUid}')">Force Close</button>
@@ -1081,10 +1103,8 @@ const Admin = {
     const bank = Banking._banks[ownerUid];
     if (!bank) return;
     const newStress = Math.max(0, Math.min(100, (bank.stressLevel || 0) + delta));
-    Firebase.updateBank(ownerUid, { stressLevel: newStress }).then(() => {
-      if (newStress >= 100) Banking.bankruptBank(ownerUid, 'Admin action');
-      this.renderBankControls();
-    });
+    // Just update the value — no auto-bankruptcy; use Force Close for that
+    Firebase.updateBank(ownerUid, { stressLevel: newStress });
   },
 
   adminForceCloseBank(ownerUid) {

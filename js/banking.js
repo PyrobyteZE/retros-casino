@@ -373,8 +373,11 @@ const Banking = {
 
   // === RENDERING ===
 
+  _stressColor(stress) {
+    return stress >= 70 ? '#e74c3c' : stress >= 40 ? '#f39c12' : '#27ae60';
+  },
+
   _renderBankCards() {
-    // Render in the companies browse tab (injected by companies.js)
     const container = document.getElementById('banking-browse-section');
     if (!container) return;
 
@@ -386,14 +389,33 @@ const Banking = {
       return;
     }
 
+    // Fast path: if every card already exists, just animate stress in-place (preserves CSS transition)
+    const existingUids = new Set([...container.querySelectorAll('[data-bank-uid]')].map(el => el.dataset.bankUid));
+    const newUids = new Set(banks.map(([uid]) => uid));
+    const sameSet = existingUids.size === newUids.size && [...newUids].every(u => existingUids.has(u));
+
+    if (sameSet && existingUids.size > 0) {
+      for (const [ownerUid, bank] of banks) {
+        const stress = bank.stressLevel || 0;
+        const color = this._stressColor(stress);
+        const fill = container.querySelector(`[data-bank-uid="${ownerUid}"] .bank-stress-fill`);
+        const label = container.querySelector(`[data-bank-uid="${ownerUid}"] .bank-stress-label`);
+        if (fill) { fill.style.width = stress + '%'; fill.style.background = color; }
+        if (label) { label.style.color = color; label.textContent = stress + '%'; }
+      }
+      return;
+    }
+
+    // Full rebuild (new bank added or removed)
     let html = '';
     for (const [ownerUid, bank] of banks) {
       const myVault = this._myVaults[ownerUid];
       const myDeposit = myVault ? (myVault.money || 0) : 0;
-      const stressColor = bank.stressLevel >= 70 ? '#e74c3c' : bank.stressLevel >= 40 ? '#f39c12' : '#27ae60';
+      const stress = bank.stressLevel || 0;
+      const stressColor = this._stressColor(stress);
       const vaultCap = this._getVaultCap(ownerUid);
       const capStr = vaultCap === Infinity ? 'Unlimited' : App.formatMoney(vaultCap) + ' cap';
-      html += `<div class="bank-card">
+      html += `<div class="bank-card" data-bank-uid="${ownerUid}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div>
             <div class="bank-name">🏦 ${this._esc(bank.ownerName)}'s Bank</div>
@@ -408,9 +430,9 @@ const Banking = {
         <div style="display:flex;align-items:center;gap:6px;margin:4px 0">
           <div style="font-size:11px;color:var(--text-dim);flex-shrink:0">Stress:</div>
           <div class="bank-stress-bar">
-            <div class="bank-stress-fill" style="width:${bank.stressLevel || 0}%;background:${stressColor}"></div>
+            <div class="bank-stress-fill" style="--stress-w:${stress}%;background:${stressColor}"></div>
           </div>
-          <div style="font-size:11px;color:${stressColor};flex-shrink:0">${bank.stressLevel || 0}%</div>
+          <span class="bank-stress-label" style="font-size:11px;color:${stressColor};flex-shrink:0">${stress}%</span>
         </div>
         ${myDeposit > 0 ? `<div style="font-size:12px;color:var(--gold);margin:4px 0">My deposit: ${App.formatMoney(myDeposit)}</div>` : ''}
         <div style="display:flex;gap:6px;margin-top:6px">
@@ -476,7 +498,7 @@ const Banking = {
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:4px">Vault Cap: ${vaultCap === Infinity ? 'Unlimited' : App.formatMoney(vaultCap) + '/player'}</div>
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
         <span style="font-size:12px;color:var(--text-dim)">Stress:</span>
-        <div class="bank-stress-bar" style="flex:1"><div class="bank-stress-fill" style="width:${bank.stressLevel || 0}%;background:${stressColor}"></div></div>
+        <div class="bank-stress-bar" style="flex:1"><div class="bank-stress-fill" style="--stress-w:${bank.stressLevel || 0}%;background:${stressColor}"></div></div>
         <span style="font-size:12px;color:${stressColor};font-weight:700">${bank.stressLevel || 0}%</span>
       </div>
       <div style="margin-bottom:8px">

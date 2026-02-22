@@ -5979,7 +5979,15 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
 .bank-stress-fill {
   height: 100%;
   border-radius: 4px;
-  transition: width 0.3s ease;
+  /* On creation: animate from 0 to --stress-w over 2.5s */
+  animation: bank-stress-grow 2.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  /* On in-place updates: smooth transition */
+  transition: width 2.5s cubic-bezier(0.25, 0.46, 0.45, 0.94), background 1.5s ease;
+}
+
+@keyframes bank-stress-grow {
+  from { width: 0%; }
+  to   { width: var(--stress-w, 0%); }
 }
 
 .bank-setup-section {
