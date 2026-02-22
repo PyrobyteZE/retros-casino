@@ -858,7 +858,7 @@ const Stocks = {
     });
     html += `</div>
       <div class="stock-trade-custom-amount" style="margin-top:4px;margin-bottom:12px">
-        <input type="number" id="stock-sell-custom" placeholder="# of shares" min="0.0001" max="${owned}" step="any" style="flex:1">
+        <input type="text" inputmode="decimal" id="stock-sell-custom" placeholder="# of shares" style="flex:1">
         <button onclick="Stocks._confirmCustomSell('${symbol}')">Sell</button>
       </div>
       <button class="stock-trade-cancel" onclick="Stocks.closeModal()">Cancel</button>
@@ -869,7 +869,7 @@ const Stocks = {
   _confirmCustomSell(symbol) {
     const input = document.getElementById('stock-sell-custom');
     if (!input) return;
-    const qty = parseFloat(input.value);
+    const qty = App.parseAmount(input.value);
     if (isNaN(qty) || qty <= 0) return;
     this.sell(symbol, qty);
     this.closeModal();

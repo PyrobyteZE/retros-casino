@@ -794,7 +794,7 @@ const Admin = {
     if (typeof Stocks === 'undefined') return;
     const input = document.getElementById('admin-stock-price-' + idx);
     if (!input) return;
-    const val = parseFloat(input.value);
+    const val = App.parseAmount(input.value);
     if (isNaN(val) || val < 1) return;
     Stocks.setGradualTarget(idx, val, 15);
     if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminStockCommand({ type: 'target', idx, target: val, steps: 15 });
@@ -816,7 +816,7 @@ const Admin = {
           <button class="rig-btn win" onclick="Admin.stockAdjust(${i},2)">+100%</button>
         </div>
         <div class="admin-stock-set">
-          <input type="number" id="admin-stock-price-${i}" value="${Math.round(price)}" min="1" style="width:70px">
+          <input type="text" inputmode="decimal" id="admin-stock-price-${i}" value="${Math.round(price)}" style="width:70px">
           <button onclick="Admin.stockSetPrice(${i})">Set</button>
         </div>
       </div>`;
@@ -851,7 +851,7 @@ const Admin = {
           <button class="rig-btn lose" style="background:#7B0000;border-color:#7B0000;color:#fff" onclick="Admin.playerStockForceBankrupt('${sym}')">Bankrupt</button>
         </div>
         <div class="admin-stock-set">
-          <input type="number" id="admin-pstock-price-${sym}" value="${Math.round(price)}" min="1" style="width:70px">
+          <input type="text" inputmode="decimal" id="admin-pstock-price-${sym}" value="${Math.round(price)}" style="width:70px">
           <button onclick="Admin.playerStockSetPrice('${sym}')">Set</button>
         </div>
       </div>`;
@@ -871,7 +871,7 @@ const Admin = {
   playerStockSetPrice(sym) {
     const input = document.getElementById('admin-pstock-price-' + sym);
     if (!input) return;
-    const val = parseFloat(input.value);
+    const val = App.parseAmount(input.value);
     if (isNaN(val) || val < 0.01) return;
     const cmd = { type: 'set', sym, target: val };
     if (typeof Companies !== 'undefined') Companies.applyAdminCommand(cmd);
@@ -953,7 +953,7 @@ const Admin = {
     if (typeof Crypto === 'undefined') return;
     const input = document.getElementById('admin-crypto-price-' + idx);
     if (!input) return;
-    const val = parseFloat(input.value);
+    const val = App.parseAmount(input.value);
     if (isNaN(val) || val < 0.01) return;
     Crypto.setGradualTarget(idx, val, 10);
     if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminCryptoCommand({ type: 'target', idx, target: val, steps: 10 });
@@ -984,7 +984,7 @@ const Admin = {
           <button class="rig-btn danger" style="background:#3d0000;color:#ff6b6b;border:1px solid #8b0000" onclick="Admin.playerCoinDelete('${safeSym}')">\u{1F5D1}\uFE0F Delete</button>
         </div>
         <div class="admin-stock-set">
-          <input type="number" id="admin-pcoin-price-${safeSym}" value="${price.toFixed(4)}" min="0.0001" step="0.0001" style="width:80px">
+          <input type="text" inputmode="decimal" id="admin-pcoin-price-${safeSym}" value="${price.toFixed(4)}" style="width:80px">
           <button onclick="Admin.playerCoinSetPrice('${safeSym}')">Set</button>
         </div>
       </div>`;
@@ -1004,7 +1004,7 @@ const Admin = {
   playerCoinSetPrice(sym) {
     const input = document.getElementById('admin-pcoin-price-' + sym);
     if (!input) return;
-    const val = parseFloat(input.value);
+    const val = App.parseAmount(input.value);
     if (isNaN(val) || val < 0.0001) return;
     const cmd = { type: 'pcoin-set', sym, target: val };
     if (typeof Crypto !== 'undefined') Crypto.applyPlayerCoinAdminCommand(cmd);
@@ -1053,7 +1053,7 @@ const Admin = {
           <button class="rig-btn win" onclick="Admin.cryptoAdjust(${i},5)">+400%</button>
         </div>
         <div class="admin-stock-set">
-          <input type="number" id="admin-crypto-price-${i}" value="${price.toFixed(2)}" min="0.01" step="0.01" style="width:80px">
+          <input type="text" inputmode="decimal" id="admin-crypto-price-${i}" value="${price.toFixed(2)}" style="width:80px">
           <button onclick="Admin.cryptoSetPrice(${i})">Set</button>
         </div>
       </div>`;
