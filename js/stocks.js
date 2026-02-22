@@ -785,22 +785,39 @@ const Stocks = {
     if (idx < 0) return;
     const price = this.prices[idx];
     const owned = this.holdings[symbol].shares;
+    const fmt = n => n % 1 === 0 ? n : parseFloat(n.toFixed(4));
 
-    // Fixed amounts only — ALL uses sellAll() so it always reads live holdings
-    const fixedAmounts = [1, 5, 10].filter(a => a < owned);
-    const showAll = owned > 0;
+    const pcts = [
+      { label: '10%', shares: owned * 0.10 },
+      { label: '25%', shares: owned * 0.25 },
+      { label: '50%', shares: owned * 0.50 },
+      { label: 'All',  shares: owned },
+    ];
 
     let html = `<div class="stock-trade-modal">
-      <div class="stock-trade-title">Sell ${symbol} @ ${App.formatMoney(price)}</div>
+      <div class="stock-trade-title" style="color:var(--red)">Sell ${symbol}</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">@ ${App.formatMoney(price)} &bull; ${fmt(owned)} shares &bull; ${App.formatMoney(price * owned)}</div>
       <div class="stock-trade-buttons">`;
-    fixedAmounts.forEach(a => {
-      html += `<button class="stock-trade-btn stock-sell-btn" onclick="Stocks.sell('${symbol}',${a});Stocks.closeModal()">${a} share${a>1?'s':''}<br>${App.formatMoney(price*a)}</button>`;
+    pcts.forEach(({ label, shares }) => {
+      html += `<button class="stock-trade-btn stock-sell-btn" onclick="Stocks.sell('${symbol}',${shares});Stocks.closeModal()">${label}<br><span style="font-size:11px;opacity:0.8">${App.formatMoney(price * shares)}</span></button>`;
     });
-    if (showAll) {
-      html += `<button class="stock-trade-btn stock-sell-btn" onclick="Stocks.sellAll('${symbol}');Stocks.closeModal()">ALL<br>${App.formatMoney(price*owned)}</button>`;
-    }
-    html += `</div><button class="stock-trade-cancel" onclick="Stocks.closeModal()">Cancel</button></div>`;
+    html += `</div>
+      <div class="stock-trade-custom-amount" style="margin-top:4px;margin-bottom:12px">
+        <input type="number" id="stock-sell-custom" placeholder="# of shares" min="0.0001" max="${owned}" step="any" style="flex:1">
+        <button onclick="Stocks._confirmCustomSell('${symbol}')">Sell</button>
+      </div>
+      <button class="stock-trade-cancel" onclick="Stocks.closeModal()">Cancel</button>
+    </div>`;
     this._showModal(html);
+  },
+
+  _confirmCustomSell(symbol) {
+    const input = document.getElementById('stock-sell-custom');
+    if (!input) return;
+    const qty = parseFloat(input.value);
+    if (isNaN(qty) || qty <= 0) return;
+    this.sell(symbol, qty);
+    this.closeModal();
   },
 
   _showModal(html) {

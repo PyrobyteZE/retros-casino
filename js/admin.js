@@ -831,6 +831,7 @@ const Admin = {
           <button class="rig-btn lose" onclick="Admin.playerStockAdjust('${sym}',0.8)">-20%</button>
           <button class="rig-btn win" onclick="Admin.playerStockAdjust('${sym}',1.25)">+25%</button>
           <button class="rig-btn win" onclick="Admin.playerStockAdjust('${sym}',2)">+100%</button>
+          <button class="rig-btn lose" style="background:#7B0000;border-color:#7B0000;color:#fff" onclick="Admin.playerStockForceBankrupt('${sym}')">Bankrupt</button>
         </div>
         <div class="admin-stock-set">
           <input type="number" id="admin-pstock-price-${sym}" value="${Math.round(price)}" min="1" style="width:70px">
@@ -879,6 +880,14 @@ const Admin = {
     const msg = '\u{1F4C9} Player company stocks in freefall! Mass sell-off detected!';
     if (typeof Stocks !== 'undefined') Stocks._addNews(msg, false);
     if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushStockNews(msg, false);
+  },
+
+  playerStockForceBankrupt(sym) {
+    if (!confirm(`Force ${sym} into bankruptcy? Owner can bail out or another player can acquire it.`)) return;
+    const cmd = { type: 'forceBankrupt', sym };
+    if (typeof Companies !== 'undefined') Companies.applyAdminCommand(cmd);
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminPlayerStockCommand(cmd);
+    this.renderPlayerStockControls();
   },
 
   // === Crypto Admin ===
