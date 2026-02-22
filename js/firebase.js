@@ -1235,7 +1235,25 @@ const Firebase = {
       .then(() => this.db.ref('companySaleReceipts/' + sellerUid).push({
         amount: salePrice, ts: Date.now(), ticker,
       }))
+      .then(() => this._transferBank(sellerUid, buyerUid, buyerName))
       .catch(err => console.error('Firebase acquireListedCompany error:', err));
+  },
+
+  // Transfer bank + vaults from seller to buyer on company sale
+  _transferBank(sellerUid, buyerUid, buyerName) {
+    return this.db.ref('playerBanks/' + sellerUid).once('value').then(snap => {
+      const bank = snap.val();
+      if (!bank) return; // seller had no bank
+      return this.db.ref('playerBanks/' + buyerUid).set({ ...bank, ownerName: buyerName })
+        .then(() => this.db.ref('playerBankVaults/' + sellerUid).once('value'))
+        .then(vaultSnap => {
+          const vaults = vaultSnap.val();
+          const ops = [this.db.ref('playerBanks/' + sellerUid).remove()];
+          if (vaults) ops.push(this.db.ref('playerBankVaults/' + buyerUid).set(vaults));
+          return Promise.all(ops);
+        })
+        .then(() => this.db.ref('playerBankVaults/' + sellerUid).remove());
+    });
   },
 
   listenSaleReceipts(uid, cb) {

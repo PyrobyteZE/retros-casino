@@ -239,6 +239,7 @@ const Admin = {
     } else if (tab === 'market') {
       this.renderPlayerStockControls();
       this.renderPlayerCoinControls();
+      this.renderBankControls();
       this.renderStockControls();
       this.renderCryptoControls();
     } else if (tab === 'data') {
@@ -398,6 +399,10 @@ const Admin = {
       <div class="admin-section">
         <h3>Player Coins</h3>
         <div id="admin-player-coin-controls" class="admin-stock-controls"></div>
+      </div>
+      <div class="admin-section">
+        <h3>Player Banks</h3>
+        <div id="admin-bank-controls" class="admin-stock-controls"></div>
       </div>
       <div class="admin-section">
         <h3>Stock Market</h3>
@@ -1035,6 +1040,57 @@ const Admin = {
     }
     Toast.show(`\u{1F5D1}\uFE0F Coin ${sym} deleted.`, '#c0392b', 4000);
     this.renderPlayerCoinControls();
+  },
+
+  // === Player Bank Admin ===
+  renderBankControls() {
+    const container = document.getElementById('admin-bank-controls');
+    if (!container) return;
+    if (typeof Banking === 'undefined' || !Object.keys(Banking._banks).length) {
+      container.innerHTML = '<span style="color:#888;font-size:13px">No active player banks.</span>';
+      return;
+    }
+    let html = '<div class="admin-stock-grid">';
+    Object.entries(Banking._banks).forEach(([ownerUid, bank]) => {
+      const stress = bank.stressLevel || 0;
+      const stressColor = stress >= 70 ? '#e74c3c' : stress >= 40 ? '#f39c12' : '#27ae60';
+      const safeName = (bank.ownerName || 'Unknown').replace(/'/g, '');
+      html += `<div class="admin-stock-row" style="flex-wrap:wrap;gap:4px">
+        <div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:4px">
+          <span class="admin-stock-sym" style="font-size:12px">🏦 ${safeName}</span>
+          <span style="font-size:11px;color:var(--text-dim)">${bank.companyTicker || ''}</span>
+          <div style="flex:1;height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;min-width:60px">
+            <div style="width:${stress}%;height:100%;background:${stressColor};border-radius:4px"></div>
+          </div>
+          <span style="font-size:12px;color:${stressColor};font-weight:700">${stress}%</span>
+        </div>
+        <div class="admin-stock-btns">
+          <button class="rig-btn win" onclick="Admin.adminBankStress('${ownerUid}', -20)">-20 Stress</button>
+          <button class="rig-btn lose" onclick="Admin.adminBankStress('${ownerUid}', 20)">+20 Stress</button>
+          <button class="rig-btn lose" onclick="Admin.adminBankStress('${ownerUid}', 100)">Max Stress</button>
+          <button class="rig-btn lose" style="background:#7B0000;border-color:#7B0000;color:#fff" onclick="Admin.adminForceCloseBank('${ownerUid}')">Force Close</button>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+  },
+
+  adminBankStress(ownerUid, delta) {
+    if (typeof Banking === 'undefined' || !Firebase || !Firebase.isOnline()) return;
+    const bank = Banking._banks[ownerUid];
+    if (!bank) return;
+    const newStress = Math.max(0, Math.min(100, (bank.stressLevel || 0) + delta));
+    Firebase.updateBank(ownerUid, { stressLevel: newStress }).then(() => {
+      if (newStress >= 100) Banking.bankruptBank(ownerUid, 'Admin action');
+      this.renderBankControls();
+    });
+  },
+
+  adminForceCloseBank(ownerUid) {
+    if (!confirm('Force close this bank? All depositors lose everything.')) return;
+    if (typeof Banking !== 'undefined') Banking.bankruptBank(ownerUid, 'Admin force close');
+    setTimeout(() => this.renderBankControls(), 1000);
   },
 
   renderCryptoControls() {
