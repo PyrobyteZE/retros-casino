@@ -981,6 +981,7 @@ const Admin = {
           <button class="rig-btn win" onclick="Admin.playerCoinAdjust('${safeSym}',1.25)">+25%</button>
           <button class="rig-btn win" onclick="Admin.playerCoinAdjust('${safeSym}',2)">+100%</button>
           <button class="rig-btn danger" style="background:#8b0000;color:#fff" onclick="Admin.playerCoinRugPull('${safeSym}')">Rug Pull</button>
+          <button class="rig-btn danger" style="background:#3d0000;color:#ff6b6b;border:1px solid #8b0000" onclick="Admin.playerCoinDelete('${safeSym}')">\u{1F5D1}\uFE0F Delete</button>
         </div>
         <div class="admin-stock-set">
           <input type="number" id="admin-pcoin-price-${safeSym}" value="${price.toFixed(4)}" min="0.0001" step="0.0001" style="width:80px">
@@ -1017,6 +1018,22 @@ const Admin = {
     if (typeof Crypto !== 'undefined') Crypto.applyPlayerCoinAdminCommand(cmd);
     if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushAdminCoinCommand(cmd);
     Toast.show(`\u{1F4A5} Rug pull executed on ${sym}!`, '#c0392b', 4000);
+    this.renderPlayerCoinControls();
+  },
+
+  playerCoinDelete(sym) {
+    if (!confirm(`Permanently DELETE coin ${sym}?\n\nThis removes it from the game entirely. Cannot be undone.`)) return;
+    const uid = typeof Crypto !== 'undefined' ? Crypto._getPlayerCoinUidBySym(sym) : null;
+    if (!uid && typeof Crypto !== 'undefined') {
+      Toast.show('Coin not found in registry', '#ff5252'); return;
+    }
+    const cmd = { type: 'pcoin-delete', sym, ownerUid: uid };
+    if (typeof Crypto !== 'undefined') Crypto.applyPlayerCoinAdminCommand(cmd);
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.pushAdminCoinCommand(cmd);
+      if (uid) Firebase.removePlayerCoin(uid);
+    }
+    Toast.show(`\u{1F5D1}\uFE0F Coin ${sym} deleted.`, '#c0392b', 4000);
     this.renderPlayerCoinControls();
   },
 

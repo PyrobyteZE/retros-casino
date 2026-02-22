@@ -178,6 +178,10 @@ const Firebase = {
     this.listenPlayerCoinPrices(prices => { if (typeof Crypto !== 'undefined') Crypto.applyServerPlayerCoinPrices(prices); });
     // Listen player coins catalog
     if (typeof Crypto !== 'undefined') this.listenPlayerCoins(data => Crypto.updatePlayerCoins(data));
+    // Coin transfers (P2P sends)
+    this.listenCoinTransfers(this.uid, transfer => {
+      if (typeof Crypto !== 'undefined') Crypto._receiveCoinTransfer(transfer);
+    });
     // Init Firebase-dependent features in other modules
     if (typeof Stocks !== 'undefined') Stocks._initFirebaseFeatures();
     if (typeof Loans !== 'undefined' && Loans._counterLoan && Loans._counterLoan.amount > 0) {
@@ -2028,5 +2032,21 @@ const Firebase = {
   listenTradeInfluenceCoin(sym, cb) {
     if (!this.isOnline()) return;
     this.db.ref('tradeInfluenceCoin/' + sym).on('value', snap => cb(snap.val()));
+  },
+
+  // === COIN TRANSFERS ===
+  sendCoinTransfer(toUid, sym, amount, fromName) {
+    if (!this.isOnline() || !toUid) return;
+    return this.db.ref('coinTransfers/' + toUid).push({
+      sym, amount, fromName: fromName || 'Player', fromUid: this.uid, ts: Date.now(),
+    }).catch(err => console.error('sendCoinTransfer error:', err));
+  },
+
+  listenCoinTransfers(uid, cb) {
+    if (!this.isOnline() || !uid) return;
+    this.db.ref('coinTransfers/' + uid).on('child_added', snap => {
+      const data = snap.val();
+      if (data) { cb(data); snap.ref.remove(); }
+    }, err => console.warn('listenCoinTransfers denied:', err.code));
   },
 };

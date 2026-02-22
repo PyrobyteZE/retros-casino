@@ -1,25 +1,25 @@
 // Crypto Mining System - Click + Idle
 const Crypto = {
-  // System coins (8 total)
+  // System coins (8 total) — lower base prices, higher vol for bigger % swings like IRL crypto
   coins: [
-    { symbol: 'BTC',  name: 'Bitcoin',    baseValue: 500,    vol: 0.03, color: '#f7931a', emoji: '\u20BF' },
-    { symbol: 'ETH',  name: 'Ethereum',   baseValue: 50,     vol: 0.04, color: '#627eea', emoji: '\u039E' },
-    { symbol: 'DOGE', name: 'Dogecoin',   baseValue: 0.10,   vol: 0.08, color: '#c2a633', emoji: '\u{1F436}' },
-    { symbol: 'SOL',  name: 'Solana',     baseValue: 150,    vol: 0.06, color: '#9945ff', emoji: '\u25CE' },
-    { symbol: 'XRP',  name: 'Ripple',     baseValue: 0.50,   vol: 0.04, color: '#346aa9', emoji: '\u2715' },
-    { symbol: 'PEPE', name: 'PepeCoin',   baseValue: 0.0001, vol: 0.20, color: '#479747', emoji: '\u{1F438}' },
-    { symbol: 'LINK', name: 'Chainlink',  baseValue: 15,     vol: 0.07, color: '#2a5ada', emoji: '\u2B21' },
-    { symbol: 'ADA',  name: 'Cardano',    baseValue: 0.45,   vol: 0.05, color: '#0d1e2d', emoji: '\u20B3' },
+    { symbol: 'BTC',  name: 'Bitcoin',    baseValue: 200,    vol: 0.08, color: '#f7931a', emoji: '\u20BF' },
+    { symbol: 'ETH',  name: 'Ethereum',   baseValue: 20,     vol: 0.10, color: '#627eea', emoji: '\u039E' },
+    { symbol: 'DOGE', name: 'Dogecoin',   baseValue: 0.08,   vol: 0.20, color: '#c2a633', emoji: '\u{1F436}' },
+    { symbol: 'SOL',  name: 'Solana',     baseValue: 50,     vol: 0.13, color: '#9945ff', emoji: '\u25CE' },
+    { symbol: 'XRP',  name: 'Ripple',     baseValue: 0.30,   vol: 0.10, color: '#346aa9', emoji: '\u2715' },
+    { symbol: 'PEPE', name: 'PepeCoin',   baseValue: 0.0001, vol: 0.40, color: '#479747', emoji: '\u{1F438}' },
+    { symbol: 'LINK', name: 'Chainlink',  baseValue: 8,      vol: 0.14, color: '#2a5ada', emoji: '\u2B21' },
+    { symbol: 'ADA',  name: 'Cardano',    baseValue: 0.20,   vol: 0.11, color: '#0d1e2d', emoji: '\u20B3' },
   ],
 
-  // Mining rigs (idle income)
+  // Mining rigs (idle income) — baseRates scaled up to keep dollar income stable after BTC price drop
   rigs: [
-    { name: 'USB Miner',   icon: '\u{1F50C}',        cost: 1000,    baseRate: 0.0001, coin: 'BTC',  maxLevel: 10 },
-    { name: 'Gaming PC',   icon: '\u{1F5A5}\uFE0F',  cost: 10000,   baseRate: 0.001,  coin: 'ETH',  maxLevel: 10 },
-    { name: 'Mining Rig',  icon: '\u2699\uFE0F',      cost: 100000,  baseRate: 0.01,   coin: 'ETH',  maxLevel: 10 },
-    { name: 'ASIC Miner',  icon: '\u{1F4A0}',         cost: 500000,  baseRate: 0.005,  coin: 'BTC',  maxLevel: 10 },
-    { name: 'Server Farm', icon: '\u{1F3ED}',         cost: 5000000, baseRate: 0.05,   coin: 'BTC',  maxLevel: 10 },
-    { name: 'DOGE Farm',   icon: '\u{1F436}',         cost: 50000,   baseRate: 10,     coin: 'DOGE', maxLevel: 10 },
+    { name: 'USB Miner',   icon: '\u{1F50C}',        cost: 1000,    baseRate: 0.00025, coin: 'BTC',  maxLevel: 10 },
+    { name: 'Gaming PC',   icon: '\u{1F5A5}\uFE0F',  cost: 10000,   baseRate: 0.0025,  coin: 'ETH',  maxLevel: 10 },
+    { name: 'Mining Rig',  icon: '\u2699\uFE0F',      cost: 100000,  baseRate: 0.025,   coin: 'ETH',  maxLevel: 10 },
+    { name: 'ASIC Miner',  icon: '\u{1F4A0}',         cost: 500000,  baseRate: 0.0125,  coin: 'BTC',  maxLevel: 10 },
+    { name: 'Server Farm', icon: '\u{1F3ED}',         cost: 5000000, baseRate: 0.125,   coin: 'BTC',  maxLevel: 10 },
+    { name: 'DOGE Farm',   icon: '\u{1F436}',         cost: 50000,   baseRate: 25,      coin: 'DOGE', maxLevel: 10 },
   ],
 
   // Click mining upgrades
@@ -213,6 +213,13 @@ const Crypto = {
   _getPlayerCoinBySym(sym) {
     for (const uid in this._playerCoins) {
       if (this._playerCoins[uid].symbol === sym) return this._playerCoins[uid];
+    }
+    return null;
+  },
+
+  _getPlayerCoinUidBySym(sym) {
+    for (const uid in this._playerCoins) {
+      if (this._playerCoins[uid].symbol === sym) return uid;
     }
     return null;
   },
@@ -451,20 +458,48 @@ const Crypto = {
   applyPlayerCoinAdminCommand(cmd) {
     if (!cmd || !cmd.type || !cmd.sym) return;
     const sym = cmd.sym;
+    const _syncBase = (newPrice) => {
+      // Update local baseValue so mean reversion targets new price, not old one
+      const coin = this._getPlayerCoinBySym(sym);
+      if (coin) {
+        coin.baseValue = newPrice;
+        // Only write Firebase once — from admin's session (online + not follower-only)
+        const uid = this._getPlayerCoinUidBySym(sym);
+        if (uid && typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+          Firebase.updatePlayerCoin(uid, { baseValue: newPrice })
+            .catch(() => {});
+        }
+      }
+    };
     switch (cmd.type) {
       case 'pcoin-adjust': {
         const cur = this._playerCoinPrices[sym];
-        if (cur !== undefined) this._playerCoinPrices[sym] = Math.max(0.001, cur * cmd.mult);
+        if (cur !== undefined) {
+          const newPrice = Math.max(0.001, cur * cmd.mult);
+          this._playerCoinPrices[sym] = newPrice;
+          _syncBase(newPrice);
+        }
         break;
       }
       case 'pcoin-set':
-        if (cmd.target > 0) this._playerCoinPrices[sym] = cmd.target;
+        if (cmd.target > 0) {
+          this._playerCoinPrices[sym] = cmd.target;
+          _syncBase(cmd.target);
+        }
         break;
       case 'pcoin-rugPull': {
         this._playerCoinPrices[sym] = 0.0001;
-        // Mark coin as private so it disappears from the market
+        _syncBase(0.0001);
         const coin = this._getPlayerCoinBySym(sym);
         if (coin) coin.type = 'private';
+        break;
+      }
+      case 'pcoin-delete': {
+        const ownerUid = cmd.ownerUid || this._getPlayerCoinUidBySym(sym);
+        delete this._playerCoinPrices[sym];
+        delete this._playerCoinHistory[sym];
+        if (ownerUid && this._playerCoins[ownerUid]) delete this._playerCoins[ownerUid];
+        if (this._myPlayerCoin && this._myPlayerCoin.symbol === sym) this._myPlayerCoin = null;
         break;
       }
     }
@@ -489,6 +524,17 @@ const Crypto = {
     const coinAmount = cashAmount / price;
     App.addBalance(-cashAmount);
     this._playerCoinHoldings[symbol] = (this._playerCoinHoldings[symbol] || 0) + coinAmount;
+    // If owner buys their own coin — update reserve stake
+    if (typeof Firebase !== 'undefined' && Firebase.uid) {
+      const ownerUid = this._getPlayerCoinUidBySym(symbol);
+      if (ownerUid === Firebase.uid) {
+        const coin = this._playerCoins[ownerUid];
+        if (coin) {
+          coin.reserveAmt = (coin.reserveAmt || 0) + coinAmount;
+          Firebase.updatePlayerCoin(ownerUid, { reserveAmt: coin.reserveAmt }).catch(() => {});
+        }
+      }
+    }
     if (typeof Firebase !== 'undefined') Firebase.tradeInfluenceCoin(symbol, 'buy');
     App.save(); this.render();
   },
@@ -546,6 +592,83 @@ const Crypto = {
     if (modal) modal.classList.add('hidden');
   },
 
+  promptSendCoin(symbol) {
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) {
+      Toast.show('Must be online to send coins', '#ff5252'); return;
+    }
+    const held = this._playerCoinHoldings[symbol] || 0;
+    if (held <= 0) { Toast.show('You have no ' + symbol + ' to send', '#ff5252'); return; }
+    const price = this._playerCoinPrices[symbol] || 0;
+    const html = `<div class="stock-trade-modal">
+      <div class="stock-trade-title">\u{1FA99} Send ${symbol}</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">You hold: ${held.toFixed(4)} ${symbol} (${App.formatMoney(held * price)})</div>
+      <div class="admin-row"><label style="min-width:70px;font-size:12px">To:</label>
+        <input type="text" id="send-coin-name" placeholder="Player name" style="flex:1;font-size:14px"></div>
+      <div class="admin-row"><label style="min-width:70px;font-size:12px">Amount:</label>
+        <input type="number" id="send-coin-amount" value="${held.toFixed(4)}" min="0.0001" max="${held}" step="0.0001" style="flex:1;font-size:14px"></div>
+      <div class="stock-trade-buttons" style="margin-top:10px">
+        <button class="stock-buy-btn" onclick="Crypto._doSendCoin('${symbol}')">Send</button>
+        <button class="stock-trade-cancel" onclick="Crypto.closeModal()">Cancel</button>
+      </div>
+    </div>`;
+    this._showModal(html);
+  },
+
+  _doSendCoin(symbol) {
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
+    const nameInput = document.getElementById('send-coin-name');
+    const amtInput = document.getElementById('send-coin-amount');
+    if (!nameInput || !amtInput) return;
+    const recipientName = nameInput.value.trim();
+    const amount = parseFloat(amtInput.value);
+    if (!recipientName) { Toast.show('Enter recipient name', '#ff5252'); return; }
+    if (isNaN(amount) || amount <= 0) { Toast.show('Invalid amount', '#ff5252'); return; }
+    const held = this._playerCoinHoldings[symbol] || 0;
+    if (amount > held + 0.000001) { Toast.show('Not enough ' + symbol, '#ff5252'); return; }
+    const nameLower = recipientName.toLowerCase();
+    const entry = Firebase._registeredNames[nameLower];
+    if (!entry || !entry.uid) { Toast.show('Player "' + recipientName + '" not found', '#ff5252'); return; }
+    if (entry.uid === Firebase.uid) { Toast.show('Cannot send to yourself', '#ff5252'); return; }
+    const fromName = typeof Settings !== 'undefined' ? Settings.profile.name : 'Player';
+    const sendAmt = Math.min(amount, held);
+    this._playerCoinHoldings[symbol] = Math.max(0, held - sendAmt);
+    // If owner, update reserve
+    const ownerUid = this._getPlayerCoinUidBySym(symbol);
+    if (ownerUid === Firebase.uid) {
+      const coin = this._playerCoins[ownerUid];
+      if (coin) {
+        coin.reserveAmt = Math.max(0, (coin.reserveAmt || 0) - sendAmt);
+        Firebase.updatePlayerCoin(ownerUid, { reserveAmt: coin.reserveAmt }).catch(() => {});
+      }
+    }
+    Firebase.sendCoinTransfer(entry.uid, symbol, sendAmt, fromName);
+    App.save();
+    this.closeModal();
+    this.render();
+    Toast.show('\u2705 Sent ' + sendAmt.toFixed(4) + ' ' + symbol + ' to ' + recipientName + '!', '#00e676', 3000);
+  },
+
+  _receiveCoinTransfer(transfer) {
+    const { sym, amount, fromName } = transfer;
+    if (!sym || !amount) return;
+    this._playerCoinHoldings[sym] = (this._playerCoinHoldings[sym] || 0) + amount;
+    // If owner receives their own coin — update reserve
+    if (typeof Firebase !== 'undefined' && Firebase.uid) {
+      const ownerUid = this._getPlayerCoinUidBySym(sym);
+      if (ownerUid === Firebase.uid) {
+        const coin = this._playerCoins[ownerUid];
+        if (coin) {
+          coin.reserveAmt = (coin.reserveAmt || 0) + amount;
+          Firebase.updatePlayerCoin(ownerUid, { reserveAmt: coin.reserveAmt }).catch(() => {});
+        }
+      }
+    }
+    App.save();
+    if (App.currentScreen === 'crypto') this.render();
+    const price = this._playerCoinPrices[sym] || 0;
+    Toast.show('\u{1FA99} Received ' + amount.toFixed(4) + ' ' + sym + ' from ' + (fromName || 'someone') + (price > 0 ? ' (\u2248' + App.formatMoney(amount * price) + ')' : ''), '#9945ff', 5000);
+  },
+
   sellCoin(symbol, amount) {
     const sysIdx = this.coins.findIndex(c => c.symbol === symbol);
     if (sysIdx >= 0) {
@@ -565,6 +688,21 @@ const Crypto = {
     const value = amount * price;
     this._playerCoinHoldings[symbol] -= amount;
     App.addBalance(value);
+    // If owner sells their own coin — update reserve stake
+    if (typeof Firebase !== 'undefined' && Firebase.uid) {
+      const ownerUid = this._getPlayerCoinUidBySym(symbol);
+      if (ownerUid === Firebase.uid) {
+        const coin = this._playerCoins[ownerUid];
+        if (coin) {
+          const newReserve = Math.max(0, (coin.reserveAmt || 0) - amount);
+          coin.reserveAmt = newReserve;
+          Firebase.updatePlayerCoin(ownerUid, { reserveAmt: newReserve }).catch(() => {});
+          if (newReserve <= 0) {
+            Toast.show('\u26A0\uFE0F You sold your entire reserve — you have no stake in ' + symbol, '#ff9100', 5000);
+          }
+        }
+      }
+    }
     if (typeof Firebase !== 'undefined') Firebase.tradeInfluenceCoin(symbol, 'sell');
     App.save(); this.render();
   },
@@ -654,6 +792,7 @@ const Crypto = {
           <div class="stock-actions">
             <button class="stock-buy-btn" onclick="Crypto.promptBuyCoin('${sym}')">Buy</button>
             <button class="stock-sell-btn" onclick="Crypto.promptSellCoin('${sym}')" ${held > 0 ? '' : 'disabled'}>Sell</button>
+            ${held > 0 ? `<button class="admin-btn" style="font-size:10px;padding:2px 6px" onclick="Crypto.promptSendCoin('${sym}')">Send</button>` : ''}
           </div>
         </div>`;
       });
@@ -944,6 +1083,7 @@ const Crypto = {
             <div style="font-weight:700;font-size:16px">${this._esc(coin.name)} <span class="player-coin-badge">COIN</span></div>
             <div style="font-size:12px;color:#bb86fc">${sym} \u2022 ${App.formatMoney(price)}</div>
             <div style="font-size:11px;color:var(--text-dim)">Supply: ${(coin.supply||0).toLocaleString()} \u2022 Reserve: ${(coin.reserveAmt||0).toLocaleString()}</div>
+            ${(coin.reserveAmt || 0) <= 0 ? '<div style="font-size:11px;color:#ff9100;margin-top:2px">\u26A0\uFE0F No owner stake \u2014 buy back to regain stake</div>' : ''}
           </div>
         </div>
         ${isOwner ? `
@@ -1088,8 +1228,9 @@ const Crypto = {
           <span class="exchange-value">= ${App.formatMoney(held * price)}</span>
         </div>
         <div class="exchange-actions">
-          ${isOwn ? '<span style="font-size:11px;color:var(--gold)">Your Coin</span>' : `<button class="stock-buy-btn" onclick="Crypto.promptBuyCoin('${sym}')">Buy</button>`}
+          <button class="stock-buy-btn" onclick="Crypto.promptBuyCoin('${sym}')">${isOwn ? 'Buy Back' : 'Buy'}</button>
           <button class="stock-sell-btn" onclick="Crypto.promptSellCoin('${sym}')" ${held > 0 ? '' : 'disabled'}>Sell</button>
+          ${held > 0 ? `<button class="admin-btn" style="font-size:11px" onclick="Crypto.promptSendCoin('${sym}')">Send</button>` : ''}
         </div>
       </div>`;
     });
