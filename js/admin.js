@@ -163,27 +163,91 @@ const Admin = {
 
     if (this.tapCount >= 5) {
       this.tapCount = 0;
-      if (!this.adminMode) {
-        if (typeof Settings === 'undefined' || Settings.profile.name !== this.adminName) return;
-        const pw = prompt('Enter admin password:');
-        if (pw !== this.adminPassword) return;
-        this.adminMode = true;
-        this.showGameAdmins();
-        if (!this.badgeHidden) {
-          document.getElementById('admin-indicator').classList.remove('hidden');
-        }
-        // Persist admin grant to Firebase so it survives page reloads
-        this._persistAdminToFirebase();
+      if (this.adminMode && this.isAdmin()) {
+        // Already logged in — open panel
+        this.open();
+      } else {
+        this.showLoginModal();
       }
-      if (!this.isAdmin()) {
-        this.adminMode = false;
-        this.godMode = false;
-        document.getElementById('admin-indicator').classList.add('hidden');
-        this.showGameAdmins();
-        return;
-      }
-      this.open();
     }
+  },
+
+  // ─── Admin Login Modal ───────────────────────────────────────────
+
+  showLoginModal() {
+    if (document.getElementById('admin-login-modal')) return;
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    const isGranted = myUid && this._adminsList[myUid];
+
+    const modal = document.createElement('div');
+    modal.id = 'admin-login-modal';
+    modal.className = 'admin-login-backdrop';
+    modal.innerHTML = `
+      <div class="admin-login-box">
+        <div class="admin-login-logo">🔐</div>
+        <div class="admin-login-title">Admin Login</div>
+        ${isGranted
+          ? `<div class="admin-login-hint">Your account has admin access.<br>Enter the admin password to continue.</div>`
+          : `<div class="admin-login-field">
+               <label class="admin-login-label">Username</label>
+               <input class="admin-login-input" type="text" id="al-username" autocomplete="off" spellcheck="false" placeholder="Username">
+             </div>`
+        }
+        <div class="admin-login-field">
+          <label class="admin-login-label">Password</label>
+          <input class="admin-login-input" type="password" id="al-password" placeholder="Password"
+            onkeydown="if(event.key==='Enter')Admin.attemptLogin()">
+        </div>
+        <div id="al-error" class="admin-login-error" style="display:none"></div>
+        <button class="admin-login-btn" onclick="Admin.attemptLogin()">Login</button>
+        <button class="admin-login-cancel" onclick="Admin.closeLoginModal()">Cancel</button>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    // Focus first available input
+    setTimeout(() => {
+      const first = modal.querySelector('#al-username, #al-password');
+      if (first) first.focus();
+    }, 80);
+  },
+
+  closeLoginModal() {
+    const modal = document.getElementById('admin-login-modal');
+    if (modal) modal.remove();
+  },
+
+  attemptLogin() {
+    const passEl  = document.getElementById('al-password');
+    const userEl  = document.getElementById('al-username');
+    const errorEl = document.getElementById('al-error');
+    const password = passEl ? passEl.value : '';
+    const username = userEl ? userEl.value.trim() : null;
+
+    const showError = (msg) => {
+      if (errorEl) { errorEl.textContent = msg; errorEl.style.display = 'block'; }
+      if (passEl)  { passEl.value = ''; passEl.focus(); }
+    };
+
+    if (password !== this.adminPassword) { showError('Incorrect password.'); return; }
+
+    const myUid   = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    const isGranted = myUid && this._adminsList[myUid];
+
+    // Granted admin: password is enough
+    // Master admin: username must also match
+    if (!isGranted && username !== this.adminName) {
+      showError('Access denied.'); return;
+    }
+
+    // Success
+    this.closeLoginModal();
+    this.adminMode = true;
+    this.showGameAdmins();
+    if (!this.badgeHidden) {
+      document.getElementById('admin-indicator')?.classList.remove('hidden');
+    }
+    this._persistAdminToFirebase();
+    this.open();
   },
 
   _persistAdminToFirebase() {

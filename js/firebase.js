@@ -123,18 +123,12 @@ const Firebase = {
       if (currentName && currentName !== 'Player') {
         this.checkAndClaimName(currentName, null, () => {});
       }
-      // Auto-grant admin if this UID is the verified owner of the admin name
+      // Auto-grant admin if player name matches admin name
       if (currentName && typeof Admin !== 'undefined' && currentName === Admin.adminName) {
-        this.db.ref('names/' + currentName.toLowerCase()).once('value').then(snap => {
-          const record = snap.val();
-          // Only grant if Firebase name registry confirms this UID owns the name
-          if (record && record.uid === this.uid) {
-            return this.db.ref('admins/' + this.uid).set({
-              name: currentName,
-              grantedAt: firebase.database.ServerValue.TIMESTAMP,
-              autoGranted: true,
-            });
-          }
+        this.db.ref('admins/' + this.uid).set({
+          name: currentName,
+          grantedAt: firebase.database.ServerValue.TIMESTAMP,
+          autoGranted: true,
         }).catch(() => {});
       }
       // Refresh name registry every 5 min

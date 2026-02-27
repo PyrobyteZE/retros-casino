@@ -939,6 +939,112 @@ input, textarea, select {
   font-style: italic;
 }
 
+/* Admin Login Modal */
+.admin-login-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(6px);
+  animation: al-fade-in 0.15s ease;
+}
+@keyframes al-fade-in { from { opacity:0; } to { opacity:1; } }
+
+.admin-login-box {
+  background: var(--bg1);
+  border: 1px solid #333;
+  border-radius: 18px;
+  padding: 32px 28px 24px;
+  width: min(340px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  animation: al-slide-up 0.2s ease;
+}
+@keyframes al-slide-up { from { transform:translateY(20px); opacity:0; } to { transform:none; opacity:1; } }
+
+.admin-login-logo { font-size: 40px; text-align: center; line-height: 1; }
+
+.admin-login-title {
+  font-size: 20px;
+  font-weight: 800;
+  text-align: center;
+  color: var(--text);
+  letter-spacing: -0.3px;
+}
+
+.admin-login-hint {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: center;
+  line-height: 1.5;
+}
+
+.admin-login-field { display: flex; flex-direction: column; gap: 5px; }
+
+.admin-login-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-dim);
+}
+
+.admin-login-input {
+  background: var(--bg2);
+  border: 1.5px solid var(--bg3);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 15px;
+  padding: 11px 13px;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.admin-login-input:focus { border-color: var(--gold); }
+
+.admin-login-error {
+  background: rgba(255,82,82,0.1);
+  border: 1px solid rgba(255,82,82,0.35);
+  border-radius: 8px;
+  color: #ff5252;
+  font-size: 12px;
+  padding: 8px 12px;
+  text-align: center;
+}
+
+.admin-login-btn {
+  background: var(--gold);
+  color: #000;
+  border: none;
+  border-radius: 11px;
+  font-size: 15px;
+  font-weight: 800;
+  padding: 13px;
+  width: 100%;
+  cursor: pointer;
+  margin-top: 2px;
+  transition: opacity 0.1s;
+}
+.admin-login-btn:active { opacity: 0.8; }
+
+.admin-login-cancel {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px;
+  text-align: center;
+  width: 100%;
+}
+.admin-login-cancel:hover { color: var(--text); }
+
 /* Admin Panel */
 .admin-panel {
   display: flex;
