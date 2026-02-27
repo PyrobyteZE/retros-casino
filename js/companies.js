@@ -138,6 +138,7 @@ const Companies = {
   // === STATE ===
   _companies: [],          // [{ name, ticker, industry, foundedAt, stocks:[{symbol,name,type,price,vol,basePrice}], mainIdx }]
   _companySlots: 1,        // number of slots unlocked (1–3); founding requires a free slot
+  _mainCompanyTicker: null, // ticker of the one company the player has locked as their main
   _allPlayerStocks: {},    // { [symbol]: { ownerUid, ownerName, name, symbol, type, price, history:[], vol, basePrice, companyTicker, companyName, companyStocks, companyMainIdx, companyFoundedAt, companyIndustry } }
   _holdings: {},           // { [symbol]: { shares, avgCost } }
   _playerStockTargets: {}, // { [symbol]: { target, stepsLeft } }
@@ -226,6 +227,7 @@ const Companies = {
         this._companies = [d.company]; // migration
       }
       if (d.companySlots) this._companySlots = Math.max(1, d.companySlots);
+      if (d.mainCompanyTicker) this._mainCompanyTicker = d.mainCompanyTicker;
       if (d.holdings) this._holdings = d.holdings;
     } catch (e) {}
   },
@@ -234,12 +236,13 @@ const Companies = {
     localStorage.setItem('retros_companies', JSON.stringify({
       companies: this._companies,
       companySlots: this._companySlots,
+      mainCompanyTicker: this._mainCompanyTicker,
       holdings: this._holdings,
     }));
   },
 
   getSaveData() {
-    return { companies: this._companies, companySlots: this._companySlots, holdings: this._holdings };
+    return { companies: this._companies, companySlots: this._companySlots, mainCompanyTicker: this._mainCompanyTicker, holdings: this._holdings };
   },
 
   loadSaveData(data) {
@@ -250,6 +253,7 @@ const Companies = {
       this._companies = [data.company]; // migration
     }
     if (data.companySlots) this._companySlots = Math.max(1, data.companySlots);
+    if (data.mainCompanyTicker) this._mainCompanyTicker = data.mainCompanyTicker;
     if (data.holdings) this._holdings = data.holdings;
     // Immediately persist so a hard-refresh doesn't lose the imported data
     this._saveLocal();
@@ -732,10 +736,19 @@ const Companies = {
   _declareBankruptcy(sym) {
     const s = this._allPlayerStocks[sym];
     if (!s || s._bankruptDeclared) return;
-    s._bankruptDeclared = true;
 
     const ownerUid = s.ownerUid;
     const ticker = s.companyTicker || sym;
+
+    // If this stock's company is the owner's locked main company, block full bankruptcy
+    if (typeof Firebase !== 'undefined' && Firebase.uid === ownerUid && this.isMainCompany(ticker)) {
+      s._bankruptDeclared = false; // allow it to recover
+      s._lowTicks = 0;
+      Toast.show('⭐ ' + ticker + ' is your main company — bankruptcy blocked!', '#f39c12', 4000);
+      return;
+    }
+
+    s._bankruptDeclared = true;
     const debtCost = Math.max(5000, Math.round((s.basePrice || 100) * 50));
     const companyData = {
       name: s.companyName || s.name,
@@ -1017,6 +1030,23 @@ const Companies = {
     this._saveLocal();
     this._pushToFirebase();
     this._triggerRender();
+  },
+
+  setMainCompany(cIdx) {
+    const c = this._companies[cIdx];
+    if (!c) return;
+    if (this._mainCompanyTicker === c.ticker) {
+      // Toggle off
+      this._mainCompanyTicker = null;
+    } else {
+      this._mainCompanyTicker = c.ticker;
+    }
+    this._saveLocal();
+    this._triggerRender();
+  },
+
+  isMainCompany(ticker) {
+    return this._mainCompanyTicker === ticker;
   },
 
   // === FOUND COMPANY ===
@@ -1303,10 +1333,11 @@ const Companies = {
       <div class="stock-trade-title">Buy ${symbol} @ ${App.formatMoney(s.price)}</div>
       <div class="stock-trade-custom-amount">
         <label for="ps-buy-input">$</label>
-        <input type="number" id="ps-buy-input" placeholder="Enter amount to invest"
+        <input type="text" inputmode="decimal" id="ps-buy-input" class="sh-input" placeholder="Amount (e.g. 10m)"
           oninput="Companies.updatePlayerBuyButton(this.value,'${symbol}')">
         <button onclick="document.getElementById('ps-buy-input').value=App.balance;Companies.updatePlayerBuyButton(App.balance,'${symbol}')">Max</button>
       </div>
+      <div class="sh-preview" style="display:none;font-size:11px;color:var(--text-dim);margin:2px 0 4px 0"></div>
       <div id="ps-buy-summary"></div>
       <div class="stock-trade-buttons">
         <button id="ps-buy-confirm" class="stock-trade-btn" onclick="Companies.buyPlayerWithMoney('${symbol}')" disabled>Buy</button>
@@ -1317,7 +1348,7 @@ const Companies = {
   },
 
   updatePlayerBuyButton(money, symbol) {
-    const amount = parseFloat(money);
+    const amount = App.parseAmount(money);
     const summaryEl = document.getElementById('ps-buy-summary');
     const buyBtn = document.getElementById('ps-buy-confirm');
     if (!summaryEl || !buyBtn) return;
@@ -1325,14 +1356,14 @@ const Companies = {
     const s = this._allPlayerStocks[symbol];
     const price = s ? s.price : 1;
     const shares = Math.min(amount, App.balance) / price;
-    summaryEl.textContent = `~${shares.toFixed(4)} shares @ ${App.formatMoney(price)}`;
+    summaryEl.textContent = `You will get ~${shares.toFixed(4)} shares @ ${App.formatMoney(price)}`;
     buyBtn.disabled = amount > App.balance || amount <= 0;
   },
 
   buyPlayerWithMoney(symbol) {
     const input = document.getElementById('ps-buy-input');
     if (!input) return;
-    let amount = parseFloat(input.value);
+    let amount = App.parseAmount(input.value);
     if (isNaN(amount) || amount <= 0) return;
     const s = this._allPlayerStocks[symbol];
     if (!s) return;
@@ -1381,7 +1412,7 @@ const Companies = {
     });
     html += `</div>
       <div class="stock-trade-custom-amount" style="margin-top:4px;margin-bottom:12px">
-        <input type="number" id="pstock-sell-custom" placeholder="# of shares" min="0.0001" max="${owned}" step="any" style="flex:1">
+        <input type="text" inputmode="decimal" id="pstock-sell-custom" class="sh-input" placeholder="# of shares (e.g. 1.5m)" style="flex:1">
         <button onclick="Companies._confirmCustomSell('${symbol}')">Sell</button>
       </div>
       <button class="stock-trade-cancel" onclick="Stocks.closeModal()">Cancel</button>
@@ -1392,7 +1423,7 @@ const Companies = {
   _confirmCustomSell(symbol) {
     const input = document.getElementById('pstock-sell-custom');
     if (!input) return;
-    const qty = parseFloat(input.value);
+    const qty = App.parseAmount(input.value);
     if (isNaN(qty) || qty <= 0) return;
     this.playerSellShares(symbol, qty);
   },
@@ -1922,9 +1953,18 @@ const Companies = {
         html += Banking.renderBankSetup(cIdx);
       }
 
-      html += `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bg3);text-align:center">
-        <button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);font-size:12px" onclick="Companies.deleteCompany(${cIdx})">&#x1F5D1; Delete Company</button>
-      </div>`;
+      {
+        const isMain = this.isMainCompany(c.ticker);
+        html += `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bg3);display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap">
+          <button class="csr-toggle-btn" style="${isMain ? 'color:var(--gold);border-color:var(--gold);font-weight:700' : 'font-size:12px'}" onclick="Companies.setMainCompany(${cIdx})">
+            ${isMain ? '⭐ Main Company (tap to unset)' : '⭐ Set as Main'}
+          </button>
+          <button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);font-size:12px" onclick="Companies.deleteCompany(${cIdx})">&#x1F5D1; Delete</button>
+        </div>`;
+        if (isMain) {
+          html += `<div style="font-size:11px;color:var(--gold);text-align:center;margin-top:4px;padding:0 8px">🔒 Main company — protected from full bankruptcy</div>`;
+        }
+      }
 
       html += `</div></div>`;
     });
