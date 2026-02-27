@@ -327,6 +327,13 @@ const Toast = {
   },
 };
 
+// Start Firebase (called once — skipped for guests until they set a name)
+function _initFirebase() {
+  if (typeof Firebase !== 'undefined' && !Firebase.isOnline() && Firebase.connectionState !== 'connecting') {
+    Firebase.init();
+  }
+}
+
 function showFirstTimeUsernamePrompt() {
   if (document.getElementById('ft-username-modal')) return;
   const modal = document.createElement('div');
@@ -342,9 +349,9 @@ function showFirstTimeUsernamePrompt() {
         onkeydown="if(event.key==='Enter')document.getElementById('ft-username-submit').click()">
       <button id="ft-username-submit"
         style="width:100%;padding:13px;background:var(--green);color:#000;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:6px"
-        onclick="(function(){const v=document.getElementById('ft-username-input').value.trim();if(v)Settings.setName(v);document.getElementById('ft-username-modal').remove();})()">Let's Play!</button>
+        onclick="(function(){const v=document.getElementById('ft-username-input').value.trim();if(v){Settings.setName(v);_initFirebase();}document.getElementById('ft-username-modal').remove();})()">Let's Play!</button>
       <button style="width:100%;padding:8px;background:none;color:var(--text-dim);border:none;font-size:12px;cursor:pointer"
-        onclick="document.getElementById('ft-username-modal').remove()">Skip (play as Guest)</button>
+        onclick="document.getElementById('ft-username-modal').remove()">Skip (play as Guest — local only)</button>
     </div>
   `;
   document.body.appendChild(modal);
@@ -361,7 +368,11 @@ document.addEventListener('DOMContentLoaded', () => {
   if (typeof Food !== 'undefined') Food.init();
   if (typeof Stocks !== 'undefined') Stocks.init();
   if (typeof Crypto !== 'undefined') Crypto.init();
-  if (typeof Firebase !== 'undefined') Firebase.init();
   GameStats.initAllHUDs();
-  if (isFirstTime) setTimeout(showFirstTimeUsernamePrompt, 600);
+  if (isFirstTime) {
+    // Defer Firebase until after the username choice
+    setTimeout(showFirstTimeUsernamePrompt, 600);
+  } else {
+    _initFirebase();
+  }
 });

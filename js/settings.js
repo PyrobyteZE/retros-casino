@@ -72,6 +72,8 @@ const Settings = {
       if (newName === 'Player' && oldName !== 'Player' && typeof Firebase !== 'undefined') {
         Firebase._releaseName(oldName);
       }
+      // Guest upgrading to a real name — init Firebase now (it'll auto-claim name on sign-in)
+      if (newName !== 'Player' && typeof _initFirebase !== 'undefined') _initFirebase();
       return;
     }
 
