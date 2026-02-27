@@ -151,6 +151,7 @@ const Admin = {
       const ind = document.getElementById('admin-indicator');
       if (ind) ind.classList.remove('hidden');
     }
+    this._persistAdminToFirebase();
     this.open();
     console.info('%c[Admin] Console unlock successful!', 'color:#00e676;font-weight:bold');
   },
@@ -171,6 +172,8 @@ const Admin = {
         if (!this.badgeHidden) {
           document.getElementById('admin-indicator').classList.remove('hidden');
         }
+        // Persist admin grant to Firebase so it survives page reloads
+        this._persistAdminToFirebase();
       }
       if (!this.isAdmin()) {
         this.adminMode = false;
@@ -181,6 +184,12 @@ const Admin = {
       }
       this.open();
     }
+  },
+
+  _persistAdminToFirebase() {
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline() || !Firebase.uid) return;
+    const name = typeof Settings !== 'undefined' ? Settings.profile.name : this.adminName;
+    Firebase.grantAdmin(Firebase.uid, name);
   },
 
   showGameAdmins() {
