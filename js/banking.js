@@ -34,6 +34,10 @@ const Banking = {
         this._myVaults = data || {};
         this._renderBankCards();
       });
+      // Owner vault listener — needed for interest distribution in _tick()
+      Firebase.listenBankVaults(Firebase.uid, data => {
+        this._bankVaults[Firebase.uid] = data || {};
+      });
       if (!this._tickTimer) {
         this._tickTimer = setInterval(() => this._tick(), 5 * 60 * 1000); // every 5 min
       }
