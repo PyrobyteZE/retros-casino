@@ -1363,9 +1363,16 @@ input, textarea, select {
   align-items: stretch;
 }
 
-.rl-zero-cell {
+.rl-zero-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   height: 100%;
-  min-height: 94px;
+}
+
+.rl-zero-cell {
+  flex: 1;
+  min-height: 0;
   font-size: 13px;
   font-weight: 900;
   display: flex;
