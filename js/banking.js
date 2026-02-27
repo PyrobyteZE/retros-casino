@@ -440,7 +440,7 @@ const Banking = {
         </div>
         ${myDeposit > 0 ? `<div style="font-size:12px;color:var(--gold);margin:4px 0">My deposit: ${App.formatMoney(myDeposit)}</div>` : ''}
         <div style="display:flex;gap:6px;margin-top:6px">
-          ${ownerUid !== myUid ? `<button class="company-buy-btn" style="flex:1" onclick="Banking.openDepositModal('${ownerUid}')">Deposit</button>` : '<span style="font-size:11px;color:var(--text-dim);padding:6px">Your bank</span>'}
+          <button class="company-buy-btn" style="flex:1" onclick="Banking.openDepositModal('${ownerUid}')">Deposit</button>
           ${myDeposit > 0 ? `<button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red)" onclick="Banking.withdraw('${ownerUid}', 'all')">Withdraw</button>` : ''}
         </div>
       </div>`;
