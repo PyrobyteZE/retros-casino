@@ -214,6 +214,41 @@ const Firebase = {
       Loans._startCounterLoanTimer();
     }
     if (typeof MainRoom !== 'undefined') MainRoom.init();
+    // Admin player commands (targeted at this specific player)
+    this.db.ref('adminPlayerCommands/' + this.uid).on('value', snap => {
+      const cmd = snap.val();
+      if (!cmd || !cmd.cmd) return;
+      if (cmd.cmd === 'addBalance') {
+        App.addBalance(cmd.amount || 0);
+        Toast.show('🎁 Admin gave you ' + App.formatMoney(cmd.amount || 0) + '!', '#00e676', 4000);
+      } else if (cmd.cmd === 'setBalance') {
+        App.balance = Math.max(0, cmd.amount || 0);
+        App.updateBalance();
+        Toast.show('⚡ Admin set your balance to ' + App.formatMoney(cmd.amount || 0), '#ffd740', 4000);
+      } else if (cmd.cmd === 'setRebirth') {
+        App.rebirth = Math.max(0, cmd.level || 0);
+        if (typeof Clicker !== 'undefined') {
+          Clicker.updateRebirthUI();
+          Clicker.renderUpgrades();
+          Clicker.updateStats();
+          Clicker.startAutoClicker();
+        }
+        Toast.show('⚡ Admin set your rebirth to ' + (cmd.level || 0), '#ffd740', 4000);
+      }
+      App.save();
+      this._lastCloudSave = 0;
+      setTimeout(() => this.pushCloudSave(), 1000);
+      snap.ref.remove();
+    });
+    // Admin force-save broadcast
+    this.db.ref('adminCommands/forceSave').on('value', snap => {
+      const val = snap.val();
+      if (val && val.ts && Date.now() - val.ts < 30000) {
+        App.save();
+        this._lastCloudSave = 0;
+        setTimeout(() => this.pushCloudSave(), 500);
+      }
+    });
   },
 
   // === PRESENCE ===
@@ -1460,6 +1495,17 @@ const Firebase = {
     if (!data) return;
     this.db.ref('cloudSaves/' + this.uid).set({ data, savedAt: now })
       .catch(err => console.warn('Firebase cloudSave write error:', err.code));
+  },
+
+  // === ADMIN COMMANDS ===
+  pushAdminPlayerCommand(uid, cmd) {
+    if (!this.isOnline()) return;
+    this.db.ref('adminPlayerCommands/' + uid).set({ ...cmd, ts: Date.now() });
+  },
+
+  broadcastForceSave() {
+    if (!this.isOnline()) return;
+    this.db.ref('adminCommands/forceSave').set({ ts: Date.now() });
   },
 
   // === FRIENDS ===

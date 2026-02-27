@@ -882,9 +882,16 @@ input, textarea, select {
 /* Per-Game Rig Cards (in Admin Cheats tab) */
 .admin-game-rig-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
 }
+
+.admin-player-row {
+  border-bottom: 1px solid var(--bg3);
+  padding: 8px 0;
+}
+.admin-player-row:last-child { border-bottom: none; }
+.admin-player-edit { margin-top: 6px; }
 
 .admin-game-rig-card {
   background: var(--bg);
@@ -4586,6 +4593,7 @@ html[data-platform="desktop"] .chat-panel {
 .admin-overlay-body {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 16px;
   -webkit-overflow-scrolling: touch;
 }

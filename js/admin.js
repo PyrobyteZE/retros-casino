@@ -309,15 +309,15 @@ const Admin = {
       check('bj-rig-peek', g.blackjack.peekDealer);
       check('plinko-rig-edge', g.plinko.alwaysEdge);
       set('horses-rig-winner', g.horses.forceWinner);
-    } else if (tab === 'economy') {
+    } else if (tab === 'player') {
       set('admin-balance', Math.floor(App.balance));
       set('admin-debt', Math.floor(Loans.debt));
-    } else if (tab === 'player') {
       set('admin-rebirth', App.rebirth || 0);
       set('admin-click-level', App.upgrades.clickValue || 0);
       set('admin-auto-level', App.upgrades.autoClicker || 0);
       set('admin-earned', Math.floor(App.totalEarned));
       set('admin-clicks', App.totalClicks);
+      this.renderOnlinePlayers();
     } else if (tab === 'market') {
       this.renderPlayerStockControls();
       this.renderPlayerCoinControls();
@@ -574,6 +574,32 @@ const Admin = {
   _renderPlayerTab() {
     return `
       <div class="admin-section">
+        <h3>My Balance</h3>
+        <div class="admin-row">
+          <input type="number" id="admin-balance" placeholder="Amount">
+          <button onclick="Admin.setBalance()">Set</button>
+          <button onclick="Admin.addMoney()">Add</button>
+        </div>
+        <div class="admin-quick-money">
+          <button onclick="Admin.quickAdd(1000)">+$1K</button>
+          <button onclick="Admin.quickAdd(10000)">+$10K</button>
+          <button onclick="Admin.quickAdd(100000)">+$100K</button>
+          <button onclick="Admin.quickAdd(1000000)">+$1M</button>
+          <button onclick="Admin.quickAdd(1000000000)">+$1B</button>
+        </div>
+      </div>
+      <div class="admin-section">
+        <h3>Loan Shark</h3>
+        <div class="admin-row">
+          <label>Current Debt:</label>
+          <input type="number" id="admin-debt" min="0" value="0">
+          <button onclick="Loans.debt=+document.getElementById('admin-debt').value||0;Loans.updateUI();Loans.updateDebtDisplay()">Set</button>
+        </div>
+        <div class="admin-actions" style="margin-top:8px">
+          <button class="admin-btn win-btn" onclick="Loans.debt=0;Loans.loanTime=0;Loans.stopInterest();Loans.updateUI();Loans.updateDebtDisplay()">Clear All Debt</button>
+        </div>
+      </div>
+      <div class="admin-section">
         <h3>Rebirth & Upgrades</h3>
         <div class="admin-row">
           <label>Rebirth Level:</label>
@@ -604,7 +630,76 @@ const Admin = {
           <button onclick="Admin.setClicks()">Set</button>
         </div>
       </div>
+      <div class="admin-section">
+        <h3>Online Players</h3>
+        <div id="admin-online-players"><span style="color:var(--text-dim);font-size:12px">Loading...</span></div>
+      </div>
     `;
+  },
+
+  renderOnlinePlayers() {
+    const container = document.getElementById('admin-online-players');
+    if (!container) return;
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) {
+      container.innerHTML = '<span style="color:var(--text-dim);font-size:12px">Offline — no player list</span>';
+      return;
+    }
+    const data = Firebase.leaderboardData || [];
+    const myUid = Firebase.uid;
+    const others = data.filter(e => e.uid && e.uid !== myUid);
+    if (!others.length) {
+      container.innerHTML = '<span style="color:var(--text-dim);font-size:12px">No other players in leaderboard.</span>';
+      return;
+    }
+    container.innerHTML = others.map(e => {
+      const uid = e.uid;
+      const safeUid = uid.replace(/[^a-z0-9]/gi, '');
+      const name = (e.name || 'Player').replace(/</g, '&lt;');
+      return `<div class="admin-player-row">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-weight:700;flex:1;font-size:13px">${name}</span>
+          <span style="font-size:11px;color:var(--text-dim)">${App.formatMoney(e.totalEarned||0)}</span>
+          <button onclick="Admin.togglePlayerEdit('${safeUid}')" style="font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid var(--bg3);background:var(--bg3);color:var(--text);cursor:pointer">Edit</button>
+        </div>
+        <div class="admin-player-edit hidden" id="admin-player-edit-${safeUid}" data-uid="${uid}">
+          <div style="display:flex;gap:4px;margin-top:6px">
+            <input type="number" id="admin-pe-bal-${safeUid}" placeholder="$ amount" style="flex:1;font-size:12px;padding:5px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;min-width:0">
+            <button class="rig-btn win" onclick="Admin.playerCmd('${safeUid}','addBalance')" style="font-size:11px;white-space:nowrap">+$ Give</button>
+            <button class="rig-btn" onclick="Admin.playerCmd('${safeUid}','setBalance')" style="font-size:11px;white-space:nowrap">Set $</button>
+          </div>
+          <div style="display:flex;gap:4px;margin-top:4px;align-items:center">
+            <span style="font-size:11px;color:var(--text-dim);white-space:nowrap">Rebirth:</span>
+            <input type="number" id="admin-pe-reb-${safeUid}" placeholder="Lvl" min="0" style="width:50px;font-size:12px;padding:5px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px">
+            <button class="rig-btn" onclick="Admin.playerCmd('${safeUid}','setRebirth')" style="font-size:11px">Set</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  togglePlayerEdit(safeUid) {
+    const el = document.getElementById('admin-player-edit-' + safeUid);
+    if (el) el.classList.toggle('hidden');
+  },
+
+  playerCmd(safeUid, cmd) {
+    const editEl = document.getElementById('admin-player-edit-' + safeUid);
+    if (!editEl) return;
+    const realUid = editEl.dataset.uid;
+    let payload = { cmd };
+    if (cmd === 'addBalance' || cmd === 'setBalance') {
+      const amount = parseFloat(document.getElementById('admin-pe-bal-' + safeUid)?.value);
+      if (isNaN(amount)) return;
+      payload.amount = amount;
+    } else if (cmd === 'setRebirth') {
+      const level = parseInt(document.getElementById('admin-pe-reb-' + safeUid)?.value);
+      if (isNaN(level) || level < 0) return;
+      payload.level = level;
+    }
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.pushAdminPlayerCommand(realUid, payload);
+      Toast.show('Command sent!', '#00e676', 2000);
+    }
   },
 
   _renderMarketTab() {
@@ -711,7 +806,8 @@ const Admin = {
       <div class="admin-section">
         <h3>Save Data</h3>
         <div class="admin-actions">
-          <button class="admin-btn save" onclick="Admin.forceSave()">Force Save</button>
+          <button class="admin-btn save" onclick="Admin.forceSave()">Force Save (Me)</button>
+          <button class="admin-btn win-btn" onclick="Admin.forceSaveAll()" style="background:#0097a7;border-color:#0097a7">Force Save All Players</button>
           <button class="admin-btn danger" onclick="Admin.resetAll()">Reset All Data</button>
           <button class="admin-btn" onclick="Admin.exportData()">Export Save</button>
           <button class="admin-btn" onclick="Admin.importData()">Import Save</button>
@@ -1435,6 +1531,16 @@ const Admin = {
   forceSave() {
     App.save();
     alert('Game saved!');
+  },
+
+  forceSaveAll() {
+    App.save();
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.broadcastForceSave();
+      Toast.show('⚡ Force save sent to all online players!', '#0097a7', 3000);
+    } else {
+      Toast.show('Offline — only saved locally', '#888', 2000);
+    }
   },
 
   resetAll() {
