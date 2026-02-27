@@ -640,8 +640,8 @@ const Crypto = {
       const coinFmt = this.formatCoin(coinAmt);
       btnHtml += `<button class="stock-trade-btn" onclick="Crypto.buyCoin('${symbol}',${cash});Crypto.closeModal()">
         <span class="trade-btn-label">${labels[i]}</span>
-        <span class="trade-btn-value">${App.formatMoney(cash)}</span>
-        <span class="trade-btn-sub">${coinFmt} ${symbol}</span>
+        <span class="trade-btn-value">${coinFmt} ${symbol}</span>
+        <span class="trade-btn-sub">costs ${App.formatMoney(cash)}</span>
       </button>`;
     });
 
@@ -650,21 +650,38 @@ const Crypto = {
       <div class="stock-trade-subtitle">@ ${App.formatMoney(price)} &bull; ${App.formatMoney(balance)} available</div>
       <div class="stock-trade-buttons">${btnHtml}</div>
       <div class="coin-custom-row">
-        <input type="text" inputmode="decimal" id="coin-buy-custom" class="sh-input" placeholder="$ amount (e.g. 5m)">
+        <input type="text" inputmode="decimal" id="coin-buy-custom" class="sh-input" placeholder="# coins (e.g. 5m)" oninput="Crypto._updateCoinBuyPreview('${symbol}',this)">
         <button class="stock-trade-btn coin-custom-btn" onclick="Crypto._buyCoinCustom('${symbol}')">Buy</button>
       </div>
-      <div class="sh-preview" style="display:none;font-size:11px;color:var(--text-dim);margin-top:2px"></div>
+      <div id="coin-buy-cost-preview" style="font-size:11px;color:var(--accent);min-height:14px;margin-top:2px;padding-left:2px"></div>
       <button class="stock-trade-cancel" onclick="Crypto.closeModal()">Cancel</button>
     </div>`;
     this._showModal(html);
   },
 
+  _updateCoinBuyPreview(symbol, el) {
+    const sysIdx = this.coins.findIndex(c => c.symbol === symbol);
+    const price = sysIdx >= 0 ? this.coinPrices[sysIdx] : (this._playerCoinPrices[symbol] || 0);
+    const prev = document.getElementById('coin-buy-cost-preview');
+    if (!prev) return;
+    const coins = App.parseAmount(el.value);
+    if (!isNaN(coins) && coins > 0 && price > 0) {
+      prev.textContent = '\u2248 costs ' + App.formatMoney(coins * price);
+    } else {
+      prev.textContent = '';
+    }
+  },
+
   _buyCoinCustom(symbol) {
     const input = document.getElementById('coin-buy-custom');
     if (!input) return;
-    const cash = App.parseAmount(input.value);
-    if (isNaN(cash) || cash < 1) { Toast.show('Enter a valid amount (e.g. 5m)', '#ff5252'); return; }
-    if (cash > App.balance) { Toast.show('Not enough funds', '#ff5252'); return; }
+    const sysIdx = this.coins.findIndex(c => c.symbol === symbol);
+    const price = sysIdx >= 0 ? this.coinPrices[sysIdx] : (this._playerCoinPrices[symbol] || 0);
+    if (!price) { Toast.show('Price unavailable', '#ff5252'); return; }
+    const coins = App.parseAmount(input.value);
+    if (isNaN(coins) || coins <= 0) { Toast.show('Enter a valid coin amount (e.g. 5m)', '#ff5252'); return; }
+    const cash = coins * price;
+    if (cash > App.balance) { Toast.show('Not enough funds \u2014 costs ' + App.formatMoney(cash), '#ff5252'); return; }
     this.buyCoin(symbol, cash);
     this.closeModal();
   },
@@ -1308,10 +1325,10 @@ const Crypto = {
           </div>
         </div>
         <div style="display:flex;gap:6px;margin-bottom:4px">
-          <input type="text" inputmode="decimal" id="mgcoin-buy-amt" class="sh-input" placeholder="$ to buy (e.g. 10m)" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--bg3);background:var(--bg3);color:var(--text);font-size:13px">
+          <input type="text" inputmode="decimal" id="mgcoin-buy-amt" class="sh-input" placeholder="# coins to buy (e.g. 10m)" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--bg3);background:var(--bg3);color:var(--text);font-size:13px" oninput="Crypto._updateManageBuyPreview('${sym}',this)">
           <button class="stock-buy-btn" style="flex-shrink:0;padding:8px 12px" onclick="Crypto._manageCoinBuy('${sym}')">Buy</button>
         </div>
-        <div class="sh-preview" style="display:none;font-size:11px;color:var(--text-dim);margin-bottom:2px"></div>
+        <div id="mgcoin-buy-cost" style="font-size:11px;color:var(--accent);min-height:14px;margin-bottom:2px;padding-left:2px"></div>
         <div style="display:flex;gap:6px;margin-bottom:4px">
           <input type="text" inputmode="decimal" id="mgcoin-sell-amt" class="sh-input" placeholder="# coins to sell (e.g. 1.5m)" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--bg3);background:var(--bg3);color:var(--text);font-size:13px">
           <button class="stock-sell-btn" style="flex-shrink:0;padding:8px 12px" onclick="Crypto._manageCoinSell('${sym}')">Sell</button>
@@ -1427,14 +1444,33 @@ const Crypto = {
   },
 
   // Inline buy/sell from My Coin manage tab
+  _updateManageBuyPreview(sym, el) {
+    const price = this._playerCoinPrices[sym] || 0;
+    const prev = document.getElementById('mgcoin-buy-cost');
+    if (!prev) return;
+    const coins = App.parseAmount(el.value);
+    if (!isNaN(coins) && coins > 0 && price > 0) {
+      const cost = coins * price;
+      prev.textContent = '\u2248 costs ' + App.formatMoney(cost) + (cost > App.balance ? ' \u2014 not enough' : '');
+      prev.style.color = cost > App.balance ? '#ff5252' : 'var(--accent)';
+    } else {
+      prev.textContent = '';
+    }
+  },
+
   _manageCoinBuy(sym) {
     const input = document.getElementById('mgcoin-buy-amt');
     if (!input) return;
-    const cash = App.parseAmount(input.value);
-    if (isNaN(cash) || cash < 1) { Toast.show('Enter a valid $ amount (e.g. 10m)', '#ff5252'); return; }
-    if (cash > App.balance) { Toast.show('Not enough funds', '#ff5252'); return; }
+    const price = this._playerCoinPrices[sym] || 0;
+    if (!price) { Toast.show('Price unavailable', '#ff5252'); return; }
+    const coins = App.parseAmount(input.value);
+    if (isNaN(coins) || coins <= 0) { Toast.show('Enter a valid coin amount (e.g. 10m)', '#ff5252'); return; }
+    const cash = coins * price;
+    if (cash > App.balance) { Toast.show('Not enough funds \u2014 costs ' + App.formatMoney(cash), '#ff5252'); return; }
     this.buyCoin(sym, cash);
     input.value = '';
+    const prev = document.getElementById('mgcoin-buy-cost');
+    if (prev) prev.textContent = '';
   },
 
   _manageCoinSell(sym) {
