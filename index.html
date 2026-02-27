@@ -554,18 +554,14 @@
             </div>
             <div class="game-admin-body">
               <div class="admin-row">
-                <label>Force Number:</label>
-                <select id="rl-rig-num" onchange="Rig.games.roulette.forceNumber=this.value==='none'?-1:(+this.value)" style="flex:1">
-                  <option value="none">Random</option>
-                  <option value="0">0 (Green)</option>
-                  <option value="1">1 (Red)</option>
-                  <option value="2">2 (Black)</option>
-                  <option value="7">7 (Red)</option>
-                  <option value="13">13 (Black)</option>
-                  <option value="17">17 (Black)</option>
-                  <option value="32">32 (Red)</option>
-                  <option value="36">36 (Red)</option>
-                </select>
+                <label>Force #:</label>
+                <input type="text" id="rl-rig-num" placeholder="0–36 or 00" style="flex:1" oninput="Rig.games.roulette.forceNumber=this.value.trim()===''?-1:this.value.trim()">
+                <button onclick="Rig.games.roulette.forceNumber=-1;document.getElementById('rl-rig-num').value=''">Clear</button>
+              </div>
+              <div class="admin-row" style="gap:6px;margin-top:4px">
+                <button style="flex:1;background:#1b5e20" onclick="Rig.games.roulette.forceWin=true;Rig.games.roulette.forceLose=false;this.textContent='✓ Win next'">Force Win</button>
+                <button style="flex:1;background:#b71c1c" onclick="Rig.games.roulette.forceLose=true;Rig.games.roulette.forceWin=false;this.textContent='✓ Lose next'">Force Lose</button>
+                <button onclick="Rig.games.roulette.forceWin=false;Rig.games.roulette.forceLose=false;document.querySelectorAll('#screen-roulette .game-admin-body button').forEach(b=>{if(b.textContent.startsWith('✓'))b.textContent=b.textContent.includes('Win')?'Force Win':'Force Lose'})">Reset</button>
               </div>
             </div>
           </div>

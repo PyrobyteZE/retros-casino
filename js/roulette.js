@@ -83,12 +83,36 @@ const Roulette = {
     const g = Rig.games.roulette;
     let resultIdx;
 
-    if (g && g.forceNumber !== null && g.forceNumber !== undefined && g.forceNumber !== -1) {
-      resultIdx = this.wheelOrder.indexOf(+g.forceNumber);
+    const fn = g.forceNumber;
+    const fnStr = (fn === '00') ? '00' : (fn !== -1 && fn !== '' && !isNaN(+fn)) ? +fn : null;
+
+    if (fnStr !== null) {
+      // Force a specific number (handles 0, 1–36, and '00')
+      resultIdx = this.wheelOrder.indexOf(fnStr);
       if (resultIdx < 0) resultIdx = Math.floor(Math.random() * this.wheelOrder.length);
       g.forceNumber = -1;
-      const sel = document.getElementById('rl-rig-num');
-      if (sel) sel.value = 'none';
+      const inp = document.getElementById('rl-rig-num');
+      if (inp) inp.value = '';
+    } else if (g.forceWin && Object.keys(this.bets).length > 0) {
+      // Force the next spin to win the player's biggest bet
+      g.forceWin = false;
+      const bestBet = Object.entries(this.bets).sort((a, b) => b[1] - a[1])[0][0];
+      const winners = this.getWinningNumbers(bestBet);
+      if (winners.length > 0) {
+        const winNum = winners[Math.floor(Math.random() * winners.length)];
+        resultIdx = this.wheelOrder.indexOf(winNum);
+      } else {
+        resultIdx = Math.floor(Math.random() * this.wheelOrder.length);
+      }
+    } else if (g.forceLose && Object.keys(this.bets).length > 0) {
+      // Force the next spin to lose all bets
+      g.forceLose = false;
+      const losers = this.wheelOrder.filter(n => Object.keys(this.bets).every(t => this.checkWin(t, n) === 0));
+      if (losers.length > 0) {
+        resultIdx = this.wheelOrder.indexOf(losers[Math.floor(Math.random() * losers.length)]);
+      } else {
+        resultIdx = Math.floor(Math.random() * this.wheelOrder.length);
+      }
     } else if (Rig.enabled && Rig.shouldWin() && Object.keys(this.bets).length > 0) {
       const bestBet = Object.entries(this.bets).sort((a, b) => b[1] - a[1])[0][0];
       const winners = this.getWinningNumbers(bestBet);

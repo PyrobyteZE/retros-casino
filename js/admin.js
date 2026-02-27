@@ -11,7 +11,7 @@ const Rig = {
     crash: { forceCrashAt: 0, minMultiplier: 1, neverCrash: false },
     blackjack: { forceBlackjack: false, neverBust: false, peekDealer: false },
     plinko: { forceBucket: -1, alwaysEdge: false },
-    roulette: { forceNumber: -1 },
+    roulette: { forceNumber: -1, forceWin: false, forceLose: false },
     horses: { forceWinner: -1 },
     lottery: { forceJackpot: false }
   },
