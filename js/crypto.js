@@ -67,6 +67,7 @@ const Crypto = {
   _playerCoinTickTimer: null,
   _playerCoinSlots: {},   // { [uid]: { [n]: coinData } }  n = 1, 2, 3...
   _activeCoinSlot: 0,     // which slot the player is managing (0 = slot0 = legacy playerCoins)
+  _managingCoinMeta: null, // { uid, slot } — set when entering manage view
 
   init() {
     if (!this.initialized) {
@@ -1142,11 +1143,30 @@ const Crypto = {
 
     const contentDiv = document.createElement('div');
     if (activeCoin) {
+      this._managingCoinMeta = { uid: activeOwnerUid, slot: this._activeCoinSlot };
       this._renderManageCoin(contentDiv, activeCoin, activeOwnerUid);
     } else {
+      this._managingCoinMeta = null;
       this._renderCreateCoin(contentDiv);
     }
     container.appendChild(contentDiv);
+  },
+
+  // Get the coin currently being managed (respects active slot)
+  _getManagedCoin() {
+    const meta = this._managingCoinMeta;
+    if (!meta) return null;
+    if (meta.slot === 0) return this._playerCoins[meta.uid] || this._myPlayerCoin;
+    const extraSlots = this._playerCoinSlots[meta.uid] || {};
+    return extraSlots[meta.slot] || null;
+  },
+
+  // Update the managed coin in Firebase (routes to correct slot path)
+  _updateManagedCoin(updates) {
+    const meta = this._managingCoinMeta;
+    if (!meta || !Firebase.isOnline()) return Promise.reject('no meta or offline');
+    if (meta.slot === 0) return Firebase.updatePlayerCoin(meta.uid, updates);
+    return Firebase.updatePlayerCoinSlot(meta.uid, meta.slot, updates);
   },
 
   _renderCreateCoin(container) {
@@ -1315,9 +1335,8 @@ const Crypto = {
   },
 
   _buyCoinUpgrade(key) {
-    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
-    if (!myUid || !Firebase.isOnline()) return;
-    const coin = this._playerCoins[myUid] || this._myPlayerCoin;
+    if (!Firebase.isOnline()) return;
+    const coin = this._getManagedCoin();
     if (!coin) return;
     const upgradeList = [
       { key: 'pumpEngine', max: 3, costs: [50000, 200000, 500000] },
@@ -1336,7 +1355,7 @@ const Crypto = {
     App.addBalance(-cost);
     const newLevel = lvl + 1;
     const updates = { ['upgrades/' + key]: newLevel };
-    Firebase.updatePlayerCoin(myUid, updates).then(() => {
+    this._updateManagedCoin(updates).then(() => {
       if (!coin.upgrades) coin.upgrades = {};
       coin.upgrades[key] = newLevel;
       App.save();
@@ -1345,9 +1364,8 @@ const Crypto = {
   },
 
   _ownerAction(action) {
-    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
-    if (!myUid || !Firebase.isOnline()) return;
-    const coin = this._playerCoins[myUid] || this._myPlayerCoin;
+    if (!Firebase.isOnline()) return;
+    const coin = this._getManagedCoin();
     if (!coin) return;
     const sym = coin.symbol;
 
@@ -1379,7 +1397,7 @@ const Crypto = {
       const newSupply = Math.floor((coin.supply || 1e9) * (1 + mintPct));
       const earnings = Math.floor(newSupply - (coin.supply || 1e9)) * (this._playerCoinPrices[sym] || coin.baseValue);
       App.addBalance(earnings * 0.1); // earn 10% of minted value
-      Firebase.updatePlayerCoin(myUid, { supply: newSupply }).then(() => { coin.supply = newSupply; });
+      this._updateManagedCoin({ supply: newSupply }).then(() => { coin.supply = newSupply; });
       cooldowns.mint = now + COOL_LONG;
       App.save(); this.render();
       Toast.show('\u{1F4B0} Minted ' + Math.round(mintPct * 100) + '% supply', '#9945ff', 3000);
@@ -1389,7 +1407,7 @@ const Crypto = {
       const newSupply = Math.floor((coin.supply || 1e9) * (1 - burnPct));
       const newReserve = Math.floor((coin.reserveAmt || 0) * (1 - burnPct));
       this._playerCoinPrices[sym] = (this._playerCoinPrices[sym] || coin.baseValue) * (1 + burnPct * 0.8);
-      Firebase.updatePlayerCoin(myUid, { supply: newSupply, reserveAmt: newReserve });
+      this._updateManagedCoin({ supply: newSupply, reserveAmt: newReserve });
       cooldowns.burnAct = now + COOL_LONG;
       App.save(); this.render();
       Toast.show('\u{1F525} Burned 5% supply — price up!', '#ff9100', 3000);
@@ -1400,7 +1418,7 @@ const Crypto = {
         if (App.balance < fee) { alert('Relist fee: ' + App.formatMoney(fee)); return; }
         App.addBalance(-fee);
       }
-      Firebase.updatePlayerCoin(myUid, { type: newType }).then(() => {
+      this._updateManagedCoin({ type: newType }).then(() => {
         coin.type = newType;
         App.save(); this.render();
         Toast.show(newType === 'public' ? '\u2705 Coin relisted!' : '\u{1F4E4} Coin delisted (private)', '#9945ff', 3000);
@@ -1526,6 +1544,15 @@ const Crypto = {
       const coin = this._playerCoins[uid];
       if (coin && coin.symbol && coin.type !== 'private') {
         result.push({ uid, coin });
+      }
+    }
+    // Also include extra-slot coins
+    for (const uid in this._playerCoinSlots) {
+      for (const n in this._playerCoinSlots[uid]) {
+        const coin = this._playerCoinSlots[uid][n];
+        if (coin && coin.symbol && coin.type !== 'private') {
+          result.push({ uid, coin });
+        }
       }
     }
     return result;
