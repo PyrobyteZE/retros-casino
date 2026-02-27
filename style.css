@@ -879,43 +879,83 @@ input, textarea, select {
   text-shadow: 0 0 10px rgba(224,64,251,0.5);
 }
 
-/* Per-Game Admin Panel */
-.game-admin {
-  width: 100%;
-  background: var(--bg2);
-  border: 1px solid var(--red);
-  border-radius: var(--radius);
-  overflow: hidden;
-  margin-top: 4px;
+/* Per-Game Rig Cards (in Admin Cheats tab) */
+.admin-game-rig-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
-.game-admin-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 14px;
-  cursor: pointer;
-  background: rgba(255,82,82,0.08);
-  font-size: 13px;
+.admin-game-rig-card {
+  background: var(--bg);
+  border: 1px solid var(--bg3);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.admin-game-rig-title {
+  font-size: 11px;
   font-weight: 700;
+  color: var(--green);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+/* Rooms Tab */
+.admin-rooms-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-room-card {
+  background: var(--bg);
+  border: 1px solid var(--bg3);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.admin-room-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.admin-room-game {
+  font-size: 14px;
+  font-weight: 700;
+  flex: 1;
+}
+
+.admin-room-players {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.admin-room-btns {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.admin-room-btns button {
+  flex: 1;
+  padding: 6px 4px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--bg3);
+  background: var(--bg2);
+  color: var(--text);
+  cursor: pointer;
+  min-width: 44px;
+}
+
+.admin-room-btns button.danger {
+  border-color: var(--red);
   color: var(--red);
-}
-
-.game-admin-arrow {
-  font-size: 10px;
-  transition: transform 0.2s;
-}
-
-.game-admin.collapsed .game-admin-arrow {
-  transform: rotate(-90deg);
-}
-
-.game-admin.collapsed .game-admin-body {
-  display: none;
-}
-
-.game-admin-body {
-  padding: 10px 14px;
 }
 
 .rig-btn {

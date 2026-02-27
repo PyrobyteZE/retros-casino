@@ -327,7 +327,32 @@ const Toast = {
   },
 };
 
+function showFirstTimeUsernamePrompt() {
+  if (document.getElementById('ft-username-modal')) return;
+  const modal = document.createElement('div');
+  modal.id = 'ft-username-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.88)';
+  modal.innerHTML = `
+    <div style="background:var(--bg2);border:1px solid var(--green);border-radius:14px;padding:30px 24px;max-width:320px;width:90%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.5)">
+      <div style="font-size:40px;margin-bottom:10px">🎰</div>
+      <div style="font-size:19px;font-weight:700;color:var(--green);margin-bottom:6px">Welcome to Retro's Casino!</div>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:20px">Pick a username. It will show on the leaderboard.</div>
+      <input id="ft-username-input" type="text" maxlength="16" placeholder="Username"
+        style="width:100%;padding:11px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:8px;font-size:15px;box-sizing:border-box;text-align:center;margin-bottom:12px;outline:none"
+        onkeydown="if(event.key==='Enter')document.getElementById('ft-username-submit').click()">
+      <button id="ft-username-submit"
+        style="width:100%;padding:13px;background:var(--green);color:#000;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:6px"
+        onclick="(function(){const v=document.getElementById('ft-username-input').value.trim();if(v)Settings.setName(v);document.getElementById('ft-username-modal').remove();})()">Let's Play!</button>
+      <button style="width:100%;padding:8px;background:none;color:var(--text-dim);border:none;font-size:12px;cursor:pointer"
+        onclick="document.getElementById('ft-username-modal').remove()">Skip (play as Guest)</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  setTimeout(() => document.getElementById('ft-username-input')?.focus(), 80);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  const isFirstTime = !localStorage.getItem('retros_casino_save');
   App.init();
   Clicker.init();
   Loans.init();
@@ -338,4 +363,5 @@ document.addEventListener('DOMContentLoaded', () => {
   if (typeof Crypto !== 'undefined') Crypto.init();
   if (typeof Firebase !== 'undefined') Firebase.init();
   GameStats.initAllHUDs();
+  if (isFirstTime) setTimeout(showFirstTimeUsernamePrompt, 600);
 });

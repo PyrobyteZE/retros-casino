@@ -257,13 +257,11 @@ const Admin = {
   },
 
   showGameAdmins() {
-    document.querySelectorAll('.game-admin').forEach(el => {
-      el.classList.toggle('hidden', !this.adminMode);
-    });
+    // Game panels moved to Cheats tab — nothing to show/hide here
   },
 
   toggleGamePanel(id) {
-    document.getElementById(id).classList.toggle('collapsed');
+    // Game panels moved to Cheats tab
   },
 
   open() {
@@ -283,6 +281,7 @@ const Admin = {
     if (tab === 'cheats') content.innerHTML = this._renderCheatsTab();
     else if (tab === 'economy') content.innerHTML = this._renderEconomyTab();
     else if (tab === 'player') content.innerHTML = this._renderPlayerTab();
+    else if (tab === 'rooms') content.innerHTML = this._renderRoomsTab();
     else if (tab === 'market') content.innerHTML = this._renderMarketTab();
     else if (tab === 'data') content.innerHTML = this._renderDataTab();
     this._populateTabValues(tab);
@@ -300,6 +299,16 @@ const Admin = {
       const rd = document.getElementById('rig-winrate-display');
       if (rd) rd.textContent = Rig.winRate + '%';
       this.updateRigStatus();
+      // Per-game rig state
+      const g = Rig.games;
+      set('slots-rig-symbol', g.slots.forceSymbol);
+      set('crash-rig-point', g.crash.forceCrashAt || 0);
+      set('crash-rig-min', g.crash.minMultiplier || 1);
+      check('crash-rig-never', g.crash.neverCrash);
+      check('bj-rig-nobust', g.blackjack.neverBust);
+      check('bj-rig-peek', g.blackjack.peekDealer);
+      check('plinko-rig-edge', g.plinko.alwaysEdge);
+      set('horses-rig-winner', g.horses.forceWinner);
     } else if (tab === 'economy') {
       set('admin-balance', Math.floor(App.balance));
       set('admin-debt', Math.floor(Loans.debt));
@@ -373,11 +382,162 @@ const Admin = {
           <button onclick="Admin.forceNextLose()" style="border-color:#ff5252;color:#ff5252">Force Next Lose</button>
         </div>
       </div>
+      <div class="admin-section">
+        <h3>Per-Game Rigs</h3>
+        <div class="admin-game-rig-grid">
+          <div class="admin-game-rig-card">
+            <div class="admin-game-rig-title">Coinflip</div>
+            <div class="admin-row" style="gap:4px">
+              <button class="rig-btn win" onclick="Rig.games.coinflip.forceResult='heads'">Heads</button>
+              <button class="rig-btn lose" onclick="Rig.games.coinflip.forceResult='tails'">Tails</button>
+              <button class="rig-btn" onclick="Rig.games.coinflip.forceResult=null">None</button>
+            </div>
+          </div>
+          <div class="admin-game-rig-card">
+            <div class="admin-game-rig-title">Slots</div>
+            <div class="admin-row" style="gap:4px">
+              <button class="rig-btn win" onclick="Rig.games.slots.forceJackpot=true">Jackpot</button>
+              <button class="rig-btn" onclick="Rig.games.slots.forceJackpot=false;Rig.games.slots.forceSymbol=-1">Off</button>
+            </div>
+            <div class="admin-row" style="margin-top:4px">
+              <select id="slots-rig-symbol" onchange="Rig.games.slots.forceSymbol=+this.value" style="flex:1;font-size:12px;padding:4px">
+                <option value="-1">No Force</option>
+                <option value="0">Cherry</option>
+                <option value="1">Lemon</option>
+                <option value="2">Bar</option>
+                <option value="3">Seven</option>
+                <option value="4">Diamond</option>
+              </select>
+            </div>
+          </div>
+          <div class="admin-game-rig-card">
+            <div class="admin-game-rig-title">Crash</div>
+            <div class="admin-row" style="gap:4px">
+              <input type="number" id="crash-rig-point" min="1" step="0.1" value="0" placeholder="0=random" style="width:60px;font-size:12px">
+              <button class="rig-btn win" onclick="Rig.games.crash.forceCrashAt=+document.getElementById('crash-rig-point').value||0">Set At</button>
+            </div>
+            <div class="admin-row" style="margin-top:4px;gap:6px">
+              <span style="font-size:11px;color:var(--text-dim)">Min:</span>
+              <input type="number" id="crash-rig-min" min="1" step="0.5" value="1" style="width:45px;font-size:12px" onchange="Rig.games.crash.minMultiplier=+this.value||1">
+              <span style="font-size:11px;color:var(--text-dim)">Never:</span>
+              <label class="toggle-switch" style="transform:scale(0.8);flex-shrink:0">
+                <input type="checkbox" id="crash-rig-never" onchange="Rig.games.crash.neverCrash=this.checked">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="admin-game-rig-card">
+            <div class="admin-game-rig-title">Blackjack</div>
+            <div class="admin-row" style="gap:4px">
+              <button class="rig-btn win" onclick="Rig.games.blackjack.forceBlackjack=true">Force BJ</button>
+              <button class="rig-btn" onclick="Rig.games.blackjack.forceBlackjack=false">Off</button>
+            </div>
+            <div class="admin-row" style="margin-top:4px;gap:6px;flex-wrap:wrap">
+              <span style="font-size:11px;color:var(--text-dim)">No Bust:</span>
+              <label class="toggle-switch" style="transform:scale(0.8);flex-shrink:0">
+                <input type="checkbox" id="bj-rig-nobust" onchange="Rig.games.blackjack.neverBust=this.checked">
+                <span class="toggle-slider"></span>
+              </label>
+              <span style="font-size:11px;color:var(--text-dim)">Peek:</span>
+              <label class="toggle-switch" style="transform:scale(0.8);flex-shrink:0">
+                <input type="checkbox" id="bj-rig-peek" onchange="Rig.games.blackjack.peekDealer=this.checked">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="admin-game-rig-card">
+            <div class="admin-game-rig-title">Plinko</div>
+            <div class="admin-row">
+              <select id="plinko-rig-bucket" onchange="Rig.games.plinko.forceBucket=+this.value" style="flex:1;font-size:12px;padding:4px">
+                <option value="-1">Random</option>
+              </select>
+            </div>
+            <div class="admin-row" style="margin-top:4px;gap:6px">
+              <span style="font-size:11px;color:var(--text-dim)">Always Edge:</span>
+              <label class="toggle-switch" style="transform:scale(0.8);flex-shrink:0">
+                <input type="checkbox" id="plinko-rig-edge" onchange="Rig.games.plinko.alwaysEdge=this.checked">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="admin-game-rig-card">
+            <div class="admin-game-rig-title">Roulette</div>
+            <div class="admin-row" style="gap:4px">
+              <input type="text" id="rl-rig-num" placeholder="0–36 or 00" style="flex:1;font-size:12px" oninput="Rig.games.roulette.forceNumber=this.value.trim()===''?-1:this.value.trim()">
+              <button onclick="Rig.games.roulette.forceNumber=-1;document.getElementById('rl-rig-num').value=''" style="font-size:11px">Clear</button>
+            </div>
+            <div class="admin-row" style="margin-top:4px;gap:4px">
+              <button style="flex:1;background:#1b5e20;font-size:11px;padding:4px;border-radius:4px;color:#fff;border:none;cursor:pointer" onclick="Rig.games.roulette.forceWin=true;Rig.games.roulette.forceLose=false">Force Win</button>
+              <button style="flex:1;background:#b71c1c;font-size:11px;padding:4px;border-radius:4px;color:#fff;border:none;cursor:pointer" onclick="Rig.games.roulette.forceLose=true;Rig.games.roulette.forceWin=false">Force Lose</button>
+              <button style="font-size:11px;padding:4px;border-radius:4px;background:var(--bg3);color:var(--text);border:none;cursor:pointer" onclick="Rig.games.roulette.forceWin=false;Rig.games.roulette.forceLose=false">Reset</button>
+            </div>
+          </div>
+          <div class="admin-game-rig-card">
+            <div class="admin-game-rig-title">Horses</div>
+            <div class="admin-row">
+              <select id="horses-rig-winner" onchange="Rig.games.horses.forceWinner=+this.value" style="flex:1;font-size:12px;padding:4px">
+                <option value="-1">Random</option>
+                <option value="0">Thunder (2x)</option>
+                <option value="1">Shadow (3x)</option>
+                <option value="2">Goose (4x)</option>
+                <option value="3">Storm (6x)</option>
+                <option value="4">Lucky (10x)</option>
+                <option value="5">Phantom (15x)</option>
+              </select>
+            </div>
+          </div>
+          <div class="admin-game-rig-card">
+            <div class="admin-game-rig-title">Lottery</div>
+            <div class="admin-row" style="gap:4px">
+              <button class="rig-btn win" onclick="Rig.games.lottery.forceJackpot=true">Force Jackpot</button>
+              <button class="rig-btn" onclick="Rig.games.lottery.forceJackpot=false">Off</button>
+            </div>
+          </div>
+        </div>
+      </div>
     `;
   },
 
   _renderTrollTab() {
     return '';
+  },
+
+  _renderRoomsTab() {
+    const gameLabels = { horses: '🏇 Horses', crash: '💥 Crash', roulette: '🎡 Roulette' };
+    const rows = ['horses', 'crash', 'roulette'].map(g => {
+      const room = typeof MainRoom !== 'undefined' ? MainRoom._rooms[g] : null;
+      const status = room ? room.status : 'idle';
+      const players = room ? Object.keys(room.players || {}).length : 0;
+      const playerNames = room ? Object.values(room.players || {}).map(p => p.name || 'Player').join(', ') : '';
+      const statusBadge = status === 'idle'
+        ? '<span class="mp-status-idle">idle</span>'
+        : status === 'betting'
+          ? `<span class="mp-status-betting">betting (${players}p)</span>`
+          : status === 'running'
+            ? '<span class="mp-status-live">LIVE</span>'
+            : `<span class="mp-status-done">done</span>`;
+      return `<div class="admin-room-card">
+        <div class="admin-room-header">
+          <span class="admin-room-game">${gameLabels[g]}</span>
+          ${statusBadge}
+        </div>
+        ${players > 0 ? `<div class="admin-room-players">${playerNames}</div>` : ''}
+        <div class="admin-room-btns">
+          <button onclick="MainRoom.adminOpen('${g}',30)">30s</button>
+          <button onclick="MainRoom.adminOpen('${g}',60)">60s</button>
+          <button onclick="MainRoom.adminForceStart('${g}')" style="background:#ff9100;color:#000;font-weight:700">▶ Start</button>
+          <button onclick="MainRoom.adminClose('${g}')" class="danger">✕ Close</button>
+        </div>
+      </div>`;
+    }).join('');
+    return `
+      <div class="admin-section">
+        <h3>Multiplayer Rooms</h3>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Tap Refresh or reopen this tab to update status.</div>
+        <div class="admin-rooms-grid">${rows}</div>
+        <button class="admin-btn" style="margin-top:10px;width:100%" onclick="Admin.setTab('rooms')">Refresh</button>
+      </div>
+    `;
   },
 
   _renderEconomyTab() {
@@ -449,30 +609,6 @@ const Admin = {
 
   _renderMarketTab() {
     return `
-      <div class="admin-section">
-        <h3>🎮 Multiplayer Rooms</h3>
-        <div class="admin-mp-rooms">
-          ${['horses', 'crash', 'roulette'].map(g => {
-            const room = typeof MainRoom !== 'undefined' ? MainRoom._rooms[g] : null;
-            const status = room ? room.status : 'idle';
-            const players = room ? Object.keys(room.players || {}).length : 0;
-            const statusBadge = status === 'idle' ? '<span class="mp-status-idle">idle</span>'
-              : status === 'betting' ? '<span class="mp-status-betting">betting ('+players+'p)</span>'
-              : status === 'running' ? '<span class="mp-status-live">live</span>'
-              : '<span class="mp-status-done">done</span>';
-            return `<div class="admin-mp-room-row">
-              <span class="admin-mp-game">${g}</span>
-              ${statusBadge}
-              <div class="admin-mp-btns">
-                <button onclick="MainRoom.adminOpen('${g}',30)">30s</button>
-                <button onclick="MainRoom.adminOpen('${g}',60)">60s</button>
-                <button onclick="MainRoom.adminForceStart('${g}')" style="background:#ff9100;color:#000">Start</button>
-                <button onclick="MainRoom.adminClose('${g}')" class="danger">Close</button>
-              </div>
-            </div>`;
-          }).join('')}
-        </div>
-      </div>
       <div class="admin-section">
         <h3>Hunger Controls</h3>
         <div class="admin-actions">

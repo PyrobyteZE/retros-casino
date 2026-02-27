@@ -279,29 +279,6 @@
             <button class="game-btn slots-auto-btn" id="slots-auto-btn" onclick="Slots.toggleAutoSpin()">Auto: OFF</button>
           </div>
           <div id="slots-auto-status" class="slots-auto-status"></div>
-          <div class="game-admin hidden" id="slots-admin">
-            <div class="game-admin-header" onclick="Admin.toggleGamePanel('slots-admin')">
-              <span>Admin Controls</span><span class="game-admin-arrow">&#x25BC;</span>
-            </div>
-            <div class="game-admin-body">
-              <div class="admin-row">
-                <label>Force Jackpot:</label>
-                <button class="rig-btn win" onclick="Rig.games.slots.forceJackpot=true;Admin.refreshGameRig()">3x Diamond</button>
-                <button class="rig-btn" onclick="Rig.games.slots.forceJackpot=false;Admin.refreshGameRig()">Off</button>
-              </div>
-              <div class="admin-row">
-                <label>Force Symbol:</label>
-                <select id="slots-rig-symbol" onchange="Rig.games.slots.forceSymbol=+this.value">
-                  <option value="-1">None</option>
-                  <option value="0">Cherry</option>
-                  <option value="1">Lemon</option>
-                  <option value="2">Bar</option>
-                  <option value="3">Seven</option>
-                  <option value="4">Diamond</option>
-                </select>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -334,29 +311,6 @@
           </div>
           <div class="game-actions">
             <button class="game-btn" id="crash-btn" onclick="Crash.toggle()">Start</button>
-          </div>
-          <div class="game-admin hidden" id="crash-admin">
-            <div class="game-admin-header" onclick="Admin.toggleGamePanel('crash-admin')">
-              <span>Admin Controls</span><span class="game-admin-arrow">&#x25BC;</span>
-            </div>
-            <div class="game-admin-body">
-              <div class="admin-row">
-                <label>Set Crash At:</label>
-                <input type="number" id="crash-rig-point" min="1" step="0.1" value="0" placeholder="0 = random">
-                <button class="rig-btn win" onclick="Rig.games.crash.forceCrashAt=+document.getElementById('crash-rig-point').value||0">Set</button>
-              </div>
-              <div class="admin-row">
-                <label>Min Multiplier:</label>
-                <input type="number" id="crash-rig-min" min="1" step="0.5" value="1" onchange="Rig.games.crash.minMultiplier=+this.value||1">
-              </div>
-              <div class="admin-row">
-                <label>Never Crash:</label>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="crash-rig-never" onchange="Rig.games.crash.neverCrash=this.checked">
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-            </div>
           </div>
         </div>
       </section>
@@ -392,32 +346,6 @@
             <button class="game-btn" id="bj-deal-btn" onclick="Blackjack.deal()">Deal</button>
             <button class="game-btn hidden" id="bj-hit-btn" onclick="Blackjack.hit()">Hit</button>
             <button class="game-btn hidden" id="bj-stand-btn" onclick="Blackjack.stand()">Stand</button>
-          </div>
-          <div class="game-admin hidden" id="bj-admin">
-            <div class="game-admin-header" onclick="Admin.toggleGamePanel('bj-admin')">
-              <span>Admin Controls</span><span class="game-admin-arrow">&#x25BC;</span>
-            </div>
-            <div class="game-admin-body">
-              <div class="admin-row">
-                <label>Force Blackjack:</label>
-                <button class="rig-btn win" onclick="Rig.games.blackjack.forceBlackjack=true;Admin.refreshGameRig()">Next Hand</button>
-                <button class="rig-btn" onclick="Rig.games.blackjack.forceBlackjack=false;Admin.refreshGameRig()">Off</button>
-              </div>
-              <div class="admin-row">
-                <label>Never Bust:</label>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="bj-rig-nobust" onchange="Rig.games.blackjack.neverBust=this.checked">
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-              <div class="admin-row">
-                <label>Peek Dealer:</label>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="bj-rig-peek" onchange="Rig.games.blackjack.peekDealer=this.checked">
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-            </div>
           </div>
         </div>
       </section>
@@ -463,27 +391,6 @@
             <button class="game-btn plinko-auto-btn" id="plinko-auto-btn" onclick="Plinko.toggleAuto()">Auto: OFF</button>
           </div>
           <div id="plinko-auto-status" class="plinko-auto-status"></div>
-          <div class="game-admin hidden" id="plinko-admin">
-            <div class="game-admin-header" onclick="Admin.toggleGamePanel('plinko-admin')">
-              <span>Admin Controls</span><span class="game-admin-arrow">&#x25BC;</span>
-            </div>
-            <div class="game-admin-body">
-              <div class="admin-row">
-                <label>Force Bucket:</label>
-                <select id="plinko-rig-bucket" onchange="Rig.games.plinko.forceBucket=+this.value">
-                  <option value="-1">Random</option>
-                </select>
-              </div>
-              <div class="admin-row">
-                <label>Always Edge:</label>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="plinko-rig-edge" onchange="Rig.games.plinko.alwaysEdge=this.checked">
-                  <span class="toggle-slider"></span>
-                </label>
-                <span class="rig-hint">Land on highest multiplier</span>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -548,23 +455,6 @@
           <div id="rl-auto-timer" class="rl-auto-timer"></div>
 
           <!-- Admin controls -->
-          <div class="game-admin hidden" id="rl-admin">
-            <div class="game-admin-header" onclick="Admin.toggleGamePanel('rl-admin')">
-              <span>Admin Controls</span><span class="game-admin-arrow">&#x25BC;</span>
-            </div>
-            <div class="game-admin-body">
-              <div class="admin-row">
-                <label>Force #:</label>
-                <input type="text" id="rl-rig-num" placeholder="0–36 or 00" style="flex:1" oninput="Rig.games.roulette.forceNumber=this.value.trim()===''?-1:this.value.trim()">
-                <button onclick="Rig.games.roulette.forceNumber=-1;document.getElementById('rl-rig-num').value=''">Clear</button>
-              </div>
-              <div class="admin-row" style="gap:6px;margin-top:4px">
-                <button style="flex:1;background:#1b5e20" onclick="Rig.games.roulette.forceWin=true;Rig.games.roulette.forceLose=false;this.textContent='✓ Win next'">Force Win</button>
-                <button style="flex:1;background:#b71c1c" onclick="Rig.games.roulette.forceLose=true;Rig.games.roulette.forceWin=false;this.textContent='✓ Lose next'">Force Lose</button>
-                <button onclick="Rig.games.roulette.forceWin=false;Rig.games.roulette.forceLose=false;document.querySelectorAll('#screen-roulette .game-admin-body button').forEach(b=>{if(b.textContent.startsWith('✓'))b.textContent=b.textContent.includes('Win')?'Force Win':'Force Lose'})">Reset</button>
-              </div>
-            </div>
-          </div>
 
         </div>
       </section>
@@ -591,25 +481,6 @@
           <div class="game-actions">
             <button class="game-btn" id="horses-race-btn" onclick="Horses.race()">RACE!</button>
           </div>
-          <div class="game-admin hidden" id="horses-admin">
-            <div class="game-admin-header" onclick="Admin.toggleGamePanel('horses-admin')">
-              <span>Admin Controls</span><span class="game-admin-arrow">&#x25BC;</span>
-            </div>
-            <div class="game-admin-body">
-              <div class="admin-row">
-                <label>Force Winner:</label>
-                <select id="horses-rig-winner" onchange="Rig.games.horses.forceWinner=+this.value">
-                  <option value="-1">Random</option>
-                  <option value="0">Thunder (2x)</option>
-                  <option value="1">Shadow (3x)</option>
-                  <option value="2">Blaze (4x)</option>
-                  <option value="3">Storm (6x)</option>
-                  <option value="4">Lucky (10x)</option>
-                  <option value="5">Phantom (15x)</option>
-                </select>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -632,18 +503,6 @@
           <div class="game-actions">
             <button class="game-btn" onclick="Lottery.buyCard()">Buy Card</button>
             <button class="game-btn" style="background:var(--gold);color:#000" onclick="Lottery.revealAll()">Reveal All</button>
-          </div>
-          <div class="game-admin hidden" id="lottery-admin">
-            <div class="game-admin-header" onclick="Admin.toggleGamePanel('lottery-admin')">
-              <span>Admin Controls</span><span class="game-admin-arrow">&#x25BC;</span>
-            </div>
-            <div class="game-admin-body">
-              <div class="admin-row">
-                <label>Force Jackpot:</label>
-                <button class="rig-btn win" onclick="Rig.games.lottery.forceJackpot=true">Next Card</button>
-                <button class="rig-btn" onclick="Rig.games.lottery.forceJackpot=false">Off</button>
-              </div>
-            </div>
           </div>
         </div>
       </section>
@@ -769,6 +628,7 @@
         <button class="admin-tab-btn active" data-tab="cheats" onclick="Admin.setTab('cheats')">Cheats</button>
         <button class="admin-tab-btn" data-tab="economy" onclick="Admin.setTab('economy')">Economy</button>
         <button class="admin-tab-btn" data-tab="player" onclick="Admin.setTab('player')">Player</button>
+        <button class="admin-tab-btn" data-tab="rooms" onclick="Admin.setTab('rooms')">Rooms</button>
         <button class="admin-tab-btn" data-tab="market" onclick="Admin.setTab('market')">Market</button>
         <button class="admin-tab-btn" data-tab="data" onclick="Admin.setTab('data')">Data</button>
       </div>
