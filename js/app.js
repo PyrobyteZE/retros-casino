@@ -188,6 +188,7 @@ const App = {
     if (name === 'plinko') Plinko.initCanvas();
     if (name === 'roulette') Roulette.init();
     if (name === 'horses') Horses.init();
+    if (['roulette', 'crash', 'horses'].includes(name) && typeof MainRoom !== 'undefined') MainRoom.joinScreen(name);
     if (name === 'lottery') Lottery.init();
     if (name === 'properties') Properties.init();
     if (name === 'crime') Crime.init();
@@ -340,16 +341,54 @@ function showFirstTimeUsernamePrompt() {
   modal.id = 'ft-username-modal';
   modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.88)';
   modal.innerHTML = `
-    <div style="background:var(--bg2);border:1px solid var(--green);border-radius:14px;padding:30px 24px;max-width:320px;width:90%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.5)">
-      <div style="font-size:40px;margin-bottom:10px">🎰</div>
-      <div style="font-size:19px;font-weight:700;color:var(--green);margin-bottom:6px">Welcome to Retro's Casino!</div>
-      <div style="font-size:13px;color:var(--text-dim);margin-bottom:20px">Pick a username. It will show on the leaderboard.</div>
+    <div style="background:var(--bg2);border:1px solid var(--green);border-radius:14px;padding:28px 22px;max-width:320px;width:90%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.5)">
+      <div style="font-size:40px;margin-bottom:8px">🎰</div>
+      <div style="font-size:19px;font-weight:700;color:var(--green);margin-bottom:4px">Welcome to Retro's Casino!</div>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:18px">Pick a username. It will show on the leaderboard.</div>
       <input id="ft-username-input" type="text" maxlength="16" placeholder="Username"
-        style="width:100%;padding:11px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:8px;font-size:15px;box-sizing:border-box;text-align:center;margin-bottom:12px;outline:none"
+        style="width:100%;padding:11px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:8px;font-size:15px;box-sizing:border-box;text-align:center;margin-bottom:10px;outline:none"
         onkeydown="if(event.key==='Enter')document.getElementById('ft-username-submit').click()">
       <button id="ft-username-submit"
-        style="width:100%;padding:13px;background:var(--green);color:#000;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:6px"
+        style="width:100%;padding:13px;background:var(--green);color:#000;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px"
         onclick="(function(){const v=document.getElementById('ft-username-input').value.trim();if(v){Settings.setName(v);_initFirebase();}document.getElementById('ft-username-modal').remove();})()">Let's Play!</button>
+
+      <div style="display:flex;align-items:center;gap:8px;margin:10px 0">
+        <div style="flex:1;height:1px;background:var(--bg3)"></div>
+        <span style="font-size:11px;color:var(--text-dim);white-space:nowrap">already have an account?</span>
+        <div style="flex:1;height:1px;background:var(--bg3)"></div>
+      </div>
+
+      <div id="ft-login-section" style="display:none;margin-bottom:8px">
+        <input id="ft-login-name" type="text" maxlength="16" placeholder="Username"
+          style="width:100%;padding:10px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:8px;font-size:14px;box-sizing:border-box;text-align:center;margin-bottom:8px;outline:none">
+        <input id="ft-login-pw" type="password" placeholder="Password"
+          style="width:100%;padding:10px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:8px;font-size:14px;box-sizing:border-box;text-align:center;margin-bottom:10px;outline:none"
+          onkeydown="if(event.key==='Enter')document.getElementById('ft-login-submit').click()">
+        <button id="ft-login-submit"
+          style="width:100%;padding:11px;background:var(--bg3);color:var(--text);border:1px solid var(--green);border-radius:8px;font-size:14px;font-weight:700;cursor:pointer"
+          onclick="(async function(){
+            const n=document.getElementById('ft-login-name').value.trim();
+            const p=document.getElementById('ft-login-pw').value.trim();
+            if(!n||!p){alert('Enter username and password');return;}
+            const btn=document.getElementById('ft-login-submit');
+            btn.textContent='Logging in...';btn.disabled=true;
+            Settings.setName(n);
+            _initFirebase();
+            await new Promise(r=>setTimeout(r,1500));
+            const result=await Firebase.loginWithPassword(n,p);
+            if(result.ok){
+              document.getElementById('ft-username-modal').remove();
+            } else {
+              btn.textContent='Login / Restore Save';btn.disabled=false;
+              alert('Login failed: '+(result.error||'incorrect password'));
+            }
+          })()">Login / Restore Save</button>
+        <div id="ft-login-err" style="font-size:11px;color:var(--red);margin-top:6px;min-height:14px"></div>
+      </div>
+
+      <button style="width:100%;padding:8px;background:var(--bg3);color:var(--green);border:1px solid var(--bg3);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:6px"
+        onclick="(function(){const s=document.getElementById('ft-login-section');const vis=s.style.display==='none';s.style.display=vis?'block':'none';if(vis)document.getElementById('ft-login-name').focus();this.textContent=vis?'↑ Hide Login':'🔑 Login to Existing Account';})()">🔑 Login to Existing Account</button>
+
       <button style="width:100%;padding:8px;background:none;color:var(--text-dim);border:none;font-size:12px;cursor:pointer"
         onclick="document.getElementById('ft-username-modal').remove()">Skip (play as Guest — local only)</button>
     </div>

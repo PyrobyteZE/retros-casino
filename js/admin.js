@@ -754,6 +754,18 @@ const Admin = {
         </div>
       </div>
       <div class="admin-section">
+        <div class="admin-subsection-title">\u{1F431} Cat Easter Eggs</div>
+        <div class="admin-actions">
+          <button class="admin-btn" onclick="Stocks._startCatFight()">Trigger Cat Fight</button>
+          <button class="admin-btn" onclick="Stocks._resolveCatFight()">Resolve Fight Now</button>
+          <button class="admin-btn" onclick="Stocks._triggerSoloEvent('hairball')">Hairball Crisis</button>
+          <button class="admin-btn" onclick="Stocks._triggerSoloEvent('eaten')">Report Eaten</button>
+          <button class="admin-btn" onclick="Stocks._triggerSoloEvent('nap')">Catnap</button>
+          <button class="admin-btn" onclick="Stocks._triggerSoloEvent('viral')">Viral Video</button>
+          <button class="admin-btn" onclick="Stocks._triggerSoloEvent('peace')">Peace Deal</button>
+        </div>
+      </div>
+      <div class="admin-section">
         <h3>Crypto Mining</h3>
         <div class="admin-actions">
           <button class="admin-btn win-btn" onclick="Admin.cryptoPump()">Pump All (3x)</button>

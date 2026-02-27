@@ -22,6 +22,20 @@ const MainRoom = {
     }
   },
 
+  joinScreen(game) {
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
+    const room = this._rooms[game];
+    if (!room) return; // no active room for this game
+    const uid = Firebase.uid;
+    if (!uid) return;
+    if (room.players && room.players[uid]) return; // already in
+    Firebase.joinMainRoom(game, uid, {
+      name: (typeof Settings !== 'undefined') ? Settings.profile.name : 'Player',
+      spectating: true,
+      joinedAt: Date.now(),
+    });
+  },
+
   // ─── Admin Controls ────────────────────────────────────────────
 
   adminOpen(game, durationSec) {

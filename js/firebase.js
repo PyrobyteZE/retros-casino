@@ -286,6 +286,29 @@ const Firebase = {
         badge.className = 'lb-online-badge';
       }
     }
+    const topBadge = document.getElementById('online-badge');
+    if (topBadge && this.isOnline()) {
+      topBadge.textContent = this.onlineCount + ' online';
+    }
+  },
+
+  toggleOnlinePanel() {
+    let panel = document.getElementById('online-player-panel');
+    if (panel) { panel.remove(); return; }
+    panel = document.createElement('div');
+    panel.id = 'online-player-panel';
+    panel.className = 'online-player-panel';
+    const rows = Object.values(this.onlinePlayers || {})
+      .map(p => `<div class="online-player-row">\u{1F464} ${this._escapeHtml(p.name || 'Player')}</div>`)
+      .join('');
+    panel.innerHTML = rows || '<div class="online-player-row" style="color:var(--text-dim)">No one else online</div>';
+    const badge = document.getElementById('online-badge');
+    if (badge) badge.appendChild(panel);
+    // Close on outside click
+    setTimeout(() => {
+      const close = e => { if (!panel.contains(e.target) && e.target !== badge) { panel.remove(); document.removeEventListener('click', close); } };
+      document.addEventListener('click', close);
+    }, 0);
   },
 
   // === LEADERBOARD ===
@@ -352,6 +375,14 @@ const Firebase = {
     }
     text = (text || '').trim().slice(0, 200);
     if (!text) return;
+
+    // Israel easter egg
+    if (text.toLowerCase().includes('israel')) {
+      const senderName = typeof Settings !== 'undefined' ? Settings.profile.name : 'Player';
+      const amount = Math.floor(Math.random() * 900) + 100;
+      this.pushSystemAnnouncement('\u{1F6A8} ' + senderName + ' has sent $' + amount + 'T to Israel');
+      return;
+    }
 
     // Rate limit: 3s
     const now = Date.now();
@@ -2265,5 +2296,65 @@ const Firebase = {
       }
       cb(committed && snap && snap.val() === this.uid);
     });
+  },
+
+  // === NEWS ORGS ===
+  setNewsOrg(ownerUid, data) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('newsOrgs/' + ownerUid).set(data);
+  },
+
+  postNewsArticle(ownerUid, postData) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('newsPosts/' + ownerUid).push(postData);
+  },
+
+  voteNewsPost(ownerUid, postId, dir) {
+    // dir: 'up' or 'down'
+    if (!this.isOnline()) return;
+    this.db.ref('newsPosts/' + ownerUid + '/' + postId + '/' + dir + 'votes').transaction(v => (v || 0) + 1);
+  },
+
+  listenNewsOrgs(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('newsOrgs').on('value', snap => cb(snap.val() || {}),
+      err => console.warn('listenNewsOrgs denied:', err.code));
+  },
+
+  listenNewsPosts(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('newsPosts').on('value', snap => cb(snap.val() || {}),
+      err => console.warn('listenNewsPosts denied:', err.code));
+  },
+
+  // === STOCK OFFERS (company-to-company transfers) ===
+  postStockOffer(targetTicker, offerUid, offerData) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('stockOffers/' + targetTicker + '/' + offerUid).set(offerData);
+  },
+
+  removeStockOffer(targetTicker, offerUid) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('stockOffers/' + targetTicker + '/' + offerUid).remove();
+  },
+
+  listenStockOffers(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('stockOffers').on('value', snap => cb(snap.val() || {}),
+      err => console.warn('listenStockOffers denied:', err.code));
+  },
+
+  // === P2P LOANS ===
+  updatePlayerLoan(loanId, updates) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('playerLoans/' + loanId).update(updates);
+  },
+
+  // === SYSTEM ANNOUNCEMENTS ===
+  pushSystemAnnouncement(text) {
+    if (!this.isOnline()) return;
+    this.db.ref('chat').push({
+      name: '\u{1F4E2} SYSTEM', text, ts: Date.now(), uid: 'system', system: true,
+    }).catch(() => {});
   },
 };

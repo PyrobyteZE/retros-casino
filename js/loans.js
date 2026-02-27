@@ -430,9 +430,17 @@ const Loans = {
             <span class="p2p-owed">${App.formatMoney(loan.totalOwed || loan.amount)}</span>
             ${loan.status === 'pending' ? '<span class="p2p-pending-text">(pending...)</span>' : ''}
           </div>
-          ${loan.status === 'active'
-            ? `<button class="p2p-btn p2p-forgive" onclick="Loans.forgivePlayerLoan('${id}')">Forgive</button>`
-            : '<span class="p2p-pending-text">Waiting...</span>'}
+          ${loan.status === 'active' ? `
+            <div class="loan-forgive-row">
+              <span style="font-size:11px;color:var(--text-dim)">Forgive:</span>
+              <button class="p2p-btn" onclick="Loans.forgivePartial('${id}', (Loans._p2pLoans['${id}']?.totalOwed||0)*0.10)">10%</button>
+              <button class="p2p-btn" onclick="Loans.forgivePartial('${id}', 5000)">$5K</button>
+              <button class="p2p-btn" onclick="Loans.forgivePartial('${id}', 1e9)">$1B</button>
+              <button class="p2p-btn" onclick="Loans.forgivePartial('${id}', 1e12)">$1T</button>
+              <input type="number" id="forgive-custom-${id}" placeholder="Custom $" style="width:80px;font-size:12px;background:var(--bg);border:1px solid var(--bg3);border-radius:4px;color:var(--text);padding:2px 4px">
+              <button class="p2p-btn" onclick="Loans.forgivePartial('${id}', +document.getElementById('forgive-custom-${id}').value)">Set</button>
+              <button class="p2p-btn p2p-forgive" onclick="Loans.forgivePlayerLoan('${id}')">All</button>
+            </div>` : '<span class="p2p-pending-text">Waiting...</span>'}
         </div>`;
       });
     }
@@ -796,6 +804,7 @@ const Loans = {
   // ============ P2P LOANS ============
 
   _p2pLoans: {},
+  _loanCache: {},   // { [loanId]: loanData } — localStorage-persisted for persistence
   _p2pTargetUid: null,
 
   filterBorrowerDropdown() {
@@ -838,7 +847,37 @@ const Loans = {
     this._p2pTargetUid = uid;
   },
 
+  _mergeLoans(incoming) {
+    // Update cache with incoming data; never remove active entries
+    for (const id in incoming) this._loanCache[id] = incoming[id];
+    // Remove only fully resolved (paid/declined/forgiven) entries older than 5 minutes
+    for (const id in this._loanCache) {
+      const l = this._loanCache[id];
+      if ((l.status === 'paid' || l.status === 'declined' || l.status === 'forgiven') &&
+          Date.now() - (l.createdAt || 0) > 300000) {
+        delete this._loanCache[id];
+      }
+    }
+    this._p2pLoans = { ...this._loanCache };
+    this._saveLoanCache();
+  },
+
+  _saveLoanCache() {
+    try { localStorage.setItem('retros_loan_cache', JSON.stringify(this._loanCache)); } catch (e) {}
+  },
+
+  _loadLoanCache() {
+    try {
+      const raw = localStorage.getItem('retros_loan_cache');
+      if (raw) this._loanCache = JSON.parse(raw);
+    } catch (e) {}
+    this._p2pLoans = { ...this._loanCache };
+  },
+
   loadPlayerLoans() {
+    // Pre-populate from cache while waiting for Firebase
+    this._loadLoanCache();
+
     if (typeof Firebase === 'undefined' || !Firebase.isOnline()) {
       setTimeout(() => this.loadPlayerLoans(), 3000);
       return;
@@ -853,21 +892,14 @@ const Loans = {
     // Listen for loans where I'm the lender
     db.ref('playerLoans').orderByChild('lenderId').equalTo(uid).on('value', snap => {
       const loans = snap.val() || {};
-      // Clear old lender entries
-      Object.keys(this._p2pLoans).forEach(id => {
-        if (this._p2pLoans[id].lenderId === uid) delete this._p2pLoans[id];
-      });
-      Object.assign(this._p2pLoans, loans);
+      this._mergeLoans(loans);
       this.renderPlayerLoans();
     });
 
     // Listen for loans where I'm the borrower
     db.ref('playerLoans').orderByChild('borrowerId').equalTo(uid).on('value', snap => {
       const loans = snap.val() || {};
-      Object.keys(this._p2pLoans).forEach(id => {
-        if (this._p2pLoans[id].borrowerId === uid) delete this._p2pLoans[id];
-      });
-      Object.assign(this._p2pLoans, loans);
+      this._mergeLoans(loans);
       this.renderPlayerLoans();
     });
 
@@ -1005,8 +1037,29 @@ const Loans = {
     if (!confirm('Forgive ' + loan.borrowerName + '\'s debt of ' + App.formatMoney(loan.totalOwed || loan.amount) + '?')) return;
     Firebase.db.ref('playerLoans/' + loanId).update({ status: 'forgiven' }).then(() => {
       delete this._p2pLoans[loanId];
+      delete this._loanCache[loanId];
+      this._saveLoanCache();
       this.renderPlayerLoans();
     });
+  },
+
+  forgivePartial(loanId, amount) {
+    const loan = this._p2pLoans[loanId];
+    if (!loan || loan.lenderId !== Firebase.uid) return;
+    if (!amount || amount <= 0) { Toast.show('Enter a valid amount', '#ff5252', 2000); return; }
+    const forgive = Math.min(amount, loan.totalOwed || loan.amount);
+    const newOwed = Math.max(0, (loan.totalOwed || loan.amount) - forgive);
+    if (newOwed <= 0) {
+      this.forgivePlayerLoan(loanId);
+    } else {
+      Firebase.updatePlayerLoan(loanId, { totalOwed: newOwed }).then(() => {
+        this._p2pLoans[loanId].totalOwed = newOwed;
+        if (this._loanCache[loanId]) this._loanCache[loanId].totalOwed = newOwed;
+        this._saveLoanCache();
+        this.renderPlayerLoans();
+        Toast.show('\u{1F4B8} Forgave ' + App.formatMoney(forgive) + ' of loan', '#27ae60', 3000);
+      });
+    }
   },
 
   payPlayerLoan(loanId) {

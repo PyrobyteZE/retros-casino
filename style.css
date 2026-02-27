@@ -6370,3 +6370,98 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   flex-direction: column;
   gap: 8px;
 }
+
+/* ====== ONLINE BADGE (top bar) ====== */
+
+#online-badge.online-badge {
+  font-size: 11px;
+  background: var(--green);
+  color: #000;
+  border-radius: 10px;
+  padding: 2px 7px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  position: relative;
+  flex-shrink: 0;
+}
+
+#online-badge.online-badge:empty {
+  display: none;
+}
+
+.online-player-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 160px;
+  background: var(--bg2);
+  border: 1px solid var(--bg3);
+  border-radius: 8px;
+  padding: 6px 0;
+  z-index: 600;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+
+.online-player-row {
+  padding: 5px 12px;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* ====== TOP-BAR CHAT BUTTON ====== */
+
+.chat-toggle-btn-bar {
+  background: var(--green);
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.chat-toggle-btn-bar:active { opacity: 0.7; }
+
+#chat-unread-bar {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  background: var(--red);
+  border-radius: 50%;
+  border: 1px solid var(--bg);
+  display: none;
+}
+
+/* ====== NEWS ORG SECTION ====== */
+
+.news-org-section {
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 12px;
+  background: rgba(0, 230, 118, 0.04);
+}
+
+.news-org-section h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--accent);
+}
+
+/* ====== LOAN FORGIVE ROW ====== */
+
+.loan-forgive-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--bg3);
+}

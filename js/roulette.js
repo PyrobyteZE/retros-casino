@@ -31,6 +31,7 @@ const Roulette = {
     this.renderBoard();
     this.renderStats();
     this.renderHistory();
+    if (typeof MainRoom !== 'undefined') MainRoom.joinScreen('roulette');
   },
 
   getColor(num) {

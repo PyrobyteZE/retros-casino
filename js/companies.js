@@ -152,6 +152,10 @@ const Companies = {
   _allies: {},             // { [theirUid]: { name, ticker, setAt } }
   _shareOffers: {},        // { [offerId]: offer } — incoming private share offers
   _peakHolds: {},          // { [sym]: ticksLeft } — plateau counter before hard-cap decay
+  _monopolyTriggered: false, // anti-monopoly easter egg in-flight flag
+  _stockOffers: {},           // { [targetTicker]: { [offererUid]: offerData } }
+  _newsOrgs: {},              // { [ownerUid]: { enabled, companyTicker, reputation } }
+  _newsPosts: {},             // { [ownerUid]: { [postId]: post } }
   activeTab: 'browse',
 
   // Scandal text templates ('{n}' replaced with company name)
@@ -195,6 +199,12 @@ const Companies = {
         this._shareOffers = data || {};
         this._triggerRender();
       });
+      Firebase.listenStockOffers(data => {
+        this._stockOffers = data || {};
+        this._triggerRender();
+      });
+      Firebase.listenNewsOrgs(data => { this._newsOrgs = data || {}; this._triggerRender(); });
+      Firebase.listenNewsPosts(data => { this._newsPosts = data || {}; this._triggerRender(); });
       Firebase.listenSaleReceipts(Firebase.uid, receipt => {
         App.addBalance(receipt.amount);
         App.save();
@@ -799,6 +809,7 @@ const Companies = {
         this._pushToFirebase();
         App.save();
         this._triggerRender();
+        this._checkMonopolyThreshold();
       });
     } else {
       // Offline fallback
@@ -807,6 +818,7 @@ const Companies = {
       this._saveLocal();
       App.save();
       this._triggerRender();
+      this._checkMonopolyThreshold();
     }
   },
 
@@ -1113,6 +1125,7 @@ const Companies = {
     const _pi = _pInfo[personality];
     Toast.show(_pi.msg, _pi.color, 7000);
     this.render();
+    this._checkMonopolyThreshold();
   },
 
   addStock(cIdx) {
@@ -1641,6 +1654,7 @@ const Companies = {
           <div class="company-card-actions">
             <button class="company-buy-btn" onclick="Companies.promptBuy('${s.symbol}')">Buy</button>
             ${owned > 0 ? `<button class="company-sell-btn" onclick="Companies.promptSell('${s.symbol}')">Sell</button>` : ''}
+            ${!isMyStock ? `<button class="company-buy-btn" style="background:var(--bg3);border-color:var(--accent)" onclick="Companies.promptStockOffer('${s.symbol}')">&#x1F4BC; Offer</button>` : ''}
           </div>
           ${compControls}
         </div>`;
@@ -1717,6 +1731,9 @@ const Companies = {
       html += '</div>';
     }
 
+    // 📰 News Feed
+    html = this._renderNewsFeed(html);
+
     // 🏦 Active Banks section
     html += `<div style="margin-top:16px">
       <div class="player-stocks-market-header">🏦 Active Banks</div>
@@ -1764,6 +1781,37 @@ const Companies = {
           <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
             <button class="csr-toggle-btn" style="color:var(--green);border-color:var(--green);font-size:11px" onclick="Companies.acceptShareOffer('${offerId}')">Accept</button>
             <button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);font-size:11px" onclick="Companies.declineShareOffer('${offerId}')">Decline</button>
+          </div>
+        </div>`;
+      });
+      html += `</div></div>`;
+    }
+
+    // Incoming stock transfer offers for my stocks
+    const mySymbols = this._companies.flatMap(c => (c.stocks || []).map(s => s.symbol));
+    const incomingStockOffers = [];
+    mySymbols.forEach(sym => {
+      const offers = this._stockOffers[sym];
+      if (offers) {
+        Object.entries(offers).forEach(([offererUid, offer]) => {
+          if (offererUid !== myUid) incomingStockOffers.push({ sym, offererUid, offer });
+        });
+      }
+    });
+    if (incomingStockOffers.length > 0) {
+      html += `<div class="company-manage-section" style="margin-bottom:10px;border-color:#9945ff">
+        <h3 style="color:#9945ff">\u{1F4EC} Stock Transfer Offers</h3>
+        <div style="display:flex;flex-direction:column;gap:6px">`;
+      incomingStockOffers.forEach(({ sym, offererUid, offer }) => {
+        html += `<div class="company-stock-row" style="align-items:flex-start">
+          <div style="flex:1;min-width:0">
+            <span class="csr-sym">${this._esc(sym)}</span>
+            <div style="font-size:12px;color:var(--text-dim)">Offer: <strong>${App.formatMoney(offer.amount)}</strong></div>
+            <div style="font-size:11px;color:var(--text-dim)">from ${this._esc(offer.offererName || 'Player')} (${this._esc(offer.offererCompanyTicker || '')})</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+            <button class="csr-toggle-btn" style="color:var(--green);border-color:var(--green);font-size:11px" onclick="Companies.acceptStockOffer('${sym}','${offererUid}')">Accept</button>
+            <button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);font-size:11px" onclick="Companies.declineStockOffer('${sym}','${offererUid}')">Decline</button>
           </div>
         </div>`;
       });
@@ -1946,6 +1994,25 @@ const Companies = {
           </div>`;
         });
         html += `</div></div>`;
+      }
+
+      // News Org for Entertainment companies
+      if ((c.industry || 'tech') === 'entertainment') {
+        const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+        const myOrg = myUid ? this._newsOrgs[myUid] : null;
+        const orgEnabled = myOrg && myOrg.enabled && myOrg.companyTicker === c.ticker;
+        html += `<div class="company-manage-section news-org-section" style="margin-top:10px">
+          <h3>\u{1F4F0} News Organization</h3>`;
+        if (!orgEnabled) {
+          html += `<button class="add-stock-btn" style="color:var(--accent);border-color:var(--accent)" onclick="Companies.enableNewsOrg(${cIdx})">Enable News Org \u2014 Free</button>`;
+        } else {
+          const rep = myOrg.reputation || 50;
+          const repPct = Math.round(rep);
+          html += `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Reputation: <strong style="color:${rep >= 50 ? 'var(--green)' : 'var(--red)'}">${repPct}/100</strong></div>
+            <textarea id="news-post-input-${cIdx}" maxlength="120" placeholder="Write a headline... (max 120 chars)" style="width:100%;height:60px;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);padding:8px;font-size:13px;resize:none;box-sizing:border-box"></textarea>
+            <button class="company-found-btn" style="margin-top:6px;padding:8px 20px" onclick="Companies.postNews(${cIdx})">\u{1F4E2} Publish</button>`;
+        }
+        html += `</div>`;
       }
 
       // Bank setup for Finance companies
@@ -2182,5 +2249,187 @@ const Companies = {
 
   _toast(msg, color) {
     Toast.show(msg, color || '', 3500);
+  },
+
+  // === NEWS ORG ===
+
+  enableNewsOrg(cIdx) {
+    const c = this._companies[cIdx];
+    if (!c) return;
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) { alert('Must be online.'); return; }
+    const myUid = Firebase.uid;
+    Firebase.setNewsOrg(myUid, { enabled: true, companyTicker: c.ticker, reputation: 50 }).then(() => {
+      this._newsOrgs[myUid] = { enabled: true, companyTicker: c.ticker, reputation: 50 };
+      this.render();
+      Toast.show('\u{1F4F0} News Org enabled!', '#27ae60', 3000);
+    });
+  },
+
+  postNews(cIdx) {
+    const c = this._companies[cIdx];
+    if (!c) return;
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
+    const myUid = Firebase.uid;
+    const myOrg = this._newsOrgs[myUid];
+    if (!myOrg || !myOrg.enabled) { Toast.show('Enable News Org first', '#ff5252'); return; }
+    const input = document.getElementById('news-post-input-' + cIdx);
+    if (!input) return;
+    const text = input.value.trim().slice(0, 120);
+    if (!text) { Toast.show('Enter a headline', '#ff5252'); return; }
+    Firebase.postNewsArticle(myUid, {
+      text,
+      ts: Date.now(),
+      upvotes: 0,
+      downvotes: 0,
+      authorName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Player',
+      companyTicker: c.ticker,
+    }).then(() => {
+      input.value = '';
+      Toast.show('\u{1F4F0} Published: ' + text.slice(0, 40), '#27ae60', 3000);
+    });
+  },
+
+  voteNews(ownerUid, postId, dir) {
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
+    Firebase.voteNewsPost(ownerUid, postId, dir);
+    // Optimistic UI update
+    if (!this._newsPosts[ownerUid]) this._newsPosts[ownerUid] = {};
+    if (!this._newsPosts[ownerUid][postId]) return;
+    const post = this._newsPosts[ownerUid][postId];
+    if (dir === 'up') post.upvotes = (post.upvotes || 0) + 1;
+    else post.downvotes = (post.downvotes || 0) + 1;
+    this._triggerRender();
+  },
+
+  _renderNewsFeed(html) {
+    const activeOrgs = Object.entries(this._newsOrgs).filter(([, o]) => o && o.enabled);
+    if (activeOrgs.length === 0) return html;
+    html += '<div class="player-stocks-market-header" style="margin-top:16px">\u{1F4F0} News Feed</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:10px">';
+    activeOrgs.forEach(([uid, org]) => {
+      const posts = this._newsPosts[uid] || {};
+      const postList = Object.entries(posts).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+      if (postList.length === 0) return;
+      const [postId, latest] = postList[0];
+      const net = (latest.upvotes || 0) - (latest.downvotes || 0);
+      const repColor = net > 0 ? '#27ae60' : net < 0 ? '#c0392b' : 'var(--text-dim)';
+      html += `<div class="company-card" style="border-color:var(--accent)">
+        <div class="company-card-header">
+          <div><span class="company-card-sym">\u{1F4F0}</span> <span>${this._esc(org.companyTicker || '')}</span></div>
+          <div style="font-size:11px;color:${repColor}">&#x2764; ${latest.upvotes || 0} &nbsp; \u{1F44E} ${latest.downvotes || 0}</div>
+        </div>
+        <div class="company-card-name" style="font-size:13px">${this._esc(latest.text)}</div>
+        <div class="company-card-owner" style="font-size:11px">by ${this._esc(latest.authorName || org.companyTicker)} &bull; Rep: ${org.reputation || 50}</div>
+        <div class="company-card-actions">
+          <button class="company-buy-btn" style="background:#27ae60;padding:4px 12px;font-size:13px" onclick="Companies.voteNews('${uid}','${postId}','up')">&#x1F44D; Like</button>
+          <button class="company-sell-btn" style="padding:4px 12px;font-size:13px" onclick="Companies.voteNews('${uid}','${postId}','down')">&#x1F44E; Dislike</button>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+    return html;
+  },
+
+  // === STOCK TRANSFER (company-to-company offers) ===
+
+  promptStockOffer(sym) {
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) { alert('Must be online.'); return; }
+    const s = this._allPlayerStocks[sym];
+    if (!s) return;
+    const myComp = this._companies.find(c => c.stocks && c.stocks.some(st => st.symbol === sym));
+    if (myComp) { alert("You already own this stock's company."); return; }
+    const price = s.price || 100;
+    const html = `<div class="stock-trade-modal">
+      <div class="stock-trade-title">\u{1F4BC} Make Offer on ${sym}</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">Company: ${this._esc(s.companyName || sym)} &bull; Current price: ${App.formatMoney(price)}/share</div>
+      <div style="font-size:13px;margin-bottom:8px">Offer amount to buy this stock from its owner:</div>
+      <input type="number" id="stock-offer-amt" placeholder="Offer amount $" style="width:100%;font-size:14px;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);padding:8px;margin-bottom:10px">
+      <div style="display:flex;gap:8px">
+        <button class="stock-buy-btn" style="flex:1" onclick="Companies._sendStockOffer('${sym}')">Send Offer</button>
+        <button class="stock-trade-cancel" onclick="Companies._closeStockOfferModal()">Cancel</button>
+      </div>
+    </div>`;
+    let modal = document.getElementById('stock-offer-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'stock-offer-modal';
+      modal.className = 'stock-modal-overlay';
+      document.getElementById('app').appendChild(modal);
+    }
+    modal.innerHTML = html;
+    modal.classList.remove('hidden');
+  },
+
+  _closeStockOfferModal() {
+    const modal = document.getElementById('stock-offer-modal');
+    if (modal) modal.classList.add('hidden');
+  },
+
+  _sendStockOffer(sym) {
+    const input = document.getElementById('stock-offer-amt');
+    if (!input) return;
+    const amount = parseFloat(input.value);
+    if (!amount || amount <= 0) { Toast.show('Enter a valid amount', '#ff5252'); return; }
+    const myComp = this._companies[0];
+    if (!myComp) { Toast.show('You need a company to make offers', '#ff5252'); return; }
+    Firebase.postStockOffer(sym, Firebase.uid, {
+      offererUid: Firebase.uid,
+      offererName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Player',
+      offererCompanyTicker: myComp.ticker,
+      amount,
+      ts: Date.now(),
+    }).then(() => {
+      this._closeStockOfferModal();
+      Toast.show('\u{1F4EC} Offer sent for ' + sym + ' — ' + App.formatMoney(amount), '#9945ff', 3000);
+    });
+  },
+
+  acceptStockOffer(sym, offererUid) {
+    const offer = this._stockOffers[sym]?.[offererUid];
+    if (!offer) return;
+    const myComp = this._companies.find(c => c.stocks && c.stocks.some(s => s.symbol === sym));
+    if (!myComp) { Toast.show('You no longer own this stock', '#ff5252'); return; }
+    // Remove stock from my company
+    myComp.stocks = myComp.stocks.filter(s => s.symbol !== sym);
+    App.addBalance(offer.amount);
+    this._saveLocal();
+    this._pushToFirebase();
+    // Remove offer and let buyer know via stock deletion + receipt
+    Firebase.removeStockOffer(sym, offererUid).catch(() => {});
+    Firebase.removeStockOffer(sym, Firebase.uid).catch(() => {}); // remove any other offers for same sym
+    App.save();
+    this.render();
+    Toast.show('\u{1F4B0} Sold ' + sym + ' to ' + (offer.offererName || 'buyer') + ' for ' + App.formatMoney(offer.amount) + '!', '#27ae60', 5000);
+  },
+
+  declineStockOffer(sym, offererUid) {
+    Firebase.removeStockOffer(sym, offererUid).catch(() => {});
+    Toast.show('Offer declined', '#ff5252', 2000);
+  },
+
+  _checkMonopolyThreshold() {
+    if (this._companies.length < 7 || this._monopolyTriggered) return;
+    this._monopolyTriggered = true;
+    const playerName = typeof Settings !== 'undefined' ? Settings.profile.name : 'A player';
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.pushSystemAnnouncement(
+        '\u{1F3DB}\uFE0F GOVERNMENT INTERVENTION: ' + playerName + ' has been found guilty of monopolistic practices!'
+      );
+    }
+    const tax = Math.floor(App.balance * 0.80);
+    App.addBalance(-tax);
+    Toast.show('\u{1F6A8} MONOPOLY BUST! Government seized ' + App.formatMoney(tax) + ' (80% tax)!', '#c0392b', 8000);
+    // Force-remove 4 random non-main companies
+    const nonMain = this._companies.filter(c => !this.isMainCompany(c.ticker));
+    const toRemove = nonMain.sort(() => Math.random() - 0.5).slice(0, Math.min(4, nonMain.length));
+    toRemove.forEach(c => {
+      const idx = this._companies.indexOf(c);
+      if (idx >= 0) this._companies.splice(idx, 1);
+    });
+    this._saveLocal();
+    this._pushToFirebase();
+    this._triggerRender();
+    // Reset so it can fire again if they re-acquire 7+
+    setTimeout(() => { this._monopolyTriggered = false; }, 5000);
   },
 };

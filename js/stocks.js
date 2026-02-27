@@ -44,6 +44,11 @@ const Stocks = {
   _tickerOffset: 0,
   _tickerAnimFrame: null,
 
+  // Cat Easter Egg
+  _catFightActive: false,
+  _catFightCooldown: 0,
+  _catSoloCooldowns: {},
+
   // Bounty board (R5+)
   _bounties: {},       // live data from Firebase
 
@@ -304,6 +309,87 @@ const Stocks = {
     if (isAuthority && typeof Companies !== 'undefined') Companies.tickPrices();
     if (App.currentScreen === 'stocks') this.render();
     this.updateTicker();
+    if (isAuthority) this._tickCatEasterEgg();
+  },
+
+  // ─── Cat / Luna × Goose Easter Eggs ────────────────────────────
+
+  _tickCatEasterEgg() {
+    // Main cat fight (0.1% per tick, 30-min cooldown)
+    if (!this._catFightActive && Date.now() > this._catFightCooldown) {
+      if (Math.random() < 0.001) this._startCatFight();
+    }
+    // Solo micro-events (each ~0.05% per tick, independent cooldowns)
+    const soloEvents = ['hairball', 'eaten', 'nap', 'viral', 'peace'];
+    soloEvents.forEach(e => {
+      if (Math.random() < 0.0005 && Date.now() > (this._catSoloCooldowns[e] || 0)) {
+        this._triggerSoloEvent(e);
+      }
+    });
+  },
+
+  _startCatFight() {
+    this._catFightActive = true;
+    this._catFightCooldown = Date.now() + 30 * 60 * 1000;
+    if (typeof Firebase !== 'undefined') {
+      Firebase.pushSystemAnnouncement('\u{1F431} BREAKING: Luna (CEO of Luna Inc) has started a fight with her brother Goose (CEO of Goose Foods)! Sources say it started over the last fish in the break room.');
+    }
+    setTimeout(() => this._resolveCatFight(), 4000);
+  },
+
+  _resolveCatFight() {
+    const lunaIdx = this.stocks.findIndex(s => s.symbol === 'LUNA');
+    const gooseIdx = this.stocks.findIndex(s => s.symbol === 'GOOSE');
+    const LUNA_BASE = lunaIdx >= 0 ? this.stocks[lunaIdx].basePrice : 5;
+    const GOOSE_BASE = gooseIdx >= 0 ? this.stocks[gooseIdx].basePrice : 40;
+
+    const tie = Math.random() < 0.01;
+    if (tie) {
+      if (typeof Firebase !== 'undefined') Firebase.pushSystemAnnouncement('\u{1F639} BREAKING: Luna and Goose have TIED \u2014 both knocked each other out simultaneously! Chaos erupts! Investors panic-buy both stocks!');
+      if (lunaIdx >= 0) this.setGradualTarget(lunaIdx, 1_000_000_000_000, 60);
+      if (gooseIdx >= 0) this.setGradualTarget(gooseIdx, 1_000_000_000_000, 60);
+      setTimeout(() => {
+        if (lunaIdx >= 0) this.setGradualTarget(lunaIdx, LUNA_BASE, 40);
+        if (gooseIdx >= 0) this.setGradualTarget(gooseIdx, GOOSE_BASE, 40);
+      }, 5 * 60 * 1000);
+    } else {
+      const lunaWins = Math.random() < 0.5;
+      if (lunaWins) {
+        if (typeof Firebase !== 'undefined') Firebase.pushSystemAnnouncement('\u{1F431} UPDATE: Luna wins the fight! Goose has retreated to stress-eat an entire lasagna. LUNA surges!');
+        if (lunaIdx >= 0) this.setGradualTarget(lunaIdx, this.prices[lunaIdx] * 5, 20);
+      } else {
+        if (typeof Firebase !== 'undefined') Firebase.pushSystemAnnouncement('\u{1F9A2} UPDATE: Goose wins the fight! Luna has stormed off. GOOSE surges!');
+        if (gooseIdx >= 0) this.setGradualTarget(gooseIdx, this.prices[gooseIdx] * 5, 20);
+      }
+    }
+    this._catFightActive = false;
+  },
+
+  _triggerSoloEvent(event) {
+    const lunaIdx = this.stocks.findIndex(s => s.symbol === 'LUNA');
+    const gooseIdx = this.stocks.findIndex(s => s.symbol === 'GOOSE');
+    const cooldown = 10 * 60 * 1000;
+    this._catSoloCooldowns[event] = Date.now() + cooldown;
+
+    if (event === 'hairball') {
+      if (typeof Firebase !== 'undefined') Firebase.pushSystemAnnouncement('\u{1F431} Luna Inc\u2019s server room flooded with hairballs. IT team consists of 2 kittens. LUNA -20%');
+      if (lunaIdx >= 0) this.setGradualTarget(lunaIdx, Math.max(1, this.prices[lunaIdx] * 0.80), 10);
+    } else if (event === 'eaten') {
+      if (typeof Firebase !== 'undefined') Firebase.pushSystemAnnouncement('\u{1F357} Goose Foods CEO has eaten the Q3 earnings report. Again. GOOSE -15%');
+      if (gooseIdx >= 0) this.setGradualTarget(gooseIdx, Math.max(1, this.prices[gooseIdx] * 0.85), 10);
+    } else if (event === 'nap') {
+      if (typeof Firebase !== 'undefined') Firebase.pushSystemAnnouncement('\u{1F634} Both CEOs are napping in a sunbeam. Trading resumes when they wake up. (2 min pause)');
+      // Both stocks go flat for ~2 min (just pin them at current price)
+      if (lunaIdx >= 0) this._priceTargets[lunaIdx] = { target: this.prices[lunaIdx], stepsLeft: 60, holdUntil: Date.now() + 120000 };
+      if (gooseIdx >= 0) this._priceTargets[gooseIdx] = { target: this.prices[gooseIdx], stepsLeft: 60, holdUntil: Date.now() + 120000 };
+    } else if (event === 'viral') {
+      if (typeof Firebase !== 'undefined') Firebase.pushSystemAnnouncement('\u{1F4F9} GOOSE CEO went viral on cat social media. Investors impressed by purring during board meeting. GOOSE +30%');
+      if (gooseIdx >= 0) this.setGradualTarget(gooseIdx, this.prices[gooseIdx] * 1.30, 15);
+    } else if (event === 'peace') {
+      if (typeof Firebase !== 'undefined') Firebase.pushSystemAnnouncement('\u{1F90D} Luna brought Goose a sardine as an apology. Heartwarming. Both +10%');
+      if (lunaIdx >= 0) this.setGradualTarget(lunaIdx, this.prices[lunaIdx] * 1.10, 10);
+      if (gooseIdx >= 0) this.setGradualTarget(gooseIdx, this.prices[gooseIdx] * 1.10, 10);
+    }
   },
 
   _tickerFmtPrice(price) {

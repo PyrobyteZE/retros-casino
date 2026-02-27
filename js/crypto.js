@@ -699,6 +699,7 @@ const Crypto = {
     let btnHtml = '';
     pcts.forEach((pct, i) => {
       const coinAmt = owned * pct;
+      if (coinAmt < 1e-10) return; // skip unrenderable amount
       const val = coinAmt * price;
       btnHtml += `<button class="stock-trade-btn stock-sell-btn" onclick="Crypto.sellCoin('${symbol}',${coinAmt});Crypto.closeModal()">
         <span class="trade-btn-label">${labels[i]}</span>
@@ -824,6 +825,10 @@ const Crypto = {
   },
 
   sellCoin(symbol, amount) {
+    if (amount <= 1e-10) {
+      Toast.show('Amount too small to sell', '#ff9100', 2000);
+      return;
+    }
     const sysIdx = this.coins.findIndex(c => c.symbol === symbol);
     if (sysIdx >= 0) {
       if ((this.wallet[symbol] || 0) < amount) amount = this.wallet[symbol] || 0;
@@ -841,6 +846,9 @@ const Crypto = {
     if (amount <= 0) return;
     const value = amount * price;
     this._playerCoinHoldings[symbol] -= amount;
+    if (this._playerCoinHoldings[symbol] <= 0) {
+      delete this._playerCoinHoldings[symbol];
+    }
     this._coinSold[symbol] = Math.max(0, (this._coinSold[symbol] || 0) - amount);
     App.addBalance(value);
     // If owner sells their own coin — update reserve stake
@@ -1343,6 +1351,7 @@ const Crypto = {
         </div>
         <div class="exchange-actions" style="margin-bottom:12px">
           <button class="admin-btn danger" onclick="Crypto._ownerAction('delist')" style="font-size:12px">${coin.type === 'private' ? 'Relist' : 'Delist'}</button>
+          <button class="admin-btn danger" onclick="Crypto._ownerAction('deleteCoin')" style="font-size:12px">&#x1F5D1;&#xFE0F; Delete Coin</button>
         </div>` : ''}
         <div style="margin-bottom:12px">
           <button class="admin-btn" style="width:100%;padding:10px" onclick="Crypto._showPromoteModal('${sym}')">📣 Promote ${sym}</button>
@@ -1439,6 +1448,21 @@ const Crypto = {
         coin.type = newType;
         App.save(); this.render();
         Toast.show(newType === 'public' ? '\u2705 Coin relisted!' : '\u{1F4E4} Coin delisted (private)', '#9945ff', 3000);
+      });
+    } else if (action === 'deleteCoin') {
+      if (!confirm('Permanently delete this coin? All holders lose their balance.')) return;
+      const meta = this._managingCoinMeta;
+      const promise = meta.slot === 0
+        ? Firebase.removePlayerCoin(meta.uid)
+        : Firebase.removePlayerCoinSlot(meta.uid, meta.slot);
+      promise.then(() => {
+        const delSym = sym;
+        delete this._playerCoinPrices[delSym];
+        delete this._playerCoinHistory[delSym];
+        if (meta.slot === 0) this._myPlayerCoin = null;
+        this._activeCoinSlot = 0;
+        App.save(); this.render();
+        Toast.show('\u{1F5D1}\uFE0F Coin deleted', '#e74c3c', 3000);
       });
     }
   },
