@@ -17,10 +17,10 @@ const CoinFlip = {
   ],
   luckLevel: 0, // saved in App
 
-  getBet() { return Math.max(0.01, Math.round((Number(document.getElementById('cf-bet')?.value) || 0) * 100) / 100); },
-  halfBet() { const el = document.getElementById('cf-bet'); if (el) el.value = Math.max(0.01, Math.round(this.getBet() / 2 * 100) / 100); },
-  doubleBet() { const el = document.getElementById('cf-bet'); if (el) el.value = this.getBet() * 2; },
-  maxBet() { const el = document.getElementById('cf-bet'); if (el) el.value = Math.floor(App.balance * 100) / 100; },
+  getBet() { const v = App.parseAmount(document.getElementById('cf-bet')?.value); return Math.max(0.01, isNaN(v) ? 0.01 : v); },
+  halfBet() { App.setBetInput(document.getElementById('cf-bet'), this.getBet() / 2); },
+  doubleBet() { App.setBetInput(document.getElementById('cf-bet'), this.getBet() * 2); },
+  maxBet() { const el = document.getElementById('cf-bet'); if (el) el.value = 'max'; },
 
   init() {
     this.luckLevel = App.upgrades.coinLuck || 0;
@@ -67,7 +67,7 @@ const CoinFlip = {
           <button class="cf-luck-btn" id="cf-luck-btn" onclick="CoinFlip.buyLuck()">Upgrade: $500</button>
         </div>
         <div class="bet-controls">
-          <label>Bet: $<input type="number" id="cf-bet" value="10" min="0.01" step="0.01"></label>
+          <label>Bet: $<input type="text" inputmode="decimal" id="cf-bet" value="10" class="sh-input" placeholder="Amount"></label><span class="sh-preview" style="display:none"></span>
           <div class="bet-buttons">
             <button onclick="CoinFlip.halfBet()">1/2</button>
             <button onclick="CoinFlip.doubleBet()">2x</button>

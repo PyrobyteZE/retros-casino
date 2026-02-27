@@ -1,8 +1,8 @@
 const Roulette = {
-  // European roulette wheel order (37 slots, single zero)
+  // American roulette wheel order (38 slots, 0 and 00)
   wheelOrder: [
-    0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10,
-    5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
+    0, 28, 9, 26, 30, 11, 7, 20, 32, 17, 5, 22, 34, 15, 3, 24, 36, 13, 1,
+    '00', 27, 10, 25, 29, 12, 8, 19, 31, 18, 6, 21, 33, 16, 4, 23, 35, 14, 2
   ],
   reds: [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36],
   blacks: [2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35],
@@ -20,17 +20,12 @@ const Roulette = {
   autoCountdown: 0,
   countdownInterval: null,
 
-  getBet() {
-    const raw = document.getElementById('rl-bet')?.value || '0';
-    const parsed = App.parseAmount(raw);
-    if (isNaN(parsed) || parsed <= 0) return 0.01;
-    return Math.max(0.01, Math.round(parsed * 100) / 100);
-  },
-  halfBet()   { const el = document.getElementById('rl-bet'); if (el) el.value = Math.max(0.01, Math.round(this.getBet() / 2 * 100) / 100); },
-  doubleBet() { const el = document.getElementById('rl-bet'); if (el) el.value = this.getBet() * 2; },
-  maxBet()    { const el = document.getElementById('rl-bet'); if (el) el.value = Math.floor(App.balance * 100) / 100; },
+  getBet() { const v = App.parseAmount(document.getElementById('rl-bet')?.value); return Math.max(0.01, isNaN(v) ? 0.01 : v); },
+  halfBet()   { App.setBetInput(document.getElementById('rl-bet'), this.getBet() / 2); },
+  doubleBet() { App.setBetInput(document.getElementById('rl-bet'), this.getBet() * 2); },
+  maxBet()    { const el = document.getElementById('rl-bet'); if (el) el.value = 'max'; },
   minBet()    { const el = document.getElementById('rl-bet'); if (el) el.value = '1'; },
-  pctBet()    { const el = document.getElementById('rl-bet'); if (el) el.value = Math.max(1, Math.floor(App.balance * 0.1 * 100) / 100); },
+  pctBet()    { const el = document.getElementById('rl-bet'); if (el) el.value = '10%'; },
 
   init() {
     this.renderBoard();
@@ -39,8 +34,9 @@ const Roulette = {
   },
 
   getColor(num) {
-    if (num === 0 || num === '00') return 'green';
-    if (this.reds.includes(typeof num === 'string' ? parseInt(num) : num)) return 'red';
+    if (num === 0 || num === '00' || num === 0) return 'green';
+    const n = typeof num === 'string' ? parseInt(num) : num;
+    if (this.reds.includes(n)) return 'red';
     return 'black';
   },
 
@@ -129,10 +125,11 @@ const Roulette = {
     let elapsed = 0;
     const duration = 2600;
 
+    const allNums = [0, '00', ...Array.from({length: 36}, (_, i) => i + 1)];
     const roll = () => {
-      const n = Math.floor(Math.random() * 37);
+      const n = allNums[Math.floor(Math.random() * allNums.length)];
       const c = this.getColor(n);
-      numEl.textContent = n;
+      numEl.textContent = n === '00' ? '00' : n;
       numEl.className = 'rl-result-num rl-rn-' + c;
 
       elapsed += step;
@@ -168,7 +165,7 @@ const Roulette = {
 
     App.addBalance(totalWin);
 
-    const numStr = resultNum.toString();
+    const numStr = resultNum === '00' ? '00' : resultNum.toString();
     if (totalWin > 0) {
       const net = totalWin - this.totalBet;
       this.lastWin = net;
@@ -239,10 +236,12 @@ const Roulette = {
   },
 
   checkWin(betType, resultNum) {
-    const n = typeof resultNum === 'number' ? resultNum : parseInt(resultNum);
+    const is00 = resultNum === '00';
+    const n = is00 ? -1 : (typeof resultNum === 'number' ? resultNum : parseInt(resultNum));
 
-    if (betType === 'red')    return this.reds.includes(n) ? 2 : 0;
-    if (betType === 'black')  return this.blacks.includes(n) ? 2 : 0;
+    if (betType === 'red')    return this.reds.includes(resultNum) ? 2 : 0;
+    if (betType === 'black')  return this.blacks.includes(resultNum) ? 2 : 0;
+    if (betType === 'green')  return (resultNum === 0 || resultNum === '00') ? 18 : 0;
     if (betType === 'odd')    return (n > 0 && n % 2 === 1) ? 2 : 0;
     if (betType === 'even')   return (n > 0 && n % 2 === 0) ? 2 : 0;
     if (betType === '1-18')   return (n >= 1 && n <= 18) ? 2 : 0;
@@ -254,8 +253,8 @@ const Roulette = {
     if (betType === 'col2')   return [2,5,8,11,14,17,20,23,26,29,32,35].includes(n) ? 3 : 0;
     if (betType === 'col3')   return [3,6,9,12,15,18,21,24,27,30,33,36].includes(n) ? 3 : 0;
     if (betType.startsWith('split:')) {
-      const nums = betType.slice(6).split(',').map(x => parseInt(x));
-      return nums.includes(n) ? 18 : 0;
+      const nums = betType.slice(6).split(',').map(x => x === '00' ? '00' : parseInt(x));
+      return nums.some(x => x === resultNum) ? 18 : 0;
     }
     if (betType.startsWith('street:')) {
       const b = parseInt(betType.slice(7));
@@ -265,6 +264,8 @@ const Roulette = {
       const b = parseInt(betType.slice(7));
       return [b, b+1, b+3, b+4].includes(n) ? 9 : 0;
     }
+    // Straight number bet (handles '00' and regular numbers)
+    if (betType === '00') return resultNum === '00' ? 36 : 0;
     return resultNum === parseInt(betType) ? 36 : 0;
   },
 
@@ -281,13 +282,18 @@ const Roulette = {
     const main = document.createElement('div');
     main.className = 'rl-table-main';
 
-    // 0 cell (left, spans 3 rows)
-    const zeroBtn = document.createElement('button');
-    zeroBtn.className = 'rl-cell rl-green rl-zero-cell';
-    zeroBtn.textContent = '0';
-    zeroBtn.dataset.bet = '0';
-    zeroBtn.onclick = () => this.placeBet('0');
-    main.appendChild(zeroBtn);
+    // 0 and 00 stacked on the left
+    const zeroCol = document.createElement('div');
+    zeroCol.className = 'rl-zero-col';
+    for (const z of ['0', '00']) {
+      const btn = document.createElement('button');
+      btn.className = 'rl-cell rl-green rl-zero-cell';
+      btn.textContent = z;
+      btn.dataset.bet = z;
+      btn.onclick = () => this.placeBet(z);
+      zeroCol.appendChild(btn);
+    }
+    main.appendChild(zeroCol);
 
     // Number grid: top row = col3 (3,6,9...), mid = col2 (2,5,8...), bot = col1 (1,4,7...)
     const numGrid = document.createElement('div');

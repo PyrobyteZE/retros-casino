@@ -10,10 +10,10 @@ const Crash = {
   autoCashout: 0,
   points: [],  // stored graph points for smooth rendering
 
-  getBet() { return Math.max(0.01, Math.round((Number(document.getElementById('crash-bet').value) || 0) * 100) / 100); },
-  halfBet() { document.getElementById('crash-bet').value = Math.max(0.01, Math.round(this.getBet() / 2 * 100) / 100); },
-  doubleBet() { document.getElementById('crash-bet').value = this.getBet() * 2; },
-  maxBet() { document.getElementById('crash-bet').value = Math.floor(App.balance).toFixed(0); },
+  getBet() { const v = App.parseAmount(document.getElementById('crash-bet').value); return Math.max(0.01, isNaN(v) ? 0.01 : v); },
+  halfBet() { App.setBetInput(document.getElementById('crash-bet'), this.getBet() / 2); },
+  doubleBet() { App.setBetInput(document.getElementById('crash-bet'), this.getBet() * 2); },
+  maxBet() { document.getElementById('crash-bet').value = 'max'; },
 
   getAutoCashout() {
     return parseFloat(document.getElementById('crash-auto').value) || 0;

@@ -8,10 +8,10 @@ const Blackjack = {
   suits: ['\u2660', '\u2665', '\u2666', '\u2663'],
   ranks: ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'],
 
-  getBet() { return Math.max(0.01, Math.round((Number(document.getElementById('bj-bet').value) || 0) * 100) / 100); },
-  halfBet() { document.getElementById('bj-bet').value = Math.max(0.01, Math.round(this.getBet() / 2 * 100) / 100); },
-  doubleBet() { document.getElementById('bj-bet').value = this.getBet() * 2; },
-  maxBet() { document.getElementById('bj-bet').value = Math.floor(App.balance).toFixed(0); },
+  getBet() { const v = App.parseAmount(document.getElementById('bj-bet').value); return Math.max(0.01, isNaN(v) ? 0.01 : v); },
+  halfBet() { App.setBetInput(document.getElementById('bj-bet'), this.getBet() / 2); },
+  doubleBet() { App.setBetInput(document.getElementById('bj-bet'), this.getBet() * 2); },
+  maxBet() { document.getElementById('bj-bet').value = 'max'; },
 
   createDeck() {
     this.deck = [];

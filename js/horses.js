@@ -97,23 +97,10 @@ const Horses = {
     ctx.setLineDash([]);
   },
 
-  getBet() {
-    return Math.floor(Number(document.getElementById('horses-bet').value) * 100) / 100 || 0;
-  },
-
-  halfBet() {
-    const el = document.getElementById('horses-bet');
-    el.value = Math.max(0.01, Math.floor(Number(el.value) / 2 * 100) / 100);
-  },
-
-  doubleBet() {
-    const el = document.getElementById('horses-bet');
-    el.value = Math.floor(Number(el.value) * 2 * 100) / 100;
-  },
-
-  maxBet() {
-    document.getElementById('horses-bet').value = Math.floor(App.balance * 100) / 100;
-  },
+  getBet() { const v = App.parseAmount(document.getElementById('horses-bet').value); return Math.max(0.01, isNaN(v) ? 0.01 : v); },
+  halfBet() { App.setBetInput(document.getElementById('horses-bet'), this.getBet() / 2); },
+  doubleBet() { App.setBetInput(document.getElementById('horses-bet'), this.getBet() * 2); },
+  maxBet() { document.getElementById('horses-bet').value = 'max'; },
 
   race() {
     if (this.racing) return;

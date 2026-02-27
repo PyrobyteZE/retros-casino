@@ -12,12 +12,12 @@ const Slots = {
   autoTimer: null,
   autoRemaining: 0,
 
-  getBet() { return Math.max(0.01, Math.round((Number(document.getElementById('slots-bet').value) || 0) * 100) / 100); },
-  halfBet() { document.getElementById('slots-bet').value = Math.max(0.01, Math.round(this.getBet() / 2 * 100) / 100); },
-  doubleBet() { document.getElementById('slots-bet').value = this.getBet() * 2; },
+  getBet() { const v = App.parseAmount(document.getElementById('slots-bet').value); return Math.max(0.01, isNaN(v) ? 0.01 : v); },
+  halfBet() { App.setBetInput(document.getElementById('slots-bet'), this.getBet() / 2); },
+  doubleBet() { App.setBetInput(document.getElementById('slots-bet'), this.getBet() * 2); },
   maxBet() {
     const lines = this.getPaylines();
-    document.getElementById('slots-bet').value = Math.floor(App.balance / lines * 100) / 100;
+    App.setBetInput(document.getElementById('slots-bet'), App.balance / lines);
   },
 
   getPaylines() { return parseInt(document.getElementById('slots-lines').value); },

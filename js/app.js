@@ -48,7 +48,9 @@ const App = {
       const preview = inp.nextElementSibling;
       if (!preview || !preview.classList.contains('sh-preview')) return;
       const parsed = this.parseAmount(inp.value);
-      if (!isNaN(parsed) && /[kmbt]/i.test(inp.value)) {
+      const showPreview = !isNaN(parsed) && parsed > 0 &&
+        (/[kmbt]/i.test(inp.value) || /^(max|all|\d+\.?\d*%)$/i.test(inp.value.trim()));
+      if (showPreview) {
         preview.textContent = '= ' + this.formatMoney(parsed);
         preview.style.display = 'block';
       } else {
@@ -87,17 +89,36 @@ const App = {
     return '$' + val.toFixed(2) + this.suffixes[tier];
   },
 
-  // Parse shorthand amounts: "10m" → 10_000_000, "2.5b" → 2_500_000_000 etc.
+  // Parse shorthand amounts: "10m" → 10M, "2.5b" → 2.5B, "max"/"all" → balance, "50%" → 50% of balance
   parseAmount(str) {
     if (str === null || str === undefined) return NaN;
     let s = String(str).trim().replace(/^\$/, '').replace(/,/g, '').toLowerCase();
     if (!s) return NaN;
+    // "max" / "all" = full balance
+    if (s === 'max' || s === 'all') return Math.max(0, this.balance);
+    // "50%" = percentage of balance
+    const pctMatch = s.match(/^([\d.]+)%$/);
+    if (pctMatch) {
+      const pct = parseFloat(pctMatch[1]);
+      if (!isNaN(pct) && pct >= 0) return Math.max(0, this.balance * pct / 100);
+    }
     const match = s.match(/^(-?[\d.]+)\s*([kmbt]?)$/);
     if (!match) return NaN;
     const n = parseFloat(match[1]);
     if (isNaN(n)) return NaN;
     const mult = { '': 1, k: 1e3, m: 1e6, b: 1e9, t: 1e12 };
     return n * (mult[match[2]] ?? 1);
+  },
+
+  // Format a number for a bet input field (avoids scientific notation for huge values)
+  setBetInput(el, n) {
+    if (!el) return;
+    n = Math.max(0, n);
+    if (n >= 1e12)     el.value = (n / 1e12).toFixed(2) + 't';
+    else if (n >= 1e9) el.value = (n / 1e9).toFixed(2) + 'b';
+    else if (n >= 1e6) el.value = (n / 1e6).toFixed(2) + 'm';
+    else if (n >= 1e3) el.value = (n / 1e3).toFixed(2) + 'k';
+    else               el.value = Math.max(0.01, Math.round(n * 100) / 100);
   },
 
   // Safe add that avoids floating point drift on large numbers

@@ -262,7 +262,7 @@
             </select></label>
           </div>
           <div class="bet-controls">
-            <label>Bet: $<input type="number" id="slots-bet" value="10" min="0.01" step="0.01" oninput="Slots.updateTotalBet()"></label>
+            <label>Bet: $<input type="text" inputmode="decimal" id="slots-bet" value="10" class="sh-input" placeholder="Amount" oninput="Slots.updateTotalBet()"><span class="sh-preview" style="display:none"></span></label>
             <div class="bet-buttons">
               <button onclick="Slots.halfBet();Slots.updateTotalBet()">1/2</button>
               <button onclick="Slots.doubleBet();Slots.updateTotalBet()">2x</button>
@@ -320,7 +320,7 @@
           </div>
           <div id="crash-result" class="game-result"></div>
           <div class="bet-controls">
-            <label>Bet: $<input type="number" id="crash-bet" value="10" min="0.01" step="0.01"></label>
+            <label>Bet: $<input type="text" inputmode="decimal" id="crash-bet" value="10" class="sh-input" placeholder="Amount"><span class="sh-preview" style="display:none"></span></label>
             <div class="bet-buttons">
               <button onclick="Crash.halfBet()">1/2</button>
               <button onclick="Crash.doubleBet()">2x</button>
@@ -381,7 +381,7 @@
             </div>
           </div>
           <div class="bet-controls">
-            <label>Bet: $<input type="number" id="bj-bet" value="10" min="0.01" step="0.01"></label>
+            <label>Bet: $<input type="text" inputmode="decimal" id="bj-bet" value="10" class="sh-input" placeholder="Amount"><span class="sh-preview" style="display:none"></span></label>
             <div class="bet-buttons">
               <button onclick="Blackjack.halfBet()">1/2</button>
               <button onclick="Blackjack.doubleBet()">2x</button>
@@ -447,7 +447,7 @@
             </select></label>
           </div>
           <div class="bet-controls">
-            <label>Bet: $<input type="number" id="plinko-bet" value="10" min="0.01" step="0.01"></label>
+            <label>Bet: $<input type="text" inputmode="decimal" id="plinko-bet" value="10" class="sh-input" placeholder="Amount"><span class="sh-preview" style="display:none"></span></label>
             <div class="bet-buttons">
               <button onclick="Plinko.halfBet()">1/2</button>
               <button onclick="Plinko.doubleBet()">2x</button>
@@ -585,7 +585,7 @@
           <canvas id="horses-canvas" width="350" height="240" style="width:100%;max-width:350px;height:240px;background:var(--bg2);border-radius:var(--radius);display:block"></canvas>
           <div id="horses-grid" class="horses-grid"></div>
           <div class="bet-controls">
-            <label>Bet: $<input type="number" id="horses-bet" value="10" min="0.01" step="0.01"></label>
+            <label>Bet: $<input type="text" inputmode="decimal" id="horses-bet" value="10" class="sh-input" placeholder="Amount"><span class="sh-preview" style="display:none"></span></label>
             <div class="bet-buttons">
               <button onclick="Horses.halfBet()">1/2</button>
               <button onclick="Horses.doubleBet()">2x</button>

@@ -38,10 +38,10 @@ const Plinko = {
     }
   },
 
-  getBet() { return Math.max(0.01, Math.round((Number(document.getElementById('plinko-bet').value) || 0) * 100) / 100); },
-  halfBet() { document.getElementById('plinko-bet').value = Math.max(0.01, Math.round(this.getBet() / 2 * 100) / 100); },
-  doubleBet() { document.getElementById('plinko-bet').value = this.getBet() * 2; },
-  maxBet() { document.getElementById('plinko-bet').value = Math.floor(App.balance).toFixed(0); },
+  getBet() { const v = App.parseAmount(document.getElementById('plinko-bet').value); return Math.max(0.01, isNaN(v) ? 0.01 : v); },
+  halfBet() { App.setBetInput(document.getElementById('plinko-bet'), this.getBet() / 2); },
+  doubleBet() { App.setBetInput(document.getElementById('plinko-bet'), this.getBet() * 2); },
+  maxBet() { document.getElementById('plinko-bet').value = 'max'; },
 
   getRows() { return parseInt(document.getElementById('plinko-rows').value); },
   getRisk() { return document.getElementById('plinko-risk').value; },
