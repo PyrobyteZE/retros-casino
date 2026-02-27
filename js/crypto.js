@@ -1104,8 +1104,8 @@ const Crypto = {
     const extraSlots = (myUid && this._playerCoinSlots[myUid]) ? this._playerCoinSlots[myUid] : {};
     const slotCount = (slot0Coin ? 1 : 0) + Object.keys(extraSlots).length;
 
-    // Clamp active slot
-    if (this._activeCoinSlot > 0 && !extraSlots[this._activeCoinSlot]) {
+    // Clamp only if active slot is beyond unlocked range
+    if (this._activeCoinSlot >= maxCoins) {
       this._activeCoinSlot = 0;
     }
 
