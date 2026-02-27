@@ -377,6 +377,30 @@ const Admin = {
   _renderMarketTab() {
     return `
       <div class="admin-section">
+        <h3>🎮 Multiplayer Rooms</h3>
+        <div class="admin-mp-rooms">
+          ${['horses', 'crash', 'roulette'].map(g => {
+            const room = typeof MainRoom !== 'undefined' ? MainRoom._rooms[g] : null;
+            const status = room ? room.status : 'idle';
+            const players = room ? Object.keys(room.players || {}).length : 0;
+            const statusBadge = status === 'idle' ? '<span class="mp-status-idle">idle</span>'
+              : status === 'betting' ? '<span class="mp-status-betting">betting ('+players+'p)</span>'
+              : status === 'running' ? '<span class="mp-status-live">live</span>'
+              : '<span class="mp-status-done">done</span>';
+            return `<div class="admin-mp-room-row">
+              <span class="admin-mp-game">${g}</span>
+              ${statusBadge}
+              <div class="admin-mp-btns">
+                <button onclick="MainRoom.adminOpen('${g}',30)">30s</button>
+                <button onclick="MainRoom.adminOpen('${g}',60)">60s</button>
+                <button onclick="MainRoom.adminForceStart('${g}')" style="background:#ff9100;color:#000">Start</button>
+                <button onclick="MainRoom.adminClose('${g}')" class="danger">Close</button>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+      <div class="admin-section">
         <h3>Hunger Controls</h3>
         <div class="admin-actions">
           <button class="admin-btn win-btn" onclick="Admin.feedEveryone(100)">Feed Everyone (100%)</button>

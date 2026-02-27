@@ -20,8 +20,8 @@ const Horses = {
     this.initCanvas();
   },
 
-  renderHorseButtons() {
-    const grid = document.getElementById('horses-grid');
+  renderHorseButtons(container) {
+    const grid = container || document.getElementById('horses-grid');
     if (!grid) return;
     grid.innerHTML = this.horses.map((h, i) => `
       <button class="horse-pick${this.selected === i ? ' selected' : ''}"
@@ -181,6 +181,78 @@ const Horses = {
       }
     };
 
+    this.animFrame = requestAnimationFrame(animate);
+  },
+
+  // Determine winner from a seeded RNG — weighted by inverse odds
+  pickWinnerSeeded(randFn) {
+    const weights = this.horses.map(h => 1 / h.odds);
+    const total = weights.reduce((a, b) => a + b, 0);
+    let r = randFn() * total;
+    for (let i = 0; i < this.horses.length; i++) {
+      r -= weights[i];
+      if (r <= 0) return this.horses[i].name;
+    }
+    return this.horses[this.horses.length - 1].name;
+  },
+
+  // Run the race animation with a forced winner — no balance changes.
+  // Called by MainRoom for both host (computes winner) and non-host (applies server result).
+  raceMultiplayer(forceWinner, onComplete) {
+    if (this.racing) { if (onComplete) onComplete(); return; }
+    this.racing = true;
+    this.positions = this.horses.map(() => 0);
+    this.speeds = this.horses.map(() => 0);
+
+    const resultEl = document.getElementById('horses-result');
+    const raceBtn = document.getElementById('horses-race-btn');
+    if (resultEl) { resultEl.textContent = 'Racing\u2026'; resultEl.className = 'game-result'; }
+    if (raceBtn) raceBtn.disabled = true;
+    this.renderHorseButtons();
+
+    const baseSpeeds = this.horses.map(h => {
+      let speed = (1 / h.odds) * 3 + Math.random() * 2;
+      if (h.name === forceWinner) speed += 2.5; // strong boost to force win
+      return speed;
+    });
+
+    const canvas = document.getElementById('horses-canvas');
+    if (!canvas) { this.racing = false; if (onComplete) onComplete(); return; }
+    const ctx = canvas.getContext('2d');
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    const finishLine = this.trackLength;
+    let animWinner = -1;
+
+    const animate = () => {
+      for (let i = 0; i < this.horses.length; i++) {
+        if (this.positions[i] < finishLine) {
+          const variation = (Math.random() - 0.3) * 1.5;
+          this.speeds[i] = Math.max(0.5, baseSpeeds[i] + variation);
+          this.positions[i] += this.speeds[i];
+          if (this.positions[i] >= finishLine && animWinner < 0) animWinner = i;
+        }
+      }
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+      this.drawTrack(ctx, w, h);
+
+      if (animWinner < 0) {
+        this.animFrame = requestAnimationFrame(animate);
+      } else {
+        // Use forceWinner if provided, otherwise use animation winner
+        const winnerName = forceWinner || this.horses[animWinner].name;
+        this.racing = false;
+        if (raceBtn) raceBtn.disabled = false;
+        if (resultEl) {
+          resultEl.textContent = '\uD83C\uDFC7 ' + winnerName + ' wins! (Multiplayer)';
+          resultEl.className = 'game-result win';
+        }
+        this.renderHorseButtons();
+        if (onComplete) onComplete();
+      }
+    };
     this.animFrame = requestAnimationFrame(animate);
   },
 

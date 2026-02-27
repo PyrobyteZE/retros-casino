@@ -205,6 +205,7 @@ const Firebase = {
     if (typeof Loans !== 'undefined' && Loans._counterLoan && Loans._counterLoan.amount > 0) {
       Loans._startCounterLoanTimer();
     }
+    if (typeof MainRoom !== 'undefined') MainRoom.init();
   },
 
   // === PRESENCE ===
@@ -2178,5 +2179,37 @@ const Firebase = {
     if (!this.isOnline()) return;
     this.db.ref('playerBankVaults/' + ownerUid).on('value', snap => cb(snap.val() || {}),
       err => console.error('bankVaults read error:', err.code));
+  },
+
+  // === MAIN ROOM (Global Multiplayer) ===
+  listenMainRoom(game, cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('mainRoom/' + game).on('value', snap => cb(snap.val()));
+  },
+  setMainRoom(game, data) {
+    if (!this.isOnline()) return Promise.resolve();
+    return data === null
+      ? this.db.ref('mainRoom/' + game).remove()
+      : this.db.ref('mainRoom/' + game).set(data);
+  },
+  updateMainRoom(game, updates) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('mainRoom/' + game).update(updates);
+  },
+  joinMainRoom(game, uid, playerData) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('mainRoom/' + game + '/players/' + uid).set(playerData);
+  },
+  claimMainRoomHost(game, cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('mainRoom/' + game + '/host').transaction(cur => {
+      if (!cur) return this.uid;
+      return undefined;
+    }, (err, committed, snap) => {
+      if (committed) {
+        this.db.ref('mainRoom/' + game + '/hostSession').set(this._sessionId);
+      }
+      cb(committed && snap && snap.val() === this.uid);
+    });
   },
 };
