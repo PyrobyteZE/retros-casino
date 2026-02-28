@@ -4,8 +4,18 @@ const Plinko = {
   balls: [],
   pegs: [],
   buckets: [],
+  pegFlash: [],
   animFrame: null,
   canvasReady: false,
+  _layout: null,
+
+  // Physics constants
+  GRAVITY: 0.3,
+  RESTITUTION: 0.5,
+  FRICTION: 0.97,
+  BALL_R: 5,
+  PEG_R: 4,
+  TRAIL_LEN: 10,
 
   // Auto-drop state
   autoDropping: false,
@@ -38,303 +48,361 @@ const Plinko = {
     }
   },
 
-  getBet() { const v = App.parseAmount(document.getElementById('plinko-bet').value); return Math.max(0.01, isNaN(v) ? 0.01 : v); },
-  halfBet() { App.setBetInput(document.getElementById('plinko-bet'), this.getBet() / 2); },
+  getBet()    { const v = App.parseAmount(document.getElementById('plinko-bet').value); return Math.max(0.01, isNaN(v) ? 0.01 : v); },
+  halfBet()   { App.setBetInput(document.getElementById('plinko-bet'), this.getBet() / 2); },
   doubleBet() { App.setBetInput(document.getElementById('plinko-bet'), this.getBet() * 2); },
-  maxBet() { document.getElementById('plinko-bet').value = 'max'; },
-
-  getRows() { return parseInt(document.getElementById('plinko-rows').value); },
-  getRisk() { return document.getElementById('plinko-risk').value; },
+  maxBet()    { document.getElementById('plinko-bet').value = 'max'; },
+  getRows()   { return parseInt(document.getElementById('plinko-rows').value); },
+  getRisk()   { return document.getElementById('plinko-risk').value; },
 
   initCanvas() {
     this.canvas = document.getElementById('plinko-canvas');
+    const parent = this.canvas.parentElement;
+    const w = Math.min(parent.clientWidth || 350, 430);
+    this.canvas.width  = w;
+    this.canvas.height = Math.round(w * 1.12);
+    this.canvas.style.width  = w + 'px';
+    this.canvas.style.height = this.canvas.height + 'px';
     this.ctx = this.canvas.getContext('2d');
     this.canvasReady = true;
     this.balls = [];
-    this.drawBoard();
+    this._buildBoard();
+    this._draw();
     this.populateBucketSelect();
   },
 
   onSettingsChange() {
     this.balls = [];
-    if (this.animFrame) {
-      cancelAnimationFrame(this.animFrame);
-      this.animFrame = null;
-    }
-    this.drawBoard();
+    if (this.animFrame) { cancelAnimationFrame(this.animFrame); this.animFrame = null; }
+    if (this.canvasReady) { this._buildBoard(); this._draw(); }
     this.populateBucketSelect();
   },
 
   populateBucketSelect() {
     const sel = document.getElementById('plinko-rig-bucket');
     if (!sel) return;
-    const rows = this.getRows();
-    const risk = this.getRisk();
-    const mults = this.multipliers[risk][rows];
+    const mults = this.multipliers[this.getRisk()][this.getRows()];
     sel.innerHTML = '<option value="-1">Random</option>';
-    mults.forEach((m, i) => {
-      sel.innerHTML += `<option value="${i}">Bucket ${i} (${m}x)</option>`;
-    });
+    mults.forEach((m, i) => { sel.innerHTML += `<option value="${i}">Bucket ${i} (${m}x)</option>`; });
   },
 
-  drawBoard() {
-    if (!this.canvasReady) return;
-    const ctx = this.ctx;
-    const w = this.canvas.width;
-    const h = this.canvas.height;
-    const rows = this.getRows();
-    const risk = this.getRisk();
-    const mults = this.multipliers[risk][rows];
+  // Build peg and bucket data arrays from current rows/risk settings
+  _buildBoard() {
+    const rows     = this.getRows();
+    const risk     = this.getRisk();
+    const mults    = this.multipliers[risk][rows];
+    const w        = this.canvas.width;
+    const h        = this.canvas.height;
+    const topPad   = 32;
+    const botPad   = 44;
+    const rowH     = (h - topPad - botPad) / rows;
+    const maxPegs  = rows + 1;
+    const pegSpac  = (w - 40) / maxPegs;
 
-    ctx.clearRect(0, 0, w, h);
-
-    const pegRadius = 3;
-    const topPadding = 30;
-    const bottomPadding = 40;
-    const rowSpacing = (h - topPadding - bottomPadding) / rows;
-    const maxPegsInRow = rows + 1;
-    const pegSpacing = (w - 40) / maxPegsInRow;
+    this._layout = { topPad, botPad, rowH, pegSpac, w, h, rows, mults };
 
     this.pegs = [];
-
-    ctx.fillStyle = '#888';
     for (let r = 0; r < rows; r++) {
-      const pegsInRow = r + 3;
-      const rowWidth = (pegsInRow - 1) * pegSpacing;
-      const startX = (w - rowWidth) / 2;
-      const y = topPadding + r * rowSpacing;
-
-      for (let p = 0; p < pegsInRow; p++) {
-        const x = startX + p * pegSpacing;
-        this.pegs.push({ x, y, r: pegRadius });
-        ctx.beginPath();
-        ctx.arc(x, y, pegRadius, 0, Math.PI * 2);
-        ctx.fill();
+      const cnt = r + 3;
+      const rowW = (cnt - 1) * pegSpac;
+      const sx   = (w - rowW) / 2;
+      const y    = topPad + r * rowH;
+      for (let p = 0; p < cnt; p++) {
+        this.pegs.push({ x: sx + p * pegSpac, y, r: this.PEG_R, row: r, col: p });
       }
     }
+    this.pegFlash = new Array(this.pegs.length).fill(0);
 
     this.buckets = [];
-    const bucketCount = rows + 1;
-    const lastRowPegs = rows + 2;
-    const lastRowWidth = (lastRowPegs - 1) * pegSpacing;
-    const lastStartX = (w - lastRowWidth) / 2;
-    const bucketY = topPadding + rows * rowSpacing;
-    const bucketW = pegSpacing;
+    const lastCnt = rows + 2;
+    const lastW   = (lastCnt - 1) * pegSpac;
+    const lastSX  = (w - lastW) / 2;
+    const bucketY = topPad + rows * rowH;
+    for (let i = 0; i <= rows; i++) {
+      this.buckets.push({ x: lastSX + i * pegSpac, y: bucketY, w: pegSpac, mult: mults[i] });
+    }
+  },
 
-    for (let i = 0; i < bucketCount; i++) {
-      const bx = lastStartX + i * pegSpacing;
-      this.buckets.push({ x: bx, y: bucketY, w: bucketW, mult: mults[i] });
+  // Full canvas redraw
+  _draw() {
+    if (!this.canvasReady || !this._layout) return;
+    const ctx  = this.ctx;
+    const { w, h, botPad } = this._layout;
+    ctx.clearRect(0, 0, w, h);
 
-      const mult = mults[i];
-      let color;
-      if (mult >= 10) color = '#ff1744';
-      else if (mult >= 3) color = '#ff9100';
-      else if (mult >= 1) color = '#ffd740';
-      else color = '#69f0ae';
-
-      ctx.fillStyle = color;
-      ctx.fillRect(bx - bucketW / 2 + 2, bucketY + 8, bucketW - 4, 24);
-
-      ctx.fillStyle = '#000';
-      ctx.font = 'bold 10px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(mult + 'x', bx, bucketY + 24);
+    // Pegs
+    for (let i = 0; i < this.pegs.length; i++) {
+      const peg   = this.pegs[i];
+      const flash = this.pegFlash[i];
+      if (flash > 0) {
+        ctx.fillStyle = `rgba(255, 220, 60, ${flash / 10 * 0.5})`;
+        ctx.beginPath();
+        ctx.arc(peg.x, peg.y, peg.r + 4, 0, Math.PI * 2);
+        ctx.fill();
+        this.pegFlash[i] = Math.max(0, flash - 1);
+      }
+      ctx.fillStyle = flash > 0 ? '#ffe066' : '#9a9a9a';
+      ctx.beginPath();
+      ctx.arc(peg.x, peg.y, peg.r, 0, Math.PI * 2);
+      ctx.fill();
     }
 
+    // Buckets
+    const bh = 30;
+    for (const b of this.buckets) {
+      const m = b.mult;
+      let color;
+      if (m >= 10) color = '#ff1744';
+      else if (m >= 3) color = '#ff9100';
+      else if (m >= 1) color = '#ffd740';
+      else color = '#69f0ae';
+
+      ctx.fillStyle = color + '33';
+      ctx.fillRect(b.x - b.w / 2 + 2, b.y + 4, b.w - 4, bh);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(b.x - b.w / 2 + 2, b.y + 4, b.w - 4, bh);
+
+      ctx.fillStyle = color;
+      const fs = Math.max(7, Math.min(11, Math.floor(b.w * 0.38)));
+      ctx.font = `bold ${fs}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(m + 'x', b.x, b.y + 4 + bh * 0.66);
+    }
+
+    // Balls
     for (const ball of this.balls) {
-      ctx.fillStyle = '#00e676';
+      // Trail
+      for (let t = 0; t < ball.trail.length; t++) {
+        const frac  = t / ball.trail.length;
+        const alpha = frac * 0.35;
+        const r     = this.BALL_R * frac * 0.75;
+        if (r < 1) continue;
+        ctx.fillStyle = `rgba(0,230,118,${alpha.toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(ball.trail[t].x, ball.trail[t].y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Ball
+      ctx.fillStyle = ball.done ? '#00e67688' : '#00e676';
+      ctx.shadowColor = '#00e676';
+      ctx.shadowBlur  = ball.done ? 0 : 10;
       ctx.beginPath();
-      ctx.arc(ball.x, ball.y, 6, 0, Math.PI * 2);
+      ctx.arc(ball.x, ball.y, this.BALL_R, 0, Math.PI * 2);
       ctx.fill();
+      ctx.shadowBlur = 0;
     }
   },
 
   drop() {
     const bet = this.getBet();
-    if (bet > App.balance && !Admin.godMode) {
-      this.showResult('Not enough money!', 'lose');
-      return;
-    }
-
+    if (bet > App.balance && !Admin.godMode) { this.showResult('Not enough money!', 'lose'); return; }
     if (!Admin.godMode) App.addBalance(-bet);
     this.showResult('', '');
+    if (!this.canvasReady || !this._layout) return;
 
-    const rows = this.getRows();
-    const risk = this.getRisk();
-    const w = this.canvas.width;
-    const h = this.canvas.height;
-    const topPadding = 30;
-    const bottomPadding = 40;
-    const rowSpacing = (h - topPadding - bottomPadding) / rows;
-    const maxPegsInRow = rows + 1;
-    const pegSpacing = (w - 40) / maxPegsInRow;
+    const { w, topPad, rows, mults } = this._layout;
     const g = Rig.games.plinko;
 
-    // Determine target bucket
+    // Decide target bucket
     let targetBucket = -1;
-    if (g.forceBucket >= 0) {
-      targetBucket = g.forceBucket;
-    } else if (g.alwaysEdge) {
-      // Pick leftmost or rightmost (highest multiplier)
-      const mults = this.multipliers[risk][rows];
-      targetBucket = Math.random() < 0.5 ? 0 : mults.length - 1;
-    }
+    if (g.forceBucket >= 0)      targetBucket = g.forceBucket;
+    else if (g.alwaysEdge)       targetBucket = Math.random() < 0.5 ? 0 : mults.length - 1;
 
-    const path = [];
-    let x = w / 2 + (Math.random() - 0.5) * 4;
-    let y = topPadding - 20;
-    path.push({ x, y });
-
-    let position = 0;
-
+    // Pre-compute per-row left/right decisions for guided drops
+    let decisions = null;
     if (targetBucket >= 0) {
-      // Guided path to target bucket
+      decisions = [];
+      let pos = 0;
       for (let r = 0; r < rows; r++) {
-        // Need to end up at targetBucket after 'rows' steps
-        // remaining = targetBucket - position, remaining steps = rows - r
-        const remaining = targetBucket - position;
-        const stepsLeft = rows - r;
-        // Probability of going right to reach target
-        const goRight = remaining > 0 && (Math.random() < remaining / stepsLeft);
-        if (goRight) position++;
-
-        const targetPegsInNextRow = r + 4;
-        const nextRowWidth = (targetPegsInNextRow - 1) * pegSpacing;
-        const nextStartX = (w - nextRowWidth) / 2;
-
-        x = nextStartX + position * pegSpacing;
-        y = topPadding + r * rowSpacing + rowSpacing * 0.5;
-        path.push({ x: x + (Math.random() - 0.5) * 6, y: y - rowSpacing * 0.3 });
-        path.push({ x: x + (Math.random() - 0.5) * 3, y });
-      }
-    } else {
-      for (let r = 0; r < rows; r++) {
-        let goRight;
-        if (Rig.enabled) {
-          const bias = Rig.winRate / 100;
-          const centerBias = position / (r + 1);
-          if (centerBias < 0.3) goRight = Math.random() > bias;
-          else if (centerBias > 0.7) goRight = Math.random() < (1 - bias);
-          else goRight = Math.random() < (bias > 0.5 ? 0.8 : 0.2);
-        } else {
-          goRight = Math.random() < 0.5;
-        }
-        if (goRight) position++;
-
-        const targetPegsInNextRow = r + 4;
-        const nextRowWidth = (targetPegsInNextRow - 1) * pegSpacing;
-        const nextStartX = (w - nextRowWidth) / 2;
-
-        x = nextStartX + position * pegSpacing;
-        y = topPadding + r * rowSpacing + rowSpacing * 0.5;
-        path.push({ x: x + (Math.random() - 0.5) * 6, y: y - rowSpacing * 0.3 });
-        path.push({ x: x + (Math.random() - 0.5) * 3, y });
+        const remaining   = targetBucket - pos;
+        const stepsLeft   = rows - r;
+        const goRight     = remaining > 0 && (Math.random() < remaining / stepsLeft);
+        if (goRight) pos++;
+        decisions.push(goRight);
       }
     }
 
-    const bucketIndex = Math.min(position, rows);
-    const mults = this.multipliers[risk][rows];
-    const mult = mults[bucketIndex];
+    // Soft rig bias (persistent horizontal drift each frame)
+    let hBias = 0;
+    if (!decisions && Rig.enabled) {
+      const winRate = Rig.winRate / 100;
+      if (winRate < 0.45) {
+        hBias = (Math.random() < 0.5 ? -1 : 1) * (0.45 - winRate) * 0.15;
+      }
+    }
 
-    const lastRowPegs = rows + 2;
-    const lastRowWidth = (lastRowPegs - 1) * pegSpacing;
-    const lastStartX = (w - lastRowWidth) / 2;
-    const finalX = lastStartX + bucketIndex * pegSpacing;
-    const finalY = topPadding + rows * rowSpacing + 20;
-    path.push({ x: finalX, y: finalY });
+    const ball = {
+      x: w / 2 + (Math.random() - 0.5) * 5,
+      y: topPad - 14,
+      vx: (Math.random() - 0.5) * 1.2,
+      vy: 0.5,
+      hBias,
+      decisions,
+      lastHitRow: -1,
+      bet,
+      mults,
+      trail: [],
+      done: false,
+      _doneFrames: 0,
+    };
 
-    const ball = { x: path[0].x, y: path[0].y, pathIndex: 0, path, bet, mult };
     this.balls.push(ball);
-
-    if (!this.animFrame) this.startAnimation();
+    if (!this.animFrame) this._startAnim();
   },
 
-  startAnimation() {
-    const animate = () => {
-      let anyActive = false;
+  _startAnim() {
+    const step = () => {
+      this._physicsStep();
+      this._draw();
+      if (this.balls.length > 0) {
+        this.animFrame = requestAnimationFrame(step);
+      } else {
+        this.animFrame = null;
+      }
+    };
+    this.animFrame = requestAnimationFrame(step);
+  },
 
-      for (const ball of this.balls) {
-        if (ball.pathIndex < ball.path.length - 1) {
-          anyActive = true;
-          const target = ball.path[ball.pathIndex + 1];
-          const speed = 0.15;
-          ball.x += (target.x - ball.x) * speed;
-          ball.y += (target.y - ball.y) * speed;
+  _physicsStep() {
+    const { w, h, botPad, topPad } = this._layout;
+    const G    = this.GRAVITY;
+    const REST = this.RESTITUTION;
+    const FRIC = this.FRICTION;
+    const BR   = this.BALL_R;
+    const PR   = this.PEG_R;
+    const floor = h - botPad + 20;
+    const wallL = 8 + BR;
+    const wallR = w - 8 - BR;
 
-          const dist = Math.hypot(target.x - ball.x, target.y - ball.y);
-          if (dist < 2) {
-            ball.pathIndex++;
-            ball.x = target.x;
-            ball.y = target.y;
+    for (const ball of this.balls) {
+      if (ball.done) {
+        ball._doneFrames++;
+        continue;
+      }
+
+      // Trail
+      ball.trail.push({ x: ball.x, y: ball.y });
+      if (ball.trail.length > this.TRAIL_LEN) ball.trail.shift();
+
+      // Gravity + persistent horizontal bias
+      ball.vy += G;
+      if (ball.hBias) { ball.vx += ball.hBias; ball.vx *= 0.997; }
+
+      ball.x += ball.vx;
+      ball.y += ball.vy;
+
+      // Side walls
+      if (ball.x < wallL) { ball.x = wallL; ball.vx =  Math.abs(ball.vx) * 0.6; }
+      if (ball.x > wallR) { ball.x = wallR; ball.vx = -Math.abs(ball.vx) * 0.6; }
+
+      // Peg collisions
+      for (let i = 0; i < this.pegs.length; i++) {
+        const peg = this.pegs[i];
+        const dx  = ball.x - peg.x;
+        const dy  = ball.y - peg.y;
+        const d2  = dx * dx + dy * dy;
+        const min = BR + PR;
+        if (d2 >= min * min || d2 === 0) continue;
+
+        const dist = Math.sqrt(d2);
+        const nx   = dx / dist;
+        const ny   = dy / dist;
+
+        // Reflect velocity
+        const dot = ball.vx * nx + ball.vy * ny;
+        ball.vx = (ball.vx - 2 * dot * nx) * REST;
+        ball.vy = (ball.vy - 2 * dot * ny) * REST;
+        ball.vx *= FRIC;
+
+        // Always keep some downward momentum
+        if (ball.vy < 0.3) ball.vy = 0.3;
+
+        // Separate from peg
+        const overlap = min - dist + 0.5;
+        ball.x += nx * overlap;
+        ball.y += ny * overlap;
+
+        // Flash
+        this.pegFlash[i] = 10;
+
+        // Guided row decision (rig / force bucket)
+        const row = peg.row;
+        if (ball.decisions && row !== undefined && row > ball.lastHitRow) {
+          ball.lastHitRow = row;
+          const goRight = ball.decisions[row];
+          // If ball is already going the right direction, leave it alone
+          // Otherwise give it a push — looks natural since pegs have randomness
+          if (goRight && ball.vx < 0.2) {
+            ball.vx = Math.abs(ball.vx) + 0.8;
+          } else if (!goRight && ball.vx > -0.2) {
+            ball.vx = -(Math.abs(ball.vx) + 0.8);
           }
         }
       }
 
-      this.drawBoard();
+      // Bucket floor
+      if (ball.y + BR >= floor) {
+        ball.y  = floor - BR;
+        ball.vy = 0;
+        ball.vx = 0;
+        ball.done = true;
 
-      const finished = this.balls.filter(b => b.pathIndex >= b.path.length - 1);
-      for (const ball of finished) {
-        const winnings = Math.round(ball.bet * ball.mult * 100) / 100;
-        if (winnings > 0) App.addBalance(winnings);
+        const bIdx    = this._findBucket(ball.x);
+        const mult    = ball.mults[bIdx];
+        const winning = Math.round(ball.bet * mult * 100) / 100;
+        if (winning > 0) App.addBalance(winning);
 
-        const net = winnings - ball.bet;
-        const isWin = net > 0;
-        const result = isWin ? 'win' : winnings > 0 ? 'push' : 'lose';
+        const net    = winning - ball.bet;
+        const isWin  = net > 0;
+        const result = isWin ? 'win' : winning > 0 ? 'push' : 'lose';
 
         if (!this.autoDropping) {
-          this.showResult(ball.mult + 'x \u2014 ' + (winnings > 0 ? 'Won ' + App.formatMoney(winnings) : 'Lost'), result);
+          this.showResult(mult + 'x \u2014 ' + (winning > 0 ? 'Won ' + App.formatMoney(winning) : 'Lost'), result);
         }
 
         if (isWin) { GameStats.record('plinko', 'win', net); App.recordWin(); }
         else {
-          GameStats.record('plinko', 'lose', ball.bet - winnings);
+          GameStats.record('plinko', 'lose', ball.bet - winning);
           App.recordLoss();
-          if (typeof Stocks !== 'undefined') Stocks.onCasinoLoss(ball.bet - winnings);
+          if (typeof Stocks !== 'undefined') Stocks.onCasinoLoss(ball.bet - winning);
         }
 
-        // Track auto-drop profit
         if (this.autoDropping || this.autoTotal > 0) {
           this.autoProfit = App.safeAdd(this.autoProfit, net);
           this.updateAutoStatus();
         }
       }
-      this.balls = this.balls.filter(b => b.pathIndex < b.path.length - 1);
+    }
 
-      if (anyActive || this.balls.length > 0) {
-        this.animFrame = requestAnimationFrame(animate);
-      } else {
-        this.animFrame = null;
-      }
-    };
+    // Remove balls that have been settled for a short while
+    this.balls = this.balls.filter(b => !b.done || b._doneFrames < 18);
+  },
 
-    this.animFrame = requestAnimationFrame(animate);
+  _findBucket(x) {
+    let best = 0, bestD = Infinity;
+    for (let i = 0; i < this.buckets.length; i++) {
+      const d = Math.abs(x - this.buckets[i].x);
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    return best;
   },
 
   showResult(text, cls) {
     const el = document.getElementById('plinko-result');
+    if (!el) return;
     el.textContent = text;
     el.className = 'game-result ' + cls;
   },
 
   // === AUTO DROP ===
-  toggleAuto() {
-    if (this.autoDropping) {
-      this.stopAuto();
-    } else {
-      this.startAuto();
-    }
-  },
+  toggleAuto() { this.autoDropping ? this.stopAuto() : this.startAuto(); },
 
   startAuto() {
     const count = parseInt(document.getElementById('plinko-auto-count').value) || 10;
     if (count < 1) return;
-
     const bet = this.getBet();
-    const totalCost = bet * count;
-    if (totalCost > App.balance && !Admin.godMode) {
-      this.showResult('Not enough for ' + count + ' drops!', 'lose');
-      return;
-    }
+    if (bet * count > App.balance && !Admin.godMode) { this.showResult('Not enough for ' + count + ' drops!', 'lose'); return; }
 
     this.autoDropping = true;
     this.autoRemaining = count;
@@ -352,10 +420,7 @@ const Plinko = {
   stopAuto() {
     this.autoDropping = false;
     this.autoRemaining = 0;
-    if (this.autoTimer) {
-      clearTimeout(this.autoTimer);
-      this.autoTimer = null;
-    }
+    if (this.autoTimer) { clearTimeout(this.autoTimer); this.autoTimer = null; }
 
     const btn = document.getElementById('plinko-auto-btn');
     btn.textContent = 'Auto: OFF';
@@ -365,7 +430,7 @@ const Plinko = {
     if (this.autoTotal > 0) {
       const profitText = this.autoProfit >= 0
         ? 'Profit: +' + App.formatMoney(this.autoProfit)
-        : 'Loss: ' + App.formatMoney(this.autoProfit);
+        : 'Loss: '    + App.formatMoney(this.autoProfit);
       status.textContent = 'Done! ' + (this.autoTotal - this.autoRemaining) + '/' + this.autoTotal + ' dropped. ' + profitText;
       status.className = 'plinko-auto-status ' + (this.autoProfit >= 0 ? 'auto-profit' : 'auto-loss');
     } else {
@@ -374,39 +439,24 @@ const Plinko = {
   },
 
   autoDropNext() {
-    if (!this.autoDropping || this.autoRemaining <= 0) {
-      this.stopAuto();
-      return;
-    }
-
+    if (!this.autoDropping || this.autoRemaining <= 0) { this.stopAuto(); return; }
     const bet = this.getBet();
-    if (bet > App.balance && !Admin.godMode) {
-      this.showResult('Ran out of money!', 'lose');
-      this.stopAuto();
-      return;
-    }
+    if (bet > App.balance && !Admin.godMode) { this.showResult('Ran out of money!', 'lose'); this.stopAuto(); return; }
 
-    // Track profit for this ball
-    this.autoBetAmount = bet;
     this.drop();
     this.autoRemaining--;
     this.updateAutoStatus();
 
-    // Schedule next drop (stagger slightly so balls spread out)
-    const delay = Math.max(150, 400 - this.autoTotal * 2);
-    this.autoTimer = setTimeout(() => {
-      this.autoDropNext();
-    }, delay);
+    const delay = Math.max(100, 380 - this.autoTotal * 2);
+    this.autoTimer = setTimeout(() => this.autoDropNext(), delay);
   },
 
   updateAutoStatus() {
     const status = document.getElementById('plinko-auto-status');
     if (!status) return;
     const dropped = this.autoTotal - this.autoRemaining;
-    const profitText = this.autoProfit >= 0
-      ? '+' + App.formatMoney(this.autoProfit)
-      : App.formatMoney(this.autoProfit);
+    const profitText = this.autoProfit >= 0 ? '+' + App.formatMoney(this.autoProfit) : App.formatMoney(this.autoProfit);
     status.textContent = 'Dropping: ' + dropped + '/' + this.autoTotal + ' | ' + profitText;
     status.className = 'plinko-auto-status ' + (this.autoProfit >= 0 ? 'auto-profit' : 'auto-loss');
-  }
+  },
 };

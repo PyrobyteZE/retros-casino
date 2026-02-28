@@ -587,13 +587,13 @@ const Admin = {
         <h3>🚗 Grant Car to Self</h3>
         <div style="display:flex;gap:6px;align-items:center">
           <select id="af-car-cat" style="flex:1;padding:6px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:13px">
-            <option value="economy">Economy 🚗</option>
-            <option value="sport">Sport 🏎️</option>
-            <option value="luxury">Luxury 🚘</option>
+            <option value="economy">Economy 🚘</option>
+            <option value="sedan">Sedan 🚗</option>
             <option value="suv">SUV 🚙</option>
-            <option value="truck">Truck 🛻</option>
-            <option value="supercar">Supercar ⚡</option>
-            <option value="hypercar">Hypercar 🚀</option>
+            <option value="sports">Sports 🏎️</option>
+            <option value="luxury">Luxury 🚐</option>
+            <option value="supercar">Supercar 🚀</option>
+            <option value="hypercar">Hypercar ⚡</option>
           </select>
           <button class="admin-btn win-btn" onclick="Admin.adminGrantCarToSelf()" style="white-space:nowrap">Grant</button>
         </div>
@@ -614,7 +614,6 @@ const Admin = {
       const sv = parseFloat(document.getElementById('af-stat-val-' + i)?.value);
       if (st && !isNaN(sv) && sv !== 0) stats.push({ statType: st, value: sv, label: st });
     }
-    if (stats.length === 0) { Toast.show('Add at least one stat', '#ff5252', 2000); return; }
     this._forgeItem = {
       id: 'admin_' + Date.now().toString(36),
       name,
@@ -867,13 +866,13 @@ const Admin = {
           <div class="admin-pe-section-label" style="margin-top:8px">🚗 Grant Car</div>
           <div style="display:flex;gap:4px;margin-top:4px;align-items:center">
             <select id="admin-pe-car-cat-${safeUid}" style="flex:1;font-size:12px;padding:5px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px">
-              <option value="economy">Economy 🚗</option>
-              <option value="sport">Sport 🏎️</option>
-              <option value="luxury">Luxury 🚘</option>
+              <option value="economy">Economy 🚘</option>
+              <option value="sedan">Sedan 🚗</option>
               <option value="suv">SUV 🚙</option>
-              <option value="truck">Truck 🛻</option>
-              <option value="supercar">Supercar ⚡</option>
-              <option value="hypercar">Hypercar 🚀</option>
+              <option value="sports">Sports 🏎️</option>
+              <option value="luxury">Luxury 🚐</option>
+              <option value="supercar">Supercar 🚀</option>
+              <option value="hypercar">Hypercar ⚡</option>
             </select>
             <button class="rig-btn win" onclick="Admin.playerCmd('${safeUid}','grantCar')" style="font-size:11px;white-space:nowrap">Grant</button>
           </div>

@@ -7871,3 +7871,320 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   border-radius: 8px;
   margin-bottom: 10px;
 }
+
+/* =====================================================================
+   SH-INPUT (shorthand bet input used across all games)
+   ===================================================================== */
+.sh-input {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--bg3);
+  background: var(--bg3);
+  color: var(--text);
+  font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.sh-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* =====================================================================
+   VAULT — missing classes
+   ===================================================================== */
+.vault-empty-msg {
+  text-align: center;
+  padding: 30px 16px;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.vault-cap-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: right;
+  margin-top: 2px;
+}
+.vault-public-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+  margin: 6px 0;
+}
+.vault-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 6px 0 2px;
+  border-top: 1px solid var(--bg3);
+  margin-top: 6px;
+}
+.vault-item-name {
+  font-size: 13px;
+  flex: 1;
+}
+.vault-item-val {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-left: 4px;
+}
+.vault-deposit-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+.vault-deposit-block {
+  padding: 10px;
+  background: var(--bg);
+  border: 1px solid var(--bg3);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.vault-deposit-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+.vault-deposit-select,
+.vault-deposit-input {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--bg3);
+  background: var(--bg2);
+  color: var(--text);
+  font-size: 13px;
+  box-sizing: border-box;
+}
+.vault-deposit-btn {
+  padding: 7px 12px;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  width: 100%;
+}
+.vault-deposit-btn:hover { opacity: 0.85; }
+
+/* =====================================================================
+   CARS — missing classes
+   ===================================================================== */
+.cars-empty {
+  text-align: center;
+  padding: 30px 16px;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.car-card-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin: 2px 0;
+}
+.car-card-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--green);
+  margin: 4px 0;
+}
+.car-passive-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #1a2e1a;
+  color: var(--green);
+  border: 1px solid var(--green);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  margin: 2px 0;
+}
+.car-btn-race {
+  background: var(--accent);
+  color: #000;
+  font-weight: 700;
+}
+.car-btn-sell {
+  background: var(--bg3);
+  color: var(--text);
+}
+.car-list-value-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+.car-mini-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: width 0.3s;
+}
+.car-mini-val {
+  font-size: 10px;
+  color: var(--text-dim);
+  min-width: 22px;
+  text-align: right;
+}
+
+/* Design modal */
+.car-design-modal-box {
+  max-width: 400px;
+}
+.car-design-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.car-design-select {
+  width: 100%;
+}
+.car-design-preview {
+  padding: 10px;
+  background: var(--bg);
+  border: 1px solid var(--bg3);
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+.car-design-cost {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+
+/* Flaws modal */
+.car-flaws-modal-box {
+  max-width: 380px;
+}
+.flaw-row-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.flaw-stat {
+  font-size: 11px;
+  color: #f44336;
+  margin-top: 2px;
+}
+.flaw-fixability {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 1px;
+}
+.flaw-note {
+  font-size: 11px;
+  color: #ff9800;
+  background: #1f1500;
+  border: 1px solid #ff9800;
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+}
+.flaw-repaired {
+  color: var(--green);
+  font-style: italic;
+}
+.flaw-done {
+  font-size: 11px;
+  color: var(--green);
+  font-weight: 700;
+  margin-top: 4px;
+}
+.car-flaw-ok {
+  color: var(--green);
+  border-color: var(--green);
+  background: #0d2010;
+}
+
+/* Brand / model */
+.brand-found-intro {
+  padding: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+.brand-meta {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 4px 0 10px;
+  line-height: 1.5;
+}
+.model-cat {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+/* Race panel */
+.race-panel {
+  padding: 12px 0;
+}
+.race-panel-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.race-result {
+  text-align: center;
+  padding: 20px 16px;
+  border-radius: 12px;
+  border: 2px solid var(--bg3);
+  background: var(--bg2);
+  margin-bottom: 12px;
+}
+.race-win {
+  border-color: var(--green);
+  background: #0d2010;
+}
+.race-lose {
+  border-color: #f44336;
+  background: #200d0d;
+}
+.race-result-icon { font-size: 36px; margin-bottom: 4px; }
+.race-result-title {
+  font-size: 18px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+.race-result-speeds {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.race-result-payout {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--green);
+  margin: 4px 0;
+}
+.race-result-cond {
+  font-size: 12px;
+  color: #ff9800;
+}
+.race-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.race-rule {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
