@@ -325,7 +325,7 @@ const Companies = {
             companyMainIdx: company.mainIdx || 0,
             companyFoundedAt: company.foundedAt || 0,
             companyUpgrades: company.upgrades || {},
-            companyIndustry: company.industry || 'tech',
+            companyIndustry: s.industry || company.industry || 'tech',
             companyPersonality: company.personality || 'standard',
             companyProperties: Array.isArray(company.properties) ? company.properties : [],
             companyIncomeShare: typeof company.incomeShare === 'number' ? company.incomeShare : 100,
@@ -1875,10 +1875,15 @@ const Companies = {
         const scandal = this._scandals[s.symbol];
         const hasActiveScandal = scandal && !scandal.suppressed && Date.now() - (scandal.firedAt || 0) < 120000;
         const suppressCost = App.formatMoney(Math.max(100_000, Math.round((s.basePrice || 100) * 1000)));
+        const stockIndustry = s.industry || c.industry || 'tech';
+        const stockIndustryDef = this.INDUSTRIES.find(i => i.id === stockIndustry);
+        const stockIndustryLabel = stockIndustryDef ? stockIndustryDef.label : stockIndustry;
+        const hasIndustryOverride = !isMain && s.industry && s.industry !== (c.industry || 'tech');
         html += `<div class="company-stock-row">
           <div style="flex:1;min-width:0">
             <span class="csr-sym">${this._esc(s.symbol)}</span>
             ${isMain ? '<span style="font-size:10px;color:var(--gold);margin-left:4px">MAIN</span>' : ''}
+            ${!isMain ? `<span class="csr-industry-badge ${hasIndustryOverride ? 'csr-industry-custom' : ''}">${stockIndustryLabel}</span>` : ''}
             <div class="company-card-name">${this._esc(s.name)}</div>
             ${hasActiveScandal ? `<div class="scandal-alert">\u{1F4F0} ${this._esc(scandal.text)}<br><button class="scandal-suppress-btn" onclick="Companies.suppressScandal('${s.symbol}')">Suppress — ${suppressCost}</button></div>` : ''}
           </div>
@@ -1891,6 +1896,7 @@ const Companies = {
             <button class="csr-toggle-btn" onclick="Companies.togglePublic(${cIdx},${sIdx})">${s.type === 'public' ? 'Make Private' : 'Go Public'}</button>
             ${!isMain ? `<button class="csr-toggle-btn" onclick="Companies.setMainStock(${cIdx},${sIdx})" style="font-size:10px">Set Main</button>` : ''}
             <button class="csr-toggle-btn" onclick="Companies.issueDividend(${cIdx},${sIdx})" style="color:var(--gold);border-color:var(--gold)" title="Pay cash per-share to all holders.">Dividend \u{2139}\uFE0F</button>
+            ${!isMain ? `<button class="csr-toggle-btn" style="font-size:10px;color:#82b1ff;border-color:#82b1ff" onclick="Companies.promptRebrandIndustry(${cIdx},${sIdx})">&#x1F3ED; Industry</button>` : ''}
             ${c.stocks.length > 1 ? `<button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);font-size:10px" onclick="Companies.removeStock(${cIdx},${sIdx})">Remove</button>` : ''}
             ${s.type === 'private' ? `<button class="csr-toggle-btn" style="font-size:10px;color:var(--gold);border-color:var(--gold)" onclick="Companies.offerShares(${cIdx},${sIdx})">Offer Shares</button>` : ''}
           </div>
@@ -2502,6 +2508,69 @@ const Companies = {
     Firebase.removeAcquisitionTransfer(Firebase.uid, transferId).catch(() => {});
     this._triggerRender();
     Toast.show('\u{1F91D} Acquired ' + stock.symbol + ' \u2192 added to ' + targetComp.name + '!', '#82b1ff', 5000);
+  },
+
+  // === SUB-STOCK INDUSTRY REBRAND ===
+
+  promptRebrandIndustry(cIdx, sIdx) {
+    const c = this._companies[cIdx];
+    if (!c) return;
+    const s = c.stocks[sIdx];
+    if (!s) return;
+    const isMain = sIdx === (c.mainIdx || 0);
+    if (isMain) { Toast.show('Cannot rebrand main stock — change company industry instead', '#ff5252', 3000); return; }
+
+    const COST = 500_000;
+    const currentInd = s.industry || c.industry || 'tech';
+    const opts = this.INDUSTRIES.map(ind =>
+      `<option value="${ind.id}" ${ind.id === currentInd ? 'selected' : ''}>${ind.label}</option>`
+    ).join('');
+
+    const html = `<div class="stock-trade-modal">
+      <div class="stock-trade-title">&#x1F3ED; Rebrand ${this._esc(s.symbol)} Industry</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">Change this sub-stock to a different industry.<br>Cost: <b>${App.formatMoney(COST)}</b></div>
+      <select id="rebrand-industry-select" style="width:100%;font-size:14px;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);padding:8px;margin-bottom:12px">${opts}</select>
+      <div style="display:flex;gap:8px">
+        <button class="stock-buy-btn" style="flex:1" onclick="Companies.rebrandSubStockIndustry(${cIdx},${sIdx})">Rebrand — ${App.formatMoney(COST)}</button>
+        <button class="stock-trade-cancel" onclick="Companies._closeStockOfferModal()">Cancel</button>
+      </div>
+    </div>`;
+
+    let modal = document.getElementById('stock-offer-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'stock-offer-modal';
+      modal.className = 'stock-modal-overlay';
+      document.getElementById('app').appendChild(modal);
+    }
+    modal.innerHTML = html;
+    modal.classList.remove('hidden');
+  },
+
+  rebrandSubStockIndustry(cIdx, sIdx) {
+    const COST = 500_000;
+    const sel = document.getElementById('rebrand-industry-select');
+    if (!sel) return;
+    const newInd = sel.value;
+    const c = this._companies[cIdx];
+    if (!c) return;
+    const s = c.stocks[sIdx];
+    if (!s) return;
+
+    if (App.balance < COST) { Toast.show('Not enough funds — need ' + App.formatMoney(COST), '#ff5252', 3000); return; }
+    const currentInd = s.industry || c.industry || 'tech';
+    if (newInd === currentInd) { Toast.show('That is already the current industry', '#ff5252', 2500); return; }
+
+    App.addBalance(-COST);
+    s.industry = newInd;
+    const indDef = this.INDUSTRIES.find(i => i.id === newInd);
+    const label = indDef ? indDef.label : newInd;
+    this._saveLocal();
+    this._pushToFirebase();
+    App.save();
+    this._closeStockOfferModal();
+    this._triggerRender();
+    Toast.show('\u{1F3ED} ' + s.symbol + ' rebranded to ' + label + '!', '#82b1ff', 3000);
   },
 
   // === STOCK TRANSFER (company-to-company offers) ===

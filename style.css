@@ -5770,6 +5770,8 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
 }
 .company-stock-row:last-child { border-bottom: none; }
 .csr-sym { font-weight: 800; color: var(--green); font-size: 14px; }
+.csr-industry-badge { display:inline-block; font-size:10px; padding:1px 5px; border-radius:4px; background:var(--bg3); color:var(--text-dim); margin-left:5px; vertical-align:middle; }
+.csr-industry-custom { background:#1a2a4a; color:#82b1ff; border:1px solid #82b1ff44; }
 .csr-price { font-weight: 700; font-size: 14px; }
 .csr-type { font-size: 11px; }
 .csr-type-public { color: var(--green); }
