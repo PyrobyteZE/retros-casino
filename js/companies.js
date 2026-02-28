@@ -168,6 +168,7 @@ const Companies = {
   activeTab: 'browse',
   _expandedCo: null,          // cIdx of currently-expanded company card (null = all collapsed)
   _coTab: {},                 // { [cIdx]: 'stocks'|'props'|'upgrades'|'more' }
+  _activeSubStock: null,      // { cIdx, sIdx } when drilled into a sub-stock, else null
 
   // Scandal text templates ('{n}' replaced with company name)
   SCANDAL_EVENTS: [
@@ -1799,94 +1800,17 @@ const Companies = {
     this._triggerRender();
   },
 
-  // Sub-stock manage panel (modal, DOM-injected so re-renders don't close it)
   showSubStockPanel(cIdx, sIdx) {
-    const c = this._companies[cIdx];
-    if (!c) return;
-    const s = c.stocks[sIdx];
-    if (!s) return;
-    const ind = s.industry || c.industry || 'tech';
-    const indDef = this.INDUSTRIES.find(i => i.id === ind);
-    const indLabel = indDef ? indDef.label : ind;
-
-    // Build properties section for this sub-stock
-    const propDefs = this.COMPANY_PROPERTIES[ind] || [];
-    const ownedProps = Array.isArray(s.properties) ? s.properties : [];
-    const worldMult = this._getWorldPriceMult(ind);
-    let propHtml = '';
-    if (propDefs.length) {
-      let totalIncome = 0;
-      propDefs.forEach(def => { if (ownedProps.includes(def.key)) totalIncome += def.income * worldMult; });
-      propHtml += `<div class="ssp-section">
-        <div class="ssp-section-title">&#x1F3D7; Properties &mdash; ${this._esc(indLabel)}</div>`;
-      if (totalIncome > 0) propHtml += `<div style="font-size:12px;color:var(--green);margin-bottom:6px">${App.formatMoney(totalIncome)}/5s passive income</div>`;
-      propHtml += '<div class="company-property-grid">';
-      propDefs.forEach(def => {
-        const owned = ownedProps.includes(def.key);
-        propHtml += `<div class="company-property-card${owned ? ' owned' : ''}">
-          ${owned ? '<div class="cprop-owned-badge">&#x2713;</div>' : ''}
-          <div class="cprop-name">${this._esc(def.name)}</div>
-          <div class="cprop-income">${App.formatMoney(def.income)}<span style="font-size:10px;color:var(--text-dim)">/5s</span></div>
-          ${owned ? '' : `<div class="cprop-cost">${App.formatMoney(def.cost)}</div>
-            <button class="cprop-buy-btn" onclick="Companies.buySubStockProperty(${cIdx},${sIdx},'${def.key}')">Buy</button>`}
-        </div>`;
-      });
-      propHtml += '</div></div>';
-    }
-
-    // Bank section if finance
-    let bankHtml = '';
-    if (ind === 'finance' && typeof Banking !== 'undefined') {
-      bankHtml = `<div class="ssp-section">${Banking.renderBankSetup(cIdx)}</div>`;
-    }
-
-    // Scandal alert
-    const scandal = this._scandals[s.symbol];
-    const hasActiveScandal = scandal && !scandal.suppressed && Date.now() - (scandal.firedAt || 0) < 120000;
-    const suppressCost = App.formatMoney(Math.max(100_000, Math.round((s.basePrice || 100) * 1000)));
-
-    const html = `<div class="ssp-overlay" id="ssp-overlay" onclick="if(event.target===this)Companies._closeSubStockPanel()">
-      <div class="ssp-modal">
-        <div class="ssp-header">
-          <div>
-            <span class="csr-sym" style="font-size:18px">${this._esc(s.symbol)}</span>
-            <span class="csr-industry-badge ${s.industry && s.industry !== (c.industry||'tech') ? 'csr-industry-custom' : ''}" style="margin-left:6px">${this._esc(indLabel)}</span>
-            <div style="font-size:13px;color:var(--text-dim);margin-top:2px">${this._esc(s.name)}</div>
-          </div>
-          <div style="text-align:right">
-            <div class="csr-price" style="font-size:16px">$${(s.price||0) < 10 ? (s.price||0).toFixed(2) : Math.round(s.price||0).toLocaleString()}</div>
-            <div class="csr-type ${s.type==='public'?'csr-type-public':'csr-type-private'}">${s.type}</div>
-          </div>
-          <button class="ssp-close" onclick="Companies._closeSubStockPanel()">&#x2715;</button>
-        </div>
-        <div class="ssp-body">
-          ${hasActiveScandal ? `<div class="scandal-alert ssp-section">&#x1F4F0; ${this._esc(scandal.text)}<br><button class="scandal-suppress-btn" onclick="Companies.suppressScandal('${s.symbol}')">Suppress &mdash; ${suppressCost}</button></div>` : ''}
-          <div class="ssp-section">
-            <div class="ssp-section-title">&#x26A1; Actions</div>
-            <div class="ssp-action-grid">
-              <button class="csr-toggle-btn" onclick="Companies.togglePublic(${cIdx},${sIdx});Companies._closeSubStockPanel()">${s.type==='public'?'Make Private':'Go Public'}</button>
-              <button class="csr-toggle-btn" style="color:var(--gold);border-color:var(--gold)" onclick="Companies.issueDividend(${cIdx},${sIdx})">&#x1F4B8; Dividend</button>
-              <button class="csr-toggle-btn" style="color:#82b1ff;border-color:#82b1ff" onclick="Companies.promptRebrandIndustry(${cIdx},${sIdx})">&#x1F3ED; Industry</button>
-              ${s.type==='private'?`<button class="csr-toggle-btn" style="color:var(--gold);border-color:var(--gold)" onclick="Companies.offerShares(${cIdx},${sIdx})">Offer Shares</button>`:''}
-              <button class="csr-toggle-btn" onclick="Companies.setMainStock(${cIdx},${sIdx});Companies._closeSubStockPanel()" style="font-size:11px">Set as Main</button>
-              <button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);font-size:11px" onclick="if(confirm('Remove this sub-stock?')){Companies.removeStock(${cIdx},${sIdx});Companies._closeSubStockPanel()}">&#x1F5D1; Remove</button>
-            </div>
-          </div>
-          ${propHtml}
-          ${bankHtml}
-        </div>
-      </div>
-    </div>`;
-
-    document.getElementById('ssp-overlay')?.remove();
-    const el = document.createElement('div');
-    el.id = 'ssp-overlay';
-    el.innerHTML = html;
-    document.getElementById('app').appendChild(el.firstElementChild);
+    this._activeSubStock = { cIdx, sIdx };
+    // Ensure the right company is expanded on the Stocks tab
+    this._expandedCo = cIdx;
+    this._coTab[cIdx] = 'stocks';
+    this._triggerRender();
   },
 
   _closeSubStockPanel() {
-    document.getElementById('ssp-overlay')?.remove();
+    this._activeSubStock = null;
+    this._triggerRender();
   },
 
   buySubStockProperty(cIdx, sIdx, propKey) {
@@ -1907,8 +1831,7 @@ const Companies = {
     this._pushToFirebase();
     App.save();
     Toast.show('&#x1F3D7; ' + def.name + ' purchased!', 'var(--green)', 3000);
-    // Refresh the panel in-place
-    this.showSubStockPanel(cIdx, sIdx);
+    this._triggerRender();
   },
 
   // Helper: total passive income for a company (main + sub-stocks)
@@ -2026,51 +1949,125 @@ const Companies = {
         </div>`;
 
       if (isExpanded) {
+        const drillActive = this._activeSubStock && this._activeSubStock.cIdx === cIdx;
+        const drillSIdx = drillActive ? this._activeSubStock.sIdx : -1;
+        const drillSym = drillActive ? (c.stocks[drillSIdx]?.symbol || '') : '';
         html += `<div class="co-sub-tabs">
-          <button class="co-stab${activeTab==='stocks'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'stocks')">📈 Stocks</button>
-          <button class="co-stab${activeTab==='props'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'props')">🏗️ Props</button>
-          <button class="co-stab${activeTab==='upgrades'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'upgrades')">🔧 Upgrades</button>
-          <button class="co-stab${activeTab==='more'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'more')">⚙️ More</button>
+          ${drillActive && activeTab === 'stocks'
+            ? `<button class="co-stab active" onclick="Companies._closeSubStockPanel()" style="text-align:left;flex:none;padding-left:10px">← ${this._esc(drillSym)}</button><span style="flex:1;font-size:11px;color:var(--text-dim);padding:8px 6px;align-self:center">Sub-stock</span>`
+            : `<button class="co-stab${activeTab==='stocks'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'stocks')">📈 Stocks</button>`
+          }
+          <button class="co-stab${activeTab==='props'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'props');Companies._closeSubStockPanel()">🏗️ Props</button>
+          <button class="co-stab${activeTab==='upgrades'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'upgrades');Companies._closeSubStockPanel()">🔧 Upgrades</button>
+          <button class="co-stab${activeTab==='more'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'more');Companies._closeSubStockPanel()">⚙️ More</button>
         </div>
         <div class="co-sub-content">`;
 
         // ── STOCKS TAB ───────────────────────────────────────────────────
         if (activeTab === 'stocks') {
-          c.stocks.forEach((s, sIdx) => {
-            const isMain = sIdx === (c.mainIdx || 0);
+          if (drillActive && drillSIdx >= 0) {
+            // ── DRILL-DOWN: sub-stock detail ──────────────────────────
+            const s = c.stocks[drillSIdx];
+            const ind = s.industry || c.industry || 'tech';
+            const indDef2 = this.INDUSTRIES.find(i => i.id === ind);
+            const indLabel2 = indDef2 ? indDef2.label : ind;
             const scandal = this._scandals[s.symbol];
-            const hasActiveScandal = scandal && !scandal.suppressed && Date.now() - (scandal.firedAt||0) < 120000;
+            const hasActiveScandal = scandal && !scandal.suppressed && Date.now()-(scandal.firedAt||0) < 120000;
             const suppressCost = App.formatMoney(Math.max(100_000, Math.round((s.basePrice||100)*1000)));
-            const sInd = s.industry || c.industry || 'tech';
-            const sIndDef = this.INDUSTRIES.find(i => i.id === sInd);
-            const sIndLabel = sIndDef ? sIndDef.label : sInd;
-            const hasOverride = !isMain && s.industry && s.industry !== (c.industry||'tech');
-            html += `<div class="company-stock-row">
-              <div style="flex:1;min-width:0">
-                <span class="csr-sym">${this._esc(s.symbol)}</span>
-                ${isMain ? '<span style="font-size:10px;color:var(--gold);margin-left:4px">MAIN</span>' : ''}
-                ${!isMain ? `<span class="csr-industry-badge ${hasOverride?'csr-industry-custom':''}">${sIndLabel}</span>` : ''}
-                <div class="company-card-name">${this._esc(s.name)}</div>
-                ${hasActiveScandal ? `<div class="scandal-alert">📰 ${this._esc(scandal.text)}<br><button class="scandal-suppress-btn" onclick="Companies.suppressScandal('${s.symbol}')">Suppress — ${suppressCost}</button></div>` : ''}
+            const hasOverride = s.industry && s.industry !== (c.industry||'tech');
+
+            // Header
+            html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--bg3)">
+              <div>
+                <span class="csr-sym" style="font-size:16px">${this._esc(s.symbol)}</span>
+                <span class="csr-industry-badge ${hasOverride?'csr-industry-custom':''}" style="margin-left:6px">${this._esc(indLabel2)}</span>
+                <div style="font-size:12px;color:var(--text-dim);margin-top:2px">${this._esc(s.name)}</div>
               </div>
-              <div style="text-align:right;flex-shrink:0;margin-right:8px">
+              <div style="text-align:right">
                 <div class="csr-price">$${(s.price||0)<10?(s.price||0).toFixed(2):Math.round(s.price||0).toLocaleString()}</div>
                 <div class="csr-type ${s.type==='public'?'csr-type-public':'csr-type-private'}">${s.type}</div>
               </div>
-              <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
-                ${isMain
-                  ? `<button class="csr-toggle-btn" onclick="Companies.togglePublic(${cIdx},${sIdx})">${s.type==='public'?'Make Private':'Go Public'}</button>
-                     <button class="csr-toggle-btn" onclick="Companies.issueDividend(${cIdx},${sIdx})" style="color:var(--gold);border-color:var(--gold)">Dividend</button>`
-                  : `<button class="csr-toggle-btn" onclick="Companies.showSubStockPanel(${cIdx},${sIdx})" style="color:#bb86fc;border-color:#bb86fc">⚙️ Manage</button>`
-                }
+            </div>`;
+            // Scandal
+            if (hasActiveScandal) html += `<div class="scandal-alert" style="margin-bottom:8px">📰 ${this._esc(scandal.text)}<br><button class="scandal-suppress-btn" onclick="Companies.suppressScandal('${s.symbol}')">Suppress — ${suppressCost}</button></div>`;
+            // Actions
+            html += `<div style="margin-bottom:10px">
+              <div style="font-size:12px;font-weight:700;color:var(--text-dim);margin-bottom:6px">⚡ Actions</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                <button class="csr-toggle-btn" onclick="Companies.togglePublic(${cIdx},${drillSIdx})">${s.type==='public'?'Make Private':'Go Public'}</button>
+                <button class="csr-toggle-btn" style="color:var(--gold);border-color:var(--gold)" onclick="Companies.issueDividend(${cIdx},${drillSIdx})">💸 Dividend</button>
+                <button class="csr-toggle-btn" style="color:#82b1ff;border-color:#82b1ff" onclick="Companies.promptRebrandIndustry(${cIdx},${drillSIdx})">🏭 Industry</button>
+                ${s.type==='private'?`<button class="csr-toggle-btn" style="color:var(--gold);border-color:var(--gold)" onclick="Companies.offerShares(${cIdx},${drillSIdx})">Offer Shares</button>`:''}
+                <button class="csr-toggle-btn" style="font-size:11px" onclick="Companies.setMainStock(${cIdx},${drillSIdx});Companies._closeSubStockPanel()">Set as Main</button>
+                <button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);font-size:11px" onclick="if(confirm('Remove this sub-stock?')){Companies.removeStock(${cIdx},${drillSIdx});Companies._closeSubStockPanel()}">🗑 Remove</button>
               </div>
             </div>`;
-          });
-          if (c.stocks.length < this.MAX_STOCKS) {
-            const cost = c.stocks.length === 1 ? this.STOCK2_COST : this.STOCK3_COST;
-            html += `<button class="add-stock-btn" style="margin-top:8px" onclick="Companies.addStock(${cIdx})">+ Add Sub-Stock — ${App.formatMoney(cost)}</button>`;
+            // Properties
+            const propDefs2 = this.COMPANY_PROPERTIES[ind] || [];
+            const ownedProps2 = Array.isArray(s.properties) ? s.properties : [];
+            const wm2 = this._getWorldPriceMult(ind);
+            let propIncome2 = 0;
+            propDefs2.forEach(def => { if (ownedProps2.includes(def.key)) propIncome2 += def.income * wm2; });
+            if (propDefs2.length) {
+              html += `<div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                  <div style="font-size:12px;font-weight:700;color:var(--text-dim)">🏗️ Properties — ${this._esc(indLabel2)}</div>
+                  ${propIncome2 > 0 ? `<span style="font-size:11px;color:var(--green)">${App.formatMoney(propIncome2)}/5s</span>` : ''}
+                </div>
+                <div class="company-property-grid">`;
+              propDefs2.forEach(def => {
+                const owned = ownedProps2.includes(def.key);
+                html += `<div class="company-property-card${owned?' owned':''}">
+                  ${owned ? '<div class="cprop-owned-badge">✓ Owned</div>' : ''}
+                  <div class="cprop-name">${this._esc(def.name)}</div>
+                  <div class="cprop-income">${App.formatMoney(def.income)}<span style="font-size:10px;color:var(--text-dim)">/5s</span></div>
+                  ${owned ? '' : `<div class="cprop-cost">${App.formatMoney(def.cost)}</div><button class="cprop-buy-btn" onclick="Companies.buySubStockProperty(${cIdx},${drillSIdx},'${def.key}')">Buy</button>`}
+                </div>`;
+              });
+              html += `</div></div>`;
+            }
+            // Bank if finance
+            if (ind === 'finance' && typeof Banking !== 'undefined') {
+              html += Banking.renderBankSetup(cIdx);
+            }
           } else {
-            html += `<div style="text-align:center;color:var(--text-dim);font-size:12px;margin-top:8px">Maximum 3 stocks reached</div>`;
+            // ── STOCK LIST ───────────────────────────────────────────
+            c.stocks.forEach((s, sIdx) => {
+              const isMain = sIdx === (c.mainIdx || 0);
+              const scandal = this._scandals[s.symbol];
+              const hasActiveScandal = scandal && !scandal.suppressed && Date.now() - (scandal.firedAt||0) < 120000;
+              const suppressCost = App.formatMoney(Math.max(100_000, Math.round((s.basePrice||100)*1000)));
+              const sInd = s.industry || c.industry || 'tech';
+              const sIndDef = this.INDUSTRIES.find(i => i.id === sInd);
+              const sIndLabel = sIndDef ? sIndDef.label : sInd;
+              const hasOverride = !isMain && s.industry && s.industry !== (c.industry||'tech');
+              html += `<div class="company-stock-row">
+                <div style="flex:1;min-width:0">
+                  <span class="csr-sym">${this._esc(s.symbol)}</span>
+                  ${isMain ? '<span style="font-size:10px;color:var(--gold);margin-left:4px">MAIN</span>' : ''}
+                  ${!isMain ? `<span class="csr-industry-badge ${hasOverride?'csr-industry-custom':''}">${sIndLabel}</span>` : ''}
+                  <div class="company-card-name">${this._esc(s.name)}</div>
+                  ${hasActiveScandal ? `<div class="scandal-alert">📰 ${this._esc(scandal.text)}<br><button class="scandal-suppress-btn" onclick="Companies.suppressScandal('${s.symbol}')">Suppress — ${suppressCost}</button></div>` : ''}
+                </div>
+                <div style="text-align:right;flex-shrink:0;margin-right:8px">
+                  <div class="csr-price">$${(s.price||0)<10?(s.price||0).toFixed(2):Math.round(s.price||0).toLocaleString()}</div>
+                  <div class="csr-type ${s.type==='public'?'csr-type-public':'csr-type-private'}">${s.type}</div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+                  ${isMain
+                    ? `<button class="csr-toggle-btn" onclick="Companies.togglePublic(${cIdx},${sIdx})">${s.type==='public'?'Make Private':'Go Public'}</button>
+                       <button class="csr-toggle-btn" onclick="Companies.issueDividend(${cIdx},${sIdx})" style="color:var(--gold);border-color:var(--gold)">Dividend</button>`
+                    : `<button class="csr-toggle-btn" onclick="Companies.showSubStockPanel(${cIdx},${sIdx})" style="color:#bb86fc;border-color:#bb86fc">⚙️ Manage</button>`
+                  }
+                </div>
+              </div>`;
+            });
+            if (c.stocks.length < this.MAX_STOCKS) {
+              const cost = c.stocks.length === 1 ? this.STOCK2_COST : this.STOCK3_COST;
+              html += `<button class="add-stock-btn" style="margin-top:8px" onclick="Companies.addStock(${cIdx})">+ Add Sub-Stock — ${App.formatMoney(cost)}</button>`;
+            } else {
+              html += `<div style="text-align:center;color:var(--text-dim);font-size:12px;margin-top:8px">Maximum 3 stocks reached</div>`;
+            }
           }
         }
 
