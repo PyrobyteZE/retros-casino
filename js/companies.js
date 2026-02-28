@@ -2464,10 +2464,14 @@ const Companies = {
     if (!myUid) return null;
     const userOrgs = this._newsOrgs[myUid];
     if (!userOrgs) return null;
-    // New format: { [entityKey]: orgData }
-    if (userOrgs[entityKey]) return userOrgs[entityKey];
-    // Old format (backward compat): flat object with enabled + companyTicker
-    if (userOrgs.enabled && userOrgs.companyTicker === entityKey) return userOrgs;
+    // New nested format: { [entityKey]: orgData }
+    if (userOrgs[entityKey] && typeof userOrgs[entityKey] === 'object' && userOrgs[entityKey].enabled !== undefined) {
+      return userOrgs[entityKey];
+    }
+    // Old flat format: { enabled, companyTicker, reputation }
+    if (userOrgs.enabled && (userOrgs.companyTicker === entityKey || userOrgs.entityKey === entityKey)) {
+      return userOrgs;
+    }
     return null;
   },
 
@@ -2557,22 +2561,30 @@ const Companies = {
     this._triggerRender();
   },
 
-  // Returns flat list of { uid, entityKey, org } for all enabled news orgs
-  // Handles both old format (newsOrgs/{uid} = { enabled, companyTicker }) and
-  // new format (newsOrgs/{uid}/{entityKey} = { enabled, entityKey })
+  // Returns flat list of { uid, entityKey, org } for all enabled news orgs.
+  // Handles old format (flat { enabled, companyTicker }), new format (nested { [key]: orgData }),
+  // AND mixed (old flat fields coexisting with new nested keys after partial migration).
   _flatActiveOrgs() {
     const result = [];
+    const seen = new Set();
+    // Fields that belong to the old flat org object — not entity keys
+    const OLD_ORG_FIELDS = new Set(['enabled', 'companyTicker', 'entityKey', 'reputation']);
     Object.entries(this._newsOrgs).forEach(([uid, val]) => {
-      if (!val) return;
-      if (val.enabled !== undefined) {
-        // Old flat format
-        if (val.enabled) result.push({ uid, entityKey: val.companyTicker || val.entityKey || uid, org: val });
-      } else {
-        // New nested format: { [entityKey]: orgData }
-        Object.entries(val).forEach(([entityKey, org]) => {
-          if (org && org.enabled) result.push({ uid, entityKey, org });
-        });
+      if (!val || typeof val !== 'object') return;
+      // Old flat format: val has boolean `enabled` at root level
+      if (val.enabled === true) {
+        const ek = val.companyTicker || val.entityKey || uid;
+        const key = uid + ':' + ek;
+        if (!seen.has(key)) { seen.add(key); result.push({ uid, entityKey: ek, org: val }); }
       }
+      // New nested format: sub-keys that are NOT old flat-format field names
+      Object.entries(val).forEach(([entityKey, org]) => {
+        if (OLD_ORG_FIELDS.has(entityKey)) return; // skip old flat fields
+        if (org && org.enabled) {
+          const key = uid + ':' + entityKey;
+          if (!seen.has(key)) { seen.add(key); result.push({ uid, entityKey, org }); }
+        }
+      });
     });
     return result;
   },
