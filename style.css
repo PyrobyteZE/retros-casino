@@ -2949,6 +2949,322 @@ html[data-platform="desktop"] .avatar-grid {
   position: relative;
 }
 
+/* ── Crime Empire: Path Selection ────────────────────────── */
+.crime-path-header {
+  text-align: center;
+  padding: 16px 8px 12px;
+}
+.crime-path-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+.crime-path-subtitle {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.crime-path-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 4px 2px 16px;
+}
+.crime-path-card {
+  background: var(--bg2);
+  border: 2px solid var(--bg3);
+  border-radius: var(--radius);
+  padding: 16px 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.18s, transform 0.12s, box-shadow 0.18s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.crime-path-card:hover:not(.locked) {
+  border-color: var(--path-color, var(--accent));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--path-color, var(--accent)) 30%, transparent);
+}
+.crime-path-card:active:not(.locked) { transform: scale(0.96); }
+.crime-path-card.locked {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.crime-path-icon {
+  font-size: 36px;
+  line-height: 1;
+}
+.crime-path-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--path-color, var(--text));
+}
+.crime-path-desc {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+.crime-path-lock {
+  font-size: 11px;
+  color: var(--red);
+  font-weight: 700;
+  margin-top: 4px;
+}
+.crime-path-start {
+  font-size: 12px;
+  color: var(--path-color, var(--accent));
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+/* ── Crime Empire: Confirmation ──────────────────────────── */
+.crime-confirm-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 8px;
+}
+.crime-confirm-box {
+  background: var(--bg2);
+  border: 2px solid var(--gold);
+  border-radius: var(--radius);
+  padding: 24px 20px;
+  text-align: center;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.crime-confirm-icon { font-size: 48px; }
+.crime-confirm-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--gold);
+}
+.crime-confirm-desc {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.crime-confirm-warning {
+  font-size: 13px;
+  color: var(--red);
+  background: rgba(255,82,82,0.1);
+  border: 1px solid rgba(255,82,82,0.3);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.crime-confirm-btns {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+  width: 100%;
+}
+.crime-confirm-yes {
+  flex: 1;
+  background: var(--red);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.crime-confirm-no {
+  flex: 1;
+  background: var(--bg3);
+  color: var(--text-dim);
+  border: 1px solid var(--bg3);
+  border-radius: var(--radius);
+  padding: 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/* ── Crime Empire: Upgrade Tree ──────────────────────────── */
+.crime-empire-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg2);
+  border: 2px solid var(--path-color, var(--accent));
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--path-color, var(--accent)) 20%, transparent);
+}
+.crime-empire-icon { font-size: 36px; }
+.crime-empire-info { flex: 1; }
+.crime-empire-name {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--path-color, var(--text));
+}
+.crime-empire-income {
+  font-size: 14px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.crime-special-badge {
+  background: rgba(33,150,243,0.15);
+  border: 1px solid rgba(33,150,243,0.4);
+  color: #64b5f6;
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Raid & shutdown banners */
+.crime-raid-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(255,82,82,0.18);
+  border: 2px solid var(--red);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--red);
+  animation: raidFlash 0.5s ease-in-out infinite;
+}
+.crime-bribe-btn {
+  background: var(--red);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.crime-bribe-btn.unaffordable {
+  background: var(--bg3);
+  color: var(--text-dim);
+}
+.crime-shutdown-banner {
+  background: rgba(15,15,26,0.85);
+  border: 2px solid var(--red);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--red);
+  text-align: center;
+}
+
+/* Upgrade list */
+.crime-upg-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 16px;
+}
+.crime-upg-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg2);
+  border: 1px solid var(--bg3);
+  border-radius: var(--radius);
+  padding: 12px 12px;
+  transition: border-color 0.15s;
+}
+.crime-upg-item.owned {
+  border-color: var(--green);
+  opacity: 0.75;
+}
+.crime-upg-item.locked { opacity: 0.4; }
+.crime-upg-item.affordable { border-color: var(--accent); }
+.crime-upg-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg3);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.crime-upg-item.owned .crime-upg-num {
+  background: var(--green);
+  color: #fff;
+}
+.crime-upg-info { flex: 1; min-width: 0; }
+.crime-upg-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.crime-upg-desc {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.crime-upg-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.crime-upg-income {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--green);
+}
+.crime-upg-bonus {
+  font-size: 11px;
+  color: #64b5f6;
+  background: rgba(33,150,243,0.12);
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+.crime-upg-action { flex-shrink: 0; }
+.crime-upg-btn {
+  background: var(--bg3);
+  color: var(--text-dim);
+  border: 1px solid var(--bg3);
+  border-radius: 20px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.crime-upg-btn.affordable {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.crime-upg-owned-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--green);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.crime-upg-locked-icon {
+  font-size: 18px;
+  color: var(--text-dim);
+}
+
 /* ====== PET SYSTEM ====== */
 
 /* Boost Banner */

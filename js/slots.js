@@ -184,6 +184,10 @@ const Slots = {
       }
 
       let payout = this.calculatePayout(newGrid, bet, lines);
+      // Apply hacking crime bonus to payout
+      if (typeof Crime !== 'undefined' && payout > 0) {
+        payout = Math.floor(payout * Crime.getSlotsBonus());
+      }
       // Apply hunger penalty to payout
       if (typeof App !== 'undefined' && payout > 0) {
         payout = Math.floor(payout * (1 - App.getHungerPenalty()));
