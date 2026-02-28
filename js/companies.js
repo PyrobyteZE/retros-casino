@@ -166,6 +166,8 @@ const Companies = {
   _newsOrgs: {},              // { [ownerUid]: { enabled, companyTicker, reputation } }
   _newsPosts: {},             // { [ownerUid]: { [postId]: post } }
   activeTab: 'browse',
+  _expandedCo: null,          // cIdx of currently-expanded company card (null = all collapsed)
+  _coTab: {},                 // { [cIdx]: 'stocks'|'props'|'upgrades'|'more' }
 
   // Scandal text templates ('{n}' replaced with company name)
   SCANDAL_EVENTS: [
@@ -1787,6 +1789,151 @@ const Companies = {
     if (typeof Banking !== 'undefined') Banking._renderBankCards();
   },
 
+  setCompanyExpanded(cIdx) {
+    this._expandedCo = (this._expandedCo === cIdx) ? null : cIdx;
+    this._triggerRender();
+  },
+
+  setCompanyTab(cIdx, tab) {
+    this._coTab[cIdx] = tab;
+    this._triggerRender();
+  },
+
+  // Sub-stock manage panel (modal, DOM-injected so re-renders don't close it)
+  showSubStockPanel(cIdx, sIdx) {
+    const c = this._companies[cIdx];
+    if (!c) return;
+    const s = c.stocks[sIdx];
+    if (!s) return;
+    const ind = s.industry || c.industry || 'tech';
+    const indDef = this.INDUSTRIES.find(i => i.id === ind);
+    const indLabel = indDef ? indDef.label : ind;
+
+    // Build properties section for this sub-stock
+    const propDefs = this.COMPANY_PROPERTIES[ind] || [];
+    const ownedProps = Array.isArray(s.properties) ? s.properties : [];
+    const worldMult = this._getWorldPriceMult(ind);
+    let propHtml = '';
+    if (propDefs.length) {
+      let totalIncome = 0;
+      propDefs.forEach(def => { if (ownedProps.includes(def.key)) totalIncome += def.income * worldMult; });
+      propHtml += `<div class="ssp-section">
+        <div class="ssp-section-title">&#x1F3D7; Properties &mdash; ${this._esc(indLabel)}</div>`;
+      if (totalIncome > 0) propHtml += `<div style="font-size:12px;color:var(--green);margin-bottom:6px">${App.formatMoney(totalIncome)}/5s passive income</div>`;
+      propHtml += '<div class="company-property-grid">';
+      propDefs.forEach(def => {
+        const owned = ownedProps.includes(def.key);
+        propHtml += `<div class="company-property-card${owned ? ' owned' : ''}">
+          ${owned ? '<div class="cprop-owned-badge">&#x2713;</div>' : ''}
+          <div class="cprop-name">${this._esc(def.name)}</div>
+          <div class="cprop-income">${App.formatMoney(def.income)}<span style="font-size:10px;color:var(--text-dim)">/5s</span></div>
+          ${owned ? '' : `<div class="cprop-cost">${App.formatMoney(def.cost)}</div>
+            <button class="cprop-buy-btn" onclick="Companies.buySubStockProperty(${cIdx},${sIdx},'${def.key}')">Buy</button>`}
+        </div>`;
+      });
+      propHtml += '</div></div>';
+    }
+
+    // Bank section if finance
+    let bankHtml = '';
+    if (ind === 'finance' && typeof Banking !== 'undefined') {
+      bankHtml = `<div class="ssp-section">${Banking.renderBankSetup(cIdx)}</div>`;
+    }
+
+    // Scandal alert
+    const scandal = this._scandals[s.symbol];
+    const hasActiveScandal = scandal && !scandal.suppressed && Date.now() - (scandal.firedAt || 0) < 120000;
+    const suppressCost = App.formatMoney(Math.max(100_000, Math.round((s.basePrice || 100) * 1000)));
+
+    const html = `<div class="ssp-overlay" id="ssp-overlay" onclick="if(event.target===this)Companies._closeSubStockPanel()">
+      <div class="ssp-modal">
+        <div class="ssp-header">
+          <div>
+            <span class="csr-sym" style="font-size:18px">${this._esc(s.symbol)}</span>
+            <span class="csr-industry-badge ${s.industry && s.industry !== (c.industry||'tech') ? 'csr-industry-custom' : ''}" style="margin-left:6px">${this._esc(indLabel)}</span>
+            <div style="font-size:13px;color:var(--text-dim);margin-top:2px">${this._esc(s.name)}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="csr-price" style="font-size:16px">$${(s.price||0) < 10 ? (s.price||0).toFixed(2) : Math.round(s.price||0).toLocaleString()}</div>
+            <div class="csr-type ${s.type==='public'?'csr-type-public':'csr-type-private'}">${s.type}</div>
+          </div>
+          <button class="ssp-close" onclick="Companies._closeSubStockPanel()">&#x2715;</button>
+        </div>
+        <div class="ssp-body">
+          ${hasActiveScandal ? `<div class="scandal-alert ssp-section">&#x1F4F0; ${this._esc(scandal.text)}<br><button class="scandal-suppress-btn" onclick="Companies.suppressScandal('${s.symbol}')">Suppress &mdash; ${suppressCost}</button></div>` : ''}
+          <div class="ssp-section">
+            <div class="ssp-section-title">&#x26A1; Actions</div>
+            <div class="ssp-action-grid">
+              <button class="csr-toggle-btn" onclick="Companies.togglePublic(${cIdx},${sIdx});Companies._closeSubStockPanel()">${s.type==='public'?'Make Private':'Go Public'}</button>
+              <button class="csr-toggle-btn" style="color:var(--gold);border-color:var(--gold)" onclick="Companies.issueDividend(${cIdx},${sIdx})">&#x1F4B8; Dividend</button>
+              <button class="csr-toggle-btn" style="color:#82b1ff;border-color:#82b1ff" onclick="Companies.promptRebrandIndustry(${cIdx},${sIdx})">&#x1F3ED; Industry</button>
+              ${s.type==='private'?`<button class="csr-toggle-btn" style="color:var(--gold);border-color:var(--gold)" onclick="Companies.offerShares(${cIdx},${sIdx})">Offer Shares</button>`:''}
+              <button class="csr-toggle-btn" onclick="Companies.setMainStock(${cIdx},${sIdx});Companies._closeSubStockPanel()" style="font-size:11px">Set as Main</button>
+              <button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);font-size:11px" onclick="if(confirm('Remove this sub-stock?')){Companies.removeStock(${cIdx},${sIdx});Companies._closeSubStockPanel()}">&#x1F5D1; Remove</button>
+            </div>
+          </div>
+          ${propHtml}
+          ${bankHtml}
+        </div>
+      </div>
+    </div>`;
+
+    document.getElementById('ssp-overlay')?.remove();
+    const el = document.createElement('div');
+    el.id = 'ssp-overlay';
+    el.innerHTML = html;
+    document.getElementById('app').appendChild(el.firstElementChild);
+  },
+
+  _closeSubStockPanel() {
+    document.getElementById('ssp-overlay')?.remove();
+  },
+
+  buySubStockProperty(cIdx, sIdx, propKey) {
+    const c = this._companies[cIdx];
+    if (!c) return;
+    const s = c.stocks[sIdx];
+    if (!s) return;
+    const ind = s.industry || c.industry || 'tech';
+    const defs = this.COMPANY_PROPERTIES[ind] || [];
+    const def = defs.find(d => d.key === propKey);
+    if (!def) return;
+    if (!s.properties) s.properties = [];
+    if (s.properties.includes(propKey)) { alert('Already owned.'); return; }
+    if (App.balance < def.cost) { alert('Need ' + App.formatMoney(def.cost) + ' to buy this.'); return; }
+    App.addBalance(-def.cost);
+    s.properties.push(propKey);
+    this._saveLocal();
+    this._pushToFirebase();
+    App.save();
+    Toast.show('&#x1F3D7; ' + def.name + ' purchased!', 'var(--green)', 3000);
+    // Refresh the panel in-place
+    this.showSubStockPanel(cIdx, sIdx);
+  },
+
+  // Helper: total passive income for a company (main + sub-stocks)
+  _calcCompanyIncome(c) {
+    let total = 0;
+    const worldMultMain = this._getWorldPriceMult(c.industry || 'tech');
+    const shareToOwner = typeof c.incomeShare === 'number' ? c.incomeShare / 100 : 1;
+    (this.COMPANY_PROPERTIES[c.industry || 'tech'] || []).forEach(def => {
+      if (Array.isArray(c.properties) && c.properties.includes(def.key)) {
+        total += def.income * worldMultMain * shareToOwner;
+      }
+    });
+    (c.stocks || []).forEach((s, sIdx) => {
+      if (sIdx === (c.mainIdx || 0)) return;
+      const sInd = s.industry || c.industry || 'tech';
+      const wm = this._getWorldPriceMult(sInd);
+      (this.COMPANY_PROPERTIES[sInd] || []).forEach(def => {
+        if (Array.isArray(s.properties) && s.properties.includes(def.key)) {
+          total += def.income * wm * shareToOwner;
+        }
+      });
+    });
+    return total;
+  },
+
   _renderManage(container) {
     const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
     // Preserve founding form values so price-update re-renders don't wipe user's typing
@@ -1850,228 +1997,224 @@ const Companies = {
       html += `</div></div>`;
     }
 
-    // Each existing company
+    // Each existing company — collapsible card with sub-tabs
     this._companies.forEach((c, cIdx) => {
       const listing = this._companyListings[c.ticker];
       const isListed = listing && listing.ownerUid === myUid;
-      const pBadge = c.personality === 'extreme' ? '<span style="font-size:10px;background:#8e44ad;color:#fff;border-radius:4px;padding:2px 5px;margin-left:6px">🌋 EXTREME</span>'
-        : c.personality === 'penny' ? '<span style="font-size:10px;background:#2980b9;color:#fff;border-radius:4px;padding:2px 5px;margin-left:6px">🪙 PENNY</span>'
+      const isExpanded = this._expandedCo === cIdx;
+      const activeTab = this._coTab[cIdx] || 'stocks';
+      const isMainCo = this.isMainCompany(c.ticker);
+      const pBadge = c.personality === 'extreme' ? ' <span style="font-size:10px;background:#8e44ad;color:#fff;border-radius:4px;padding:1px 4px">🌋</span>'
+        : c.personality === 'penny' ? ' <span style="font-size:10px;background:#2980b9;color:#fff;border-radius:4px;padding:1px 4px">🪙</span>'
         : '';
-      html += `<div class="company-manage-section" style="margin-bottom:10px">
-        <h3>&#x1F3E2; ${this._esc(c.name)} <span style="color:var(--text-dim);font-weight:400">(${this._esc(c.ticker)})</span>${pBadge}</h3>
-        <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">
-          Founded ${new Date(c.foundedAt || 0).toLocaleDateString()}
-        </div>
-        <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
-          <input id="co-rename-${cIdx}" type="text" maxlength="24" placeholder="Rename company…"
-            value="${this._esc(c.name)}"
-            style="flex:1;font-size:13px;padding:5px 8px;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text)">
-          <button class="csr-toggle-btn" style="font-size:11px;white-space:nowrap" onclick="Companies.renameCompany(${cIdx})">Rename — ${App.formatMoney(100000)}</button>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:6px">`;
+      const totalIncome = this._calcCompanyIncome(c);
+      const indDef = this.INDUSTRIES.find(i => i.id === (c.industry || 'tech'));
 
-      c.stocks.forEach((s, sIdx) => {
-        const isMain = sIdx === (c.mainIdx || 0);
-        const scandal = this._scandals[s.symbol];
-        const hasActiveScandal = scandal && !scandal.suppressed && Date.now() - (scandal.firedAt || 0) < 120000;
-        const suppressCost = App.formatMoney(Math.max(100_000, Math.round((s.basePrice || 100) * 1000)));
-        const stockIndustry = s.industry || c.industry || 'tech';
-        const stockIndustryDef = this.INDUSTRIES.find(i => i.id === stockIndustry);
-        const stockIndustryLabel = stockIndustryDef ? stockIndustryDef.label : stockIndustry;
-        const hasIndustryOverride = !isMain && s.industry && s.industry !== (c.industry || 'tech');
-        html += `<div class="company-stock-row">
-          <div style="flex:1;min-width:0">
-            <span class="csr-sym">${this._esc(s.symbol)}</span>
-            ${isMain ? '<span style="font-size:10px;color:var(--gold);margin-left:4px">MAIN</span>' : ''}
-            ${!isMain ? `<span class="csr-industry-badge ${hasIndustryOverride ? 'csr-industry-custom' : ''}">${stockIndustryLabel}</span>` : ''}
-            <div class="company-card-name">${this._esc(s.name)}</div>
-            ${hasActiveScandal ? `<div class="scandal-alert">\u{1F4F0} ${this._esc(scandal.text)}<br><button class="scandal-suppress-btn" onclick="Companies.suppressScandal('${s.symbol}')">Suppress — ${suppressCost}</button></div>` : ''}
+      html += `<div class="co-card${isExpanded ? ' co-card-open' : ''}">
+        <div class="co-card-header" onclick="Companies.setCompanyExpanded(${cIdx})">
+          <div class="co-card-info">
+            <span class="co-card-name">${this._esc(c.name)}${pBadge}</span>
+            <span class="co-card-ticker">${this._esc(c.ticker)}</span>
+            ${isMainCo ? '<span style="font-size:10px;color:var(--gold)">⭐ Main</span>' : ''}
           </div>
-          <div style="text-align:right;flex-shrink:0">
-            <div class="csr-price">$${(s.price || 0) < 10 ? (s.price || 0).toFixed(2) : Math.round(s.price || 0).toLocaleString()}</div>
-            <div class="csr-type ${s.type === 'public' ? 'csr-type-public' : 'csr-type-private'}">${s.type}</div>
-            ${(() => { const p = c.personality || 'standard'; const bl = (c.upgrades && c.upgrades.bullBias) || 0; const CAPS = p === 'extreme' ? [1500,3000,7500,22000,60000,100000] : [1000,2000,5000,15000,40000,70000]; const cap = p === 'penny' ? '$100' : '$' + App.formatMoney(CAPS[Math.min(bl,5)]); return `<div style="font-size:10px;color:var(--text-dim)">cap ${cap}</div>`; })()}
-          </div>
-          <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
-            <button class="csr-toggle-btn" onclick="Companies.togglePublic(${cIdx},${sIdx})">${s.type === 'public' ? 'Make Private' : 'Go Public'}</button>
-            ${!isMain ? `<button class="csr-toggle-btn" onclick="Companies.setMainStock(${cIdx},${sIdx})" style="font-size:10px">Set Main</button>` : ''}
-            <button class="csr-toggle-btn" onclick="Companies.issueDividend(${cIdx},${sIdx})" style="color:var(--gold);border-color:var(--gold)" title="Pay cash per-share to all holders.">Dividend \u{2139}\uFE0F</button>
-            ${!isMain ? `<button class="csr-toggle-btn" style="font-size:10px;color:#82b1ff;border-color:#82b1ff" onclick="Companies.promptRebrandIndustry(${cIdx},${sIdx})">&#x1F3ED; Industry</button>` : ''}
-            ${c.stocks.length > 1 ? `<button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);font-size:10px" onclick="Companies.removeStock(${cIdx},${sIdx})">Remove</button>` : ''}
-            ${s.type === 'private' ? `<button class="csr-toggle-btn" style="font-size:10px;color:var(--gold);border-color:var(--gold)" onclick="Companies.offerShares(${cIdx},${sIdx})">Offer Shares</button>` : ''}
+          <div class="co-card-meta">
+            <span style="font-size:11px;color:var(--text-dim)">${c.stocks.length} stock${c.stocks.length!==1?'s':''}</span>
+            ${totalIncome > 0 ? `<span style="font-size:11px;color:var(--green)">${App.formatMoney(totalIncome)}/5s</span>` : ''}
+            <span style="font-size:11px;color:var(--text-dim)">${indDef ? indDef.label : (c.industry||'tech')}</span>
+            <span class="co-card-chevron">${isExpanded ? '▲' : '▼'}</span>
           </div>
         </div>`;
-      });
 
-      html += `</div>`;
+      if (isExpanded) {
+        html += `<div class="co-sub-tabs">
+          <button class="co-stab${activeTab==='stocks'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'stocks')">📈 Stocks</button>
+          <button class="co-stab${activeTab==='props'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'props')">🏗️ Props</button>
+          <button class="co-stab${activeTab==='upgrades'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'upgrades')">🔧 Upgrades</button>
+          <button class="co-stab${activeTab==='more'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'more')">⚙️ More</button>
+        </div>
+        <div class="co-sub-content">`;
 
-      if (c.stocks.length < this.MAX_STOCKS) {
-        const cost = c.stocks.length === 1 ? this.STOCK2_COST : this.STOCK3_COST;
-        html += `<button class="add-stock-btn" onclick="Companies.addStock(${cIdx})">+ Add Stock — ${App.formatMoney(cost)}</button>`;
-      } else {
-        html += `<div style="text-align:center;color:var(--text-dim);font-size:12px;margin-top:8px">Maximum 3 stocks reached</div>`;
-      }
-
-      // Sell section
-      html += `<div class="company-sale-section">
-        <div style="font-weight:700;margin-bottom:6px">&#x1F4B8; Sell Company</div>`;
-      if (isListed) {
-        html += `<div style="font-size:13px;color:var(--text-dim);margin-bottom:6px">Listed for ${App.formatMoney(listing.salePrice)}</div>
-          <button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red)" onclick="Companies.cancelSale('${c.ticker}')">Cancel Listing</button>`;
-      } else {
-        html += `<div style="display:flex;gap:6px;align-items:center">
-          <input id="co-sale-price-${cIdx}" type="number" placeholder="Ask price ($)" style="flex:1;font-size:14px;padding:6px;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text)">
-          <button class="company-buy-btn" onclick="Companies.listForSale(${cIdx})">List</button>
-        </div>`;
-      }
-      // ── Insider Intel (if insiderAccess upgrade >= 1) ──────────────────
-      const insLv = (c.upgrades && c.upgrades.insiderAccess) || 0;
-      if (insLv > 0) {
-        html += `<div class="company-insider-panel">
-          <div style="font-weight:700;margin-bottom:4px">\u{1F50D} Insider Intel</div>`;
-        c.stocks.forEach(s => {
-          const tgt = this._playerStockTargets[s.symbol];
-          if (tgt && tgt.stepsLeft > 0) {
-            const dir = tgt.target > (s.price || 1) ? 'up' : 'down';
-            const pct = Math.abs((tgt.target - (s.price || 1)) / (s.price || 1) * 100);
-            let hint = dir === 'up' ? '\u{1F4C8} Buying pressure on ' : '\u{1F4C9} Selling pressure on ';
-            hint += this._esc(s.symbol);
-            if (insLv >= 2) hint += ' (~' + pct.toFixed(1) + '%)';
-            if (insLv >= 3) hint += ' \u2192 target $' + App.formatMoney(tgt.target);
-            html += `<div style="font-size:12px;padding:2px 0">${hint}</div>`;
+        // ── STOCKS TAB ───────────────────────────────────────────────────
+        if (activeTab === 'stocks') {
+          c.stocks.forEach((s, sIdx) => {
+            const isMain = sIdx === (c.mainIdx || 0);
+            const scandal = this._scandals[s.symbol];
+            const hasActiveScandal = scandal && !scandal.suppressed && Date.now() - (scandal.firedAt||0) < 120000;
+            const suppressCost = App.formatMoney(Math.max(100_000, Math.round((s.basePrice||100)*1000)));
+            const sInd = s.industry || c.industry || 'tech';
+            const sIndDef = this.INDUSTRIES.find(i => i.id === sInd);
+            const sIndLabel = sIndDef ? sIndDef.label : sInd;
+            const hasOverride = !isMain && s.industry && s.industry !== (c.industry||'tech');
+            html += `<div class="company-stock-row">
+              <div style="flex:1;min-width:0">
+                <span class="csr-sym">${this._esc(s.symbol)}</span>
+                ${isMain ? '<span style="font-size:10px;color:var(--gold);margin-left:4px">MAIN</span>' : ''}
+                ${!isMain ? `<span class="csr-industry-badge ${hasOverride?'csr-industry-custom':''}">${sIndLabel}</span>` : ''}
+                <div class="company-card-name">${this._esc(s.name)}</div>
+                ${hasActiveScandal ? `<div class="scandal-alert">📰 ${this._esc(scandal.text)}<br><button class="scandal-suppress-btn" onclick="Companies.suppressScandal('${s.symbol}')">Suppress — ${suppressCost}</button></div>` : ''}
+              </div>
+              <div style="text-align:right;flex-shrink:0;margin-right:8px">
+                <div class="csr-price">$${(s.price||0)<10?(s.price||0).toFixed(2):Math.round(s.price||0).toLocaleString()}</div>
+                <div class="csr-type ${s.type==='public'?'csr-type-public':'csr-type-private'}">${s.type}</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+                ${isMain
+                  ? `<button class="csr-toggle-btn" onclick="Companies.togglePublic(${cIdx},${sIdx})">${s.type==='public'?'Make Private':'Go Public'}</button>
+                     <button class="csr-toggle-btn" onclick="Companies.issueDividend(${cIdx},${sIdx})" style="color:var(--gold);border-color:var(--gold)">Dividend</button>`
+                  : `<button class="csr-toggle-btn" onclick="Companies.showSubStockPanel(${cIdx},${sIdx})" style="color:#bb86fc;border-color:#bb86fc">⚙️ Manage</button>`
+                }
+              </div>
+            </div>`;
+          });
+          if (c.stocks.length < this.MAX_STOCKS) {
+            const cost = c.stocks.length === 1 ? this.STOCK2_COST : this.STOCK3_COST;
+            html += `<button class="add-stock-btn" style="margin-top:8px" onclick="Companies.addStock(${cIdx})">+ Add Sub-Stock — ${App.formatMoney(cost)}</button>`;
           } else {
-            html += `<div style="font-size:12px;color:var(--text-dim);padding:2px 0">${this._esc(s.symbol)}: market neutral</div>`;
+            html += `<div style="text-align:center;color:var(--text-dim);font-size:12px;margin-top:8px">Maximum 3 stocks reached</div>`;
           }
-        });
-        html += `</div>`;
-      }
+        }
 
-      // ── Company Upgrades ────────────────────────────────────────────────
-      html += `<div class="company-upgrades-section">
-        <div style="font-weight:700;margin-bottom:8px">\u{1F527} Company Upgrades</div>
-        <div style="display:flex;flex-direction:column;gap:6px">`;
-      for (const [key, def] of Object.entries(this.COMPANY_UPGRADES)) {
-        const lvl = (c.upgrades && c.upgrades[key]) || 0;
-        const maxed = lvl >= def.maxLevel;
-        const nextCost = maxed ? 0 : def.costs[lvl];
-        html += `<div class="company-upgrade-row">
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;align-items:center;gap:6px">
-              <span style="font-size:16px">${def.icon}</span>
-              <span style="font-weight:700;font-size:13px">${this._esc(def.name)}</span>
-              <span class="upgrade-level-badge ${maxed ? 'upgrade-maxed' : ''}">Lv ${lvl}/${def.maxLevel}</span>
-            </div>
-            <div style="font-size:11px;color:var(--text-dim);margin-top:2px">${this._esc(def.desc)}</div>
-          </div>
-          <div style="flex-shrink:0;margin-left:8px">
-            ${maxed
-              ? `<span style="font-size:11px;color:var(--gold);font-weight:700">MAX</span>`
-              : `<button class="csr-toggle-btn" style="font-size:11px;white-space:nowrap" onclick="Companies.upgradeCompany(${cIdx},'${key}')">
-                   \u25B2 ${App.formatMoney(nextCost)}
-                 </button>`
+        // ── PROPS TAB (main company industry) ────────────────────────────
+        if (activeTab === 'props') {
+          const ind = c.industry || 'tech';
+          const indD = this.INDUSTRIES.find(i => i.id === ind);
+          const indL = indD ? indD.label : ind;
+          const worldMult = this._getWorldPriceMult(ind);
+          const multPct = Math.round(worldMult * 100);
+          const multColor = worldMult >= 1.0 ? 'var(--green)' : 'var(--red)';
+          const propDefs = this.COMPANY_PROPERTIES[ind] || [];
+          const ownedProps = Array.isArray(c.properties) ? c.properties : [];
+          const incomeShareVal = typeof c.incomeShare === 'number' ? c.incomeShare : 100;
+          let totalBaseIncome = 0;
+          propDefs.forEach(def => { if (ownedProps.includes(def.key)) totalBaseIncome += def.income; });
+          const totalScaled = totalBaseIncome * worldMult;
+          const personalIncome = totalScaled * (incomeShareVal / 100);
+          const reinvestIncome = totalScaled - personalIncome;
+          html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div style="font-size:13px;font-weight:700">${this._esc(indL)}</div>
+            <span style="font-size:11px;color:${multColor};font-weight:700">World: ${multPct}%</span>
+          </div>`;
+          if (totalBaseIncome > 0) {
+            html += `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">/5s — <strong style="color:var(--green)">${App.formatMoney(personalIncome)} personal</strong> + <strong style="color:var(--gold)">${App.formatMoney(reinvestIncome)} reinvest</strong></div>
+            <div style="margin-bottom:10px">
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-bottom:3px"><span>Personal ${incomeShareVal}%</span><span>Reinvest ${100-incomeShareVal}%</span></div>
+              <input type="range" min="0" max="100" value="${incomeShareVal}" style="width:100%;accent-color:var(--green)" oninput="Companies.setIncomeShare(${cIdx},this.value)">
+            </div>`;
+          } else {
+            html += `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Buy properties to earn passive income every 5 seconds.</div>`;
+          }
+          html += `<div class="company-property-grid">`;
+          propDefs.forEach(def => {
+            const owned = ownedProps.includes(def.key);
+            html += `<div class="company-property-card${owned?' owned':''}">
+              ${owned ? '<div class="cprop-owned-badge">✓ Owned</div>' : ''}
+              <div class="cprop-name">${this._esc(def.name)}</div>
+              <div class="cprop-income">${App.formatMoney(def.income)}<span style="font-size:10px;color:var(--text-dim)">/5s</span></div>
+              ${owned ? '' : `<div class="cprop-cost">${App.formatMoney(def.cost)}</div><button class="cprop-buy-btn" onclick="Companies.buyProperty(${cIdx},'${def.key}')">Buy</button>`}
+            </div>`;
+          });
+          html += `</div>`;
+        }
+
+        // ── UPGRADES TAB ─────────────────────────────────────────────────
+        if (activeTab === 'upgrades') {
+          html += `<div style="display:flex;flex-direction:column;gap:6px">`;
+          for (const [key, def] of Object.entries(this.COMPANY_UPGRADES)) {
+            const lvl = (c.upgrades && c.upgrades[key]) || 0;
+            const maxed = lvl >= def.maxLevel;
+            const nextCost = maxed ? 0 : def.costs[lvl];
+            html += `<div class="company-upgrade-row">
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="font-size:16px">${def.icon}</span>
+                  <span style="font-weight:700;font-size:13px">${this._esc(def.name)}</span>
+                  <span class="upgrade-level-badge ${maxed?'upgrade-maxed':''}">Lv ${lvl}/${def.maxLevel}</span>
+                </div>
+                <div style="font-size:11px;color:var(--text-dim);margin-top:2px">${this._esc(def.desc)}</div>
+              </div>
+              <div style="flex-shrink:0;margin-left:8px">
+                ${maxed ? '<span style="font-size:11px;color:var(--gold);font-weight:700">MAX</span>'
+                  : `<button class="csr-toggle-btn" style="font-size:11px;white-space:nowrap" onclick="Companies.upgradeCompany(${cIdx},'${key}')">▲ ${App.formatMoney(nextCost)}</button>`}
+              </div>
+            </div>`;
+          }
+          html += `</div>`;
+        }
+
+        // ── MORE TAB (rename, sell, insider intel, news org, bank, main/delete) ─
+        if (activeTab === 'more') {
+          // Rename
+          html += `<div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+            <input id="co-rename-${cIdx}" type="text" maxlength="24" placeholder="Rename…" value="${this._esc(c.name)}"
+              style="flex:1;font-size:13px;padding:5px 8px;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text)">
+            <button class="csr-toggle-btn" style="font-size:11px;white-space:nowrap" onclick="Companies.renameCompany(${cIdx})">Rename — ${App.formatMoney(100000)}</button>
+          </div>`;
+          // Insider intel
+          const insLv = (c.upgrades && c.upgrades.insiderAccess) || 0;
+          if (insLv > 0) {
+            html += `<div class="company-insider-panel" style="margin-bottom:8px">
+              <div style="font-weight:700;margin-bottom:4px">🔍 Insider Intel</div>`;
+            c.stocks.forEach(s => {
+              const tgt = this._playerStockTargets[s.symbol];
+              if (tgt && tgt.stepsLeft > 0) {
+                const dir = tgt.target > (s.price||1) ? 'up' : 'down';
+                const pct = Math.abs((tgt.target-(s.price||1))/(s.price||1)*100);
+                let hint = dir==='up' ? '📈 Buying pressure on ' : '📉 Selling pressure on ';
+                hint += this._esc(s.symbol);
+                if (insLv >= 2) hint += ' (~' + pct.toFixed(1) + '%)';
+                if (insLv >= 3) hint += ' → target $' + App.formatMoney(tgt.target);
+                html += `<div style="font-size:12px;padding:2px 0">${hint}</div>`;
+              } else {
+                html += `<div style="font-size:12px;color:var(--text-dim);padding:2px 0">${this._esc(s.symbol)}: market neutral</div>`;
+              }
+            });
+            html += `</div>`;
+          }
+          // News org (entertainment)
+          if ((c.industry||'tech') === 'entertainment') {
+            const myOrg = myUid ? this._newsOrgs[myUid] : null;
+            const orgEnabled = myOrg && myOrg.enabled && myOrg.companyTicker === c.ticker;
+            html += `<div class="company-manage-section news-org-section" style="margin-bottom:8px"><h3>📰 News Organization</h3>`;
+            if (!orgEnabled) {
+              html += `<button class="add-stock-btn" style="color:var(--accent);border-color:var(--accent)" onclick="Companies.enableNewsOrg(${cIdx})">Enable News Org — Free</button>`;
+            } else {
+              const rep = myOrg.reputation || 50;
+              html += `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Reputation: <strong style="color:${rep>=50?'var(--green)':'var(--red)'}">${Math.round(rep)}/100</strong></div>
+                <textarea id="news-post-input-${cIdx}" maxlength="120" placeholder="Write a headline…" style="width:100%;height:60px;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);padding:8px;font-size:13px;resize:none;box-sizing:border-box"></textarea>
+                <button class="company-found-btn" style="margin-top:6px;padding:8px 20px" onclick="Companies.postNews(${cIdx})">📢 Publish</button>`;
             }
-          </div>
-        </div>`;
-      }
-      html += `</div></div>`;
-
-      // ── Company Properties ───────────────────────────────────────────────
-      {
-        const ind = c.industry || 'tech';
-        const indDef = this.INDUSTRIES.find(i => i.id === ind);
-        const indLabel = indDef ? indDef.label : ind;
-        const worldMult = this._getWorldPriceMult(ind);
-        const multPct = Math.round(worldMult * 100);
-        const multColor = worldMult >= 1.0 ? 'var(--green)' : 'var(--red)';
-        const propDefs = this.COMPANY_PROPERTIES[ind] || [];
-        const ownedProps = Array.isArray(c.properties) ? c.properties : [];
-        const incomeShareVal = typeof c.incomeShare === 'number' ? c.incomeShare : 100;
-        let totalBaseIncome = 0;
-        propDefs.forEach(def => { if (ownedProps.includes(def.key)) totalBaseIncome += def.income; });
-        const totalScaled = totalBaseIncome * worldMult;
-        const personalIncome = totalScaled * (incomeShareVal / 100);
-        const reinvestIncome = totalScaled - personalIncome;
-
-        html += `<div class="company-properties-section">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <div style="font-weight:700">&#x1F3D7; Properties</div>
-            <div style="font-size:11px">
-              <span style="color:var(--text-dim)">${this._esc(indLabel)}</span>
-              &nbsp;&bull;&nbsp;
-              <span style="color:${multColor};font-weight:700">World: ${multPct}%</span>
-            </div>
+            html += `</div>`;
+          }
+          // Bank (finance main company)
+          if ((c.industry||'tech') === 'finance' && typeof Banking !== 'undefined') {
+            html += Banking.renderBankSetup(cIdx);
+          }
+          // Sell
+          html += `<div class="company-sale-section" style="margin-bottom:8px">
+            <div style="font-weight:700;margin-bottom:6px">💸 Sell Company</div>`;
+          if (isListed) {
+            html += `<div style="font-size:13px;color:var(--text-dim);margin-bottom:6px">Listed for ${App.formatMoney(listing.salePrice)}</div>
+              <button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red)" onclick="Companies.cancelSale('${c.ticker}')">Cancel Listing</button>`;
+          } else {
+            html += `<div style="display:flex;gap:6px;align-items:center">
+              <input id="co-sale-price-${cIdx}" type="number" placeholder="Ask price ($)" style="flex:1;font-size:14px;padding:6px;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text)">
+              <button class="company-buy-btn" onclick="Companies.listForSale(${cIdx})">List</button>
+            </div>`;
+          }
+          html += `</div>`;
+          // Main / delete
+          html += `<div style="display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap">
+            <button class="csr-toggle-btn" style="${isMainCo?'color:var(--gold);border-color:var(--gold);font-weight:700':'font-size:12px'}" onclick="Companies.setMainCompany(${cIdx})">
+              ${isMainCo ? '⭐ Main (tap to unset)' : '⭐ Set as Main'}
+            </button>
+            <button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);font-size:12px" onclick="Companies.deleteCompany(${cIdx})">🗑 Delete</button>
           </div>`;
-
-        if (totalBaseIncome > 0) {
-          html += `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">
-            /5s &mdash; <strong style="color:var(--green)">${App.formatMoney(personalIncome)} personal</strong>
-            &nbsp;+&nbsp;<strong style="color:var(--gold)">${App.formatMoney(reinvestIncome)} reinvest</strong>
-          </div>
-          <div style="margin-bottom:10px">
-            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-bottom:3px">
-              <span>Personal ${incomeShareVal}%</span>
-              <span>Reinvest ${100 - incomeShareVal}%</span>
-            </div>
-            <input type="range" min="0" max="100" value="${incomeShareVal}"
-              style="width:100%;accent-color:var(--green)"
-              oninput="Companies.setIncomeShare(${cIdx}, this.value)">
-          </div>`;
-        } else {
-          html += `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Buy properties to earn passive income every 5 seconds.</div>`;
+          if (isMainCo) html += `<div style="font-size:11px;color:var(--gold);text-align:center;margin-top:4px">🔒 Protected from full bankruptcy</div>`;
         }
 
-        html += `<div class="company-property-grid">`;
-        propDefs.forEach(def => {
-          const owned = ownedProps.includes(def.key);
-          html += `<div class="company-property-card${owned ? ' owned' : ''}">
-            ${owned ? '<div class="cprop-owned-badge">&#x2713; Owned</div>' : ''}
-            <div class="cprop-name">${this._esc(def.name)}</div>
-            <div class="cprop-income">${App.formatMoney(def.income)}<span style="font-size:10px;color:var(--text-dim)">/5s</span></div>
-            ${owned ? '' : `<div class="cprop-cost">${App.formatMoney(def.cost)}</div>
-              <button class="cprop-buy-btn" onclick="Companies.buyProperty(${cIdx},'${def.key}')">Buy</button>`}
-          </div>`;
-        });
-        html += `</div></div>`;
+        html += `</div>`; // co-sub-content
       }
-
-      // News Org for Entertainment companies
-      if ((c.industry || 'tech') === 'entertainment') {
-        const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
-        const myOrg = myUid ? this._newsOrgs[myUid] : null;
-        const orgEnabled = myOrg && myOrg.enabled && myOrg.companyTicker === c.ticker;
-        html += `<div class="company-manage-section news-org-section" style="margin-top:10px">
-          <h3>\u{1F4F0} News Organization</h3>`;
-        if (!orgEnabled) {
-          html += `<button class="add-stock-btn" style="color:var(--accent);border-color:var(--accent)" onclick="Companies.enableNewsOrg(${cIdx})">Enable News Org \u2014 Free</button>`;
-        } else {
-          const rep = myOrg.reputation || 50;
-          const repPct = Math.round(rep);
-          html += `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Reputation: <strong style="color:${rep >= 50 ? 'var(--green)' : 'var(--red)'}">${repPct}/100</strong></div>
-            <textarea id="news-post-input-${cIdx}" maxlength="120" placeholder="Write a headline... (max 120 chars)" style="width:100%;height:60px;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);padding:8px;font-size:13px;resize:none;box-sizing:border-box"></textarea>
-            <button class="company-found-btn" style="margin-top:6px;padding:8px 20px" onclick="Companies.postNews(${cIdx})">\u{1F4E2} Publish</button>`;
-        }
-        html += `</div>`;
-      }
-
-      // Bank setup for Finance companies
-      if ((c.industry || 'tech') === 'finance' && typeof Banking !== 'undefined') {
-        html += Banking.renderBankSetup(cIdx);
-      }
-
-      {
-        const isMain = this.isMainCompany(c.ticker);
-        html += `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bg3);display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap">
-          <button class="csr-toggle-btn" style="${isMain ? 'color:var(--gold);border-color:var(--gold);font-weight:700' : 'font-size:12px'}" onclick="Companies.setMainCompany(${cIdx})">
-            ${isMain ? '⭐ Main Company (tap to unset)' : '⭐ Set as Main'}
-          </button>
-          <button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);font-size:12px" onclick="Companies.deleteCompany(${cIdx})">&#x1F5D1; Delete</button>
-        </div>`;
-        if (isMain) {
-          html += `<div style="font-size:11px;color:var(--gold);text-align:center;margin-top:4px;padding:0 8px">🔒 Main company — protected from full bankruptcy</div>`;
-        }
-      }
-
-      html += `</div></div>`;
+      html += `</div>`; // co-card
     });
 
     // Found a new company form (only if slots available)
@@ -2084,7 +2227,7 @@ const Companies = {
         <input type="text" id="co-found-ticker" placeholder="Ticker (e.g. RETRO)" maxlength="5" style="text-transform:uppercase;font-size:16px">
         <div style="font-size:12px;color:var(--text-dim);margin:4px 0 2px">Industry</div>
         ${this._industrySelectHtml()}
-        <div style="font-size:12px;color:var(--text-dim);margin:6px 0 2px">\u{1F3B2} Stock personality is randomly rolled on founding (60% Standard / 25% Extreme / 15% Penny)</div>
+        <div style="font-size:12px;color:var(--text-dim);margin:6px 0 2px">&#x1F3B2; Stock personality is randomly rolled on founding (60% Standard / 25% Extreme / 15% Penny)</div>
         <button class="company-found-btn" onclick="Companies.foundCompany()">Found Company — ${App.formatMoney(this.FOUND_COST)}</button>
       </div>`;
     }
@@ -2268,15 +2411,24 @@ const Companies = {
     if (!this._companies.length) return;
     let totalIncome = 0;
     this._companies.forEach(c => {
-      if (!c.properties || !c.properties.length) return;
-      const ind = c.industry || 'tech';
-      const defs = this.COMPANY_PROPERTIES[ind] || [];
-      const worldMult = this._getWorldPriceMult(ind);
       const shareToOwner = typeof c.incomeShare === 'number' ? c.incomeShare / 100 : 1;
-      defs.forEach(def => {
-        if (c.properties.includes(def.key)) {
-          totalIncome += def.income * worldMult * shareToOwner;
-        }
+      // Main company properties
+      if (c.properties && c.properties.length) {
+        const ind = c.industry || 'tech';
+        const worldMult = this._getWorldPriceMult(ind);
+        (this.COMPANY_PROPERTIES[ind] || []).forEach(def => {
+          if (c.properties.includes(def.key)) totalIncome += def.income * worldMult * shareToOwner;
+        });
+      }
+      // Sub-stock properties (each uses its own effective industry)
+      (c.stocks || []).forEach((s, sIdx) => {
+        if (sIdx === (c.mainIdx || 0)) return; // main stock uses c.properties above
+        if (!s.properties || !s.properties.length) return;
+        const sInd = s.industry || c.industry || 'tech';
+        const wm = this._getWorldPriceMult(sInd);
+        (this.COMPANY_PROPERTIES[sInd] || []).forEach(def => {
+          if (s.properties.includes(def.key)) totalIncome += def.income * wm * shareToOwner;
+        });
       });
     });
     if (totalIncome > 0) {
