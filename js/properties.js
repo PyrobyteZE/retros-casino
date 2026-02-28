@@ -1,17 +1,30 @@
 const Properties = {
   businesses: [
-    { id: 0, name: 'Laundromat',     icon: '\u{1F9FA}', baseCost: 50,       baseIncome: 0.10,  vipReq: 0, maxLevel: 10 },
-    { id: 1, name: 'Gas Station',    icon: '\u26FD',     baseCost: 500,      baseIncome: 0.80,  vipReq: 0, maxLevel: 10 },
-    { id: 2, name: 'Restaurant',     icon: '\u{1F37D}\uFE0F', baseCost: 5000,     baseIncome: 5,     vipReq: 1, maxLevel: 10 },
-    { id: 3, name: 'Car Dealership', icon: '\u{1F697}', baseCost: 50000,    baseIncome: 35,    vipReq: 2, maxLevel: 10 },
-    { id: 4, name: 'Factory',        icon: '\u{1F3ED}', baseCost: 500000,   baseIncome: 250,   vipReq: 3, maxLevel: 10 },
-    { id: 5, name: 'Tech Startup',   icon: '\u{1F4BB}', baseCost: 10000000, baseIncome: 2000,  vipReq: 4, maxLevel: 10 },
-    { id: 6, name: 'Bank',           icon: '\u{1F3E6}', baseCost: 100000000,baseIncome: 15000, vipReq: 5, maxLevel: 10 },
+    { id: 0, name: 'Laundromat',     icon: '\u{1F9FA}', baseCost: 50,        baseIncome: 0.10,  vipReq: 0, maxLevel: 10 },
+    { id: 1, name: 'Gas Station',    icon: '\u26FD',     baseCost: 500,       baseIncome: 0.80,  vipReq: 0, maxLevel: 10 },
+    { id: 2, name: 'Restaurant',     icon: '\u{1F37D}\uFE0F', baseCost: 5000, baseIncome: 5,     vipReq: 1, maxLevel: 10 },
+    { id: 3, name: 'Car Dealership', icon: '\u{1F697}',  baseCost: 50000,     baseIncome: 35,    vipReq: 2, maxLevel: 10 },
+    { id: 4, name: 'Factory',        icon: '\u{1F3ED}',  baseCost: 500000,    baseIncome: 250,   vipReq: 3, maxLevel: 10 },
+    { id: 5, name: 'Hotel',          icon: '\u{1F3E8}',  baseCost: 10000000,  baseIncome: 2500,  vipReq: 4, maxLevel: 10 },
+    { id: 6, name: 'Casino Resort',  icon: '\u{1F3B0}',  baseCost: 100000000, baseIncome: 18000, vipReq: 5, maxLevel: 10 },
   ],
 
   owned: [],   // bool per business
   levels: [],  // 0-10 per business
   managers: [], // 0=none, 1=trainee, 2=expert, 3=executive per business
+
+  // Gas station supplier: null = NPC oil, 'own' = player's own energy company
+  _gasSupplier: null,  // null | 'npc' | 'own'
+  // Factory production type
+  _factoryGoods: 'generic',  // 'generic' | 'auto_parts' | 'electronics' | 'produce'
+
+  FACTORY_GOODS: {
+    generic:     { label: '🏭 Generic Goods',     mult: 1.00, desc: 'Standard production' },
+    auto_parts:  { label: '🔩 Auto Parts',         mult: 1.18, desc: '+18% income. Bonus if you own Cars.' },
+    electronics: { label: '📡 Electronics',        mult: 1.12, desc: '+12% income. Bonus with tech companies.' },
+    produce:     { label: '🌽 Food Products',      mult: 1.08, desc: '+8% income. Bonus with Restaurant.' },
+  },
+
   tickInterval: null,
 
   // Events system
@@ -134,8 +147,73 @@ const Properties = {
       * this.getEventMultiplier(id)
       * this.getRivalMultiplier(id);
     if (typeof Pets !== 'undefined') income *= Pets.getBoosts().incomeMult;
+
+    // Gas Station: supplier bonus
+    if (id === 1) income *= this._getGasSupplierMult();
+
+    // Factory: goods type bonus
+    if (id === 4) income *= this._getFactoryGoodsMult();
+
     return income;
   },
+
+  _getGasSupplierMult() {
+    if (this._gasSupplier === 'own') {
+      // Own energy company: free oil + premium brand = +30% income
+      return 1.30;
+    }
+    // NPC oil: income reduced when oil stocks are high (market price)
+    if (typeof Companies !== 'undefined') {
+      let oilPrice = 0, oilBase = 0, count = 0;
+      for (const c of Companies._companies) {
+        if ((c.industry || '') === 'energy') {
+          for (const s of (c.stocks || [])) {
+            if (s.price && s.basePrice) { oilPrice += s.price; oilBase += s.basePrice; count++; }
+          }
+        }
+      }
+      if (count > 0 && oilBase > 0) {
+        const ratio = oilPrice / oilBase;
+        // High oil price cuts into gas station margins: -15% income at 2x oil price
+        return Math.max(0.70, 1 - (ratio - 1) * 0.15);
+      }
+    }
+    return 1;
+  },
+
+  _getFactoryGoodsMult() {
+    const goods = this.FACTORY_GOODS[this._factoryGoods] || this.FACTORY_GOODS.generic;
+    let mult = goods.mult;
+    // Auto parts bonus if player has cars
+    if (this._factoryGoods === 'auto_parts' && typeof Cars !== 'undefined' && Cars._garage.length > 0) mult += 0.07;
+    // Electronics bonus if player has tech companies
+    if (this._factoryGoods === 'electronics' && typeof Companies !== 'undefined') {
+      const hasTech = Companies._companies.some(c => (c.industry || '') === 'tech');
+      if (hasTech) mult += 0.08;
+    }
+    // Produce bonus if restaurant owned
+    if (this._factoryGoods === 'produce' && this.owned[2]) mult += 0.05;
+    return mult;
+  },
+
+  getSellPrice(id) {
+    return Math.floor(this.businesses[id].baseCost * 0.5);
+  },
+
+  sell(id) {
+    if (!this.owned[id]) return;
+    const refund = this.getSellPrice(id);
+    this.owned[id] = false;
+    this.levels[id] = 0;
+    this.managers[id] = 0;
+    App.addBalance(refund);
+    App.save();
+    Toast.show(`Sold ${this.businesses[id].name} for ${App.formatMoney(refund)}`, '#00e676', 2500);
+    this.render();
+  },
+
+  // Butler: unlocked at 70 rebirths — auto-defends rival, filters bad events
+  _hasButler() { return (App.rebirth || 0) >= 70; },
 
   getTotalIncome() {
     let total = 0;
@@ -219,7 +297,15 @@ const Properties = {
     const ownedCount = this.owned.filter(o => o).length;
     if (ownedCount === 0) return;
 
-    const event = this.events[Math.floor(Math.random() * this.events.length)];
+    let event = this.events[Math.floor(Math.random() * this.events.length)];
+    // Butler blocks bad events (re-roll once for a good event)
+    if (this._hasButler() && event.type === 'bad') {
+      const goodEvents = this.events.filter(e => e.type !== 'bad');
+      if (goodEvents.length > 0) {
+        event = goodEvents[Math.floor(Math.random() * goodEvents.length)];
+        Toast.show('🛎️ Butler prevented a bad business event!', '#00e676', 2500);
+      }
+    }
     const now = Date.now();
 
     // Handle instant events
@@ -299,6 +385,16 @@ const Properties = {
     if (ownedIds.length === 0) return;
 
     const targetId = ownedIds[Math.floor(Math.random() * ownedIds.length)];
+
+    // Butler auto-defends
+    if (this._hasButler()) {
+      // Auto-defend — grant bonus immediately
+      this.rival = { targetId, expiresAt: Date.now(), active: false, bonusBizId: targetId, bonusUntil: Date.now() + 30000, damageUntil: null, damageBizId: null };
+      Toast.show('🛎️ Butler defended a rival attack on ' + this.businesses[targetId].name + '!', '#00e676', 3000);
+      this.render();
+      return;
+    }
+
     this.rival = {
       targetId,
       expiresAt: Date.now() + 10000, // 10s to defend
@@ -330,15 +426,39 @@ const Properties = {
     return this.owned.filter(o => o).length;
   },
 
+  // Gas supplier setter (called from UI)
+  setGasSupplier(val) {
+    this._gasSupplier = val || null;
+    App.save();
+    this.render();
+  },
+
+  setFactoryGoods(val) {
+    this._factoryGoods = val || 'generic';
+    App.save();
+    this.render();
+  },
+
   render() {
     const grid = document.getElementById('prop-grid');
     if (!grid) return;
 
     const rebirth = App.rebirth || 0;
     const mult = this.getRebirthMultiplier();
+    const hasButler = this._hasButler();
 
     // Update event banner timer
     this.renderEventBanner();
+
+    // Butler status bar
+    let butlerBar = '';
+    if (hasButler) {
+      butlerBar = `<div class="prop-butler-bar">🛎️ Butler Active — auto-defending all properties</div>`;
+    } else if (rebirth >= 60) {
+      butlerBar = `<div class="prop-butler-bar prop-butler-locked">🛎️ Butler at 70 rebirths (you have ${rebirth})</div>`;
+    }
+    const header = document.getElementById('prop-header-extra');
+    if (header) header.innerHTML = butlerBar;
 
     grid.innerHTML = this.businesses.map(biz => {
       const locked = !this.canAccess(biz.id);
@@ -352,7 +472,7 @@ const Properties = {
         return `<div class="prop-card locked">
           <div class="prop-icon">${biz.icon}</div>
           <div class="prop-name">${biz.name}</div>
-          <div class="prop-lock">VIP ${biz.vipReq} Required</div>
+          <div class="prop-lock">Rebirth ${biz.vipReq} Required (you have ${rebirth})</div>
         </div>`;
       }
 
@@ -362,7 +482,7 @@ const Properties = {
         return `<div class="prop-card${affordable ? ' affordable' : ''}" onclick="Properties.buy(${biz.id})">
           <div class="prop-icon">${biz.icon}</div>
           <div class="prop-name">${biz.name}</div>
-          <div class="prop-detail">${App.formatMoney(biz.baseIncome * mult)}/s</div>
+          <div class="prop-detail">${App.formatMoney(biz.baseIncome * mult)}/s base</div>
           <button class="prop-btn prop-buy-btn">Buy: ${App.formatMoney(cost)}</button>
         </div>`;
       }
@@ -385,22 +505,62 @@ const Properties = {
       let rivalHtml = '';
       if (this.rival && this.rival.active && this.rival.targetId === biz.id) {
         const remainSec = Math.max(0, Math.ceil((this.rival.expiresAt - Date.now()) / 1000));
-        rivalHtml = `<div class="prop-rival-alert" onclick="event.stopPropagation();Properties.defendRival()">DEFEND! (${remainSec}s)</div>`;
+        rivalHtml = `<div class="prop-rival-alert" onclick="event.stopPropagation();Properties.defendRival()">⚔️ DEFEND! (${remainSec}s)</div>`;
+      }
+
+      // Gas station supplier UI
+      let specialHtml = '';
+      if (biz.id === 1) {
+        const supVal = this._gasSupplier || 'npc';
+        const supMult = this._getGasSupplierMult();
+        // Check if player owns an energy company
+        let hasOwnEnergy = false;
+        if (typeof Companies !== 'undefined') {
+          hasOwnEnergy = Companies._companies.some(c => (c.industry || '') === 'energy');
+        }
+        specialHtml = `<div class="prop-special-row">
+          <span class="prop-special-label">⛽ Oil Supplier:</span>
+          <select class="prop-special-select" onchange="event.stopPropagation();Properties.setGasSupplier(this.value)">
+            <option value="npc"${supVal==='npc'?' selected':''}>NPC Market</option>
+            ${hasOwnEnergy ? `<option value="own"${supVal==='own'?' selected':''}>Own Oil Company (+30%)</option>` : ''}
+          </select>
+        </div>
+        <div class="prop-special-note">Supply mult: ${(supMult * 100).toFixed(0)}%</div>`;
+      }
+
+      // Factory goods UI
+      if (biz.id === 4) {
+        const goodsVal = this._factoryGoods || 'generic';
+        const goodOpts = Object.entries(this.FACTORY_GOODS).map(([k, g]) =>
+          `<option value="${k}"${goodsVal===k?' selected':''}>${g.label}</option>`
+        ).join('');
+        specialHtml = `<div class="prop-special-row">
+          <span class="prop-special-label">🏭 Production:</span>
+          <select class="prop-special-select" onchange="event.stopPropagation();Properties.setFactoryGoods(this.value)">
+            ${goodOpts}
+          </select>
+        </div>
+        <div class="prop-special-note">${this.FACTORY_GOODS[goodsVal]?.desc || ''}</div>`;
       }
 
       const upgCost = this.getUpgradeCost(biz.id);
       const affordable = !maxed && App.balance >= upgCost;
+      const sellPrice = this.getSellPrice(biz.id);
       return `<div class="prop-card owned">
         ${rivalHtml}
         <div class="prop-icon">${biz.icon}</div>
         <div class="prop-name">${biz.name}</div>
         <div class="prop-level">Lv ${level}/${biz.maxLevel}</div>
         <div class="prop-detail prop-income-val">${App.formatMoney(income)}/s</div>
+        ${specialHtml}
         ${managerHtml}
-        ${maxed
-          ? '<button class="prop-btn prop-maxed" disabled>MAXED</button>'
-          : `<button class="prop-btn${affordable ? ' affordable' : ''}" onclick="Properties.upgrade(${biz.id})">Upgrade: ${App.formatMoney(upgCost)}</button>`
-        }
+        <div class="prop-btn-row">
+          ${maxed
+            ? '<button class="prop-btn prop-maxed" disabled>MAXED</button>'
+            : `<button class="prop-btn${affordable ? ' affordable' : ''}" onclick="Properties.upgrade(${biz.id})">Upgrade: ${App.formatMoney(upgCost)}</button>`
+          }
+          <button class="prop-sell-btn" onclick="event.stopPropagation();if(confirm('Sell ${biz.name} for ${App.formatMoney(sellPrice)}?'))Properties.sell(${biz.id})">Sell (${App.formatMoney(sellPrice)})</button>
+        </div>
       </div>`;
     }).join('');
 
@@ -437,6 +597,8 @@ const Properties = {
       owned: this.owned.slice(),
       levels: this.levels.slice(),
       managers: this.managers.slice(),
+      gasSupplier: this._gasSupplier,
+      factoryGoods: this._factoryGoods,
       eventEndTime: this.activeEvent && this.activeEvent.endsAt ? this.activeEvent.endsAt : null,
       eventEffect: this.activeEvent ? this.activeEvent.effect : null,
       eventName: this.activeEvent ? this.activeEvent.name : null,
@@ -451,6 +613,8 @@ const Properties = {
     if (data.owned) this.owned = data.owned;
     if (data.levels) this.levels = data.levels;
     if (data.managers) this.managers = data.managers;
+    if (data.gasSupplier !== undefined) this._gasSupplier = data.gasSupplier;
+    if (data.factoryGoods) this._factoryGoods = data.factoryGoods;
     // Ensure arrays are correct length
     while (this.owned.length < this.businesses.length) this.owned.push(false);
     while (this.levels.length < this.businesses.length) this.levels.push(0);

@@ -137,20 +137,38 @@ const Crafting = {
     if (!isGod && App.balance < cost) { Toast.show('Not enough money!', '#f44336', 2500); return; }
     if (!isGod) App.addBalance(-cost);
 
-    // Roll rarity
+    // Check inventory cap
+    const MAX_INVENTORY = 20;
+    if (this._inventory.length >= MAX_INVENTORY && !isGod) {
+      Toast.show(`Inventory full! (${MAX_INVENTORY} max) — sell or equip items first`, '#ff5252', 3000);
+      if (!isGod) App.addBalance(cost); // refund
+      return;
+    }
+
+    // Rebirth scaling: each rebirth improves rarity thresholds and stat values
+    const rebirths = typeof App !== 'undefined' ? (App.rebirth || 0) : 0;
+    // Rarity thresholds improve by 0.5% per rebirth (capped so legendary doesn't become trivial)
+    const rarityBoost = Math.min(rebirths * 0.005, 0.25);  // max +25%
     const roll = Math.random();
     let rarity, statCount;
-    if (roll < 0.02) { rarity = 'legendary'; statCount = 3; }
-    else if (roll < 0.10) { rarity = 'rare'; statCount = 3; }
-    else if (roll < 0.30) { rarity = 'uncommon'; statCount = 2; }
-    else { rarity = 'common'; statCount = 1; }
+    if      (roll < 0.02 + rarityBoost * 0.5) { rarity = 'legendary'; statCount = 3; }
+    else if (roll < 0.10 + rarityBoost * 0.8) { rarity = 'rare';      statCount = 3; }
+    else if (roll < 0.30 + rarityBoost)        { rarity = 'uncommon';  statCount = 2; }
+    else                                        { rarity = 'common';    statCount = 1; }
 
     // Roll stats (seeded by timestamp)
     const seed = Date.now();
     const rng = this._seededRng(seed);
     const statPool = [...craftType.statPool];
     const stats = [];
-    const ranges = { common: [0.01, 0.05], uncommon: [0.03, 0.10], rare: [0.05, 0.15], legendary: [0.10, 0.25] };
+    // Stat value ranges — each rebirth adds +3% to max value (capped at 3x base max)
+    const rebirthStatBoost = 1 + Math.min(rebirths * 0.03, 2.0);
+    const ranges = {
+      common:    [0.01, 0.05 * rebirthStatBoost],
+      uncommon:  [0.03, 0.10 * rebirthStatBoost],
+      rare:      [0.05, 0.15 * rebirthStatBoost],
+      legendary: [0.10, 0.25 * rebirthStatBoost],
+    };
     const [minV, maxV] = ranges[rarity];
 
     // Apply boosts: craftingBonus increases max range
@@ -488,10 +506,15 @@ const Crafting = {
   },
 
   _renderBag() {
+    const MAX_INVENTORY = 20;
+    const capHtml = `<div class="inv-cap-bar">
+      <span class="inv-cap-label">🎒 ${this._inventory.length}/${MAX_INVENTORY} slots</span>
+      ${this._inventory.length >= MAX_INVENTORY ? '<span class="inv-cap-full">FULL</span>' : ''}
+    </div>`;
     if (this._inventory.length === 0) {
-      return `<div class="inv-empty">Your bag is empty.<br>Craft items from your company's Craft tab!</div>`;
+      return capHtml + `<div class="inv-empty">Your bag is empty.<br>Craft items from your company's Craft tab!</div>`;
     }
-    let html = `<div class="inv-item-grid">`;
+    let html = capHtml + `<div class="inv-item-grid">`;
     for (const item of this._inventory) {
       const rarityColor = this.RARITY_COLORS[item.rarity] || '#aaa';
       const isEquipped = Object.values(this._equipped).includes(item.id);
@@ -599,14 +622,27 @@ const Crafting = {
     }
     html += `</div>`;
 
+    // Rebirth bonus display
+    const rebirths = typeof App !== 'undefined' ? (App.rebirth || 0) : 0;
+    const rarityBoost = Math.min(rebirths * 0.005, 0.25);
+    const rebirthStatBoost = 1 + Math.min(rebirths * 0.03, 2.0);
+    const legendaryPct = Math.round((0.02 + rarityBoost * 0.5) * 100);
+    const rarePct      = Math.round((0.10 + rarityBoost * 0.8) * 100) - legendaryPct;
+    const uncommonPct  = Math.round((0.30 + rarityBoost) * 100) - legendaryPct - rarePct;
+    const commonPct    = 100 - legendaryPct - rarePct - uncommonPct;
+    const invCount = this._inventory.length;
+    const MAX_INVENTORY = 20;
+
     // Rarity odds
     html += `<div class="craft-odds">
-      <div class="craft-odds-title">Drop rates:</div>
-      <span class="craft-odd-tag" style="color:#aaa">Common 70%</span>
-      <span class="craft-odd-tag" style="color:#4caf50">Uncommon 20%</span>
-      <span class="craft-odd-tag" style="color:#2196f3">Rare 8%</span>
-      <span class="craft-odd-tag" style="color:#ff9800">Legendary 2%</span>
-    </div>`;
+      <div class="craft-odds-title">Drop rates${rebirths > 0 ? ` (${rebirths} rebirth${rebirths>1?'s':''} bonus)` : ''}:</div>
+      <span class="craft-odd-tag" style="color:#aaa">Common ${commonPct}%</span>
+      <span class="craft-odd-tag" style="color:#4caf50">Uncommon ${uncommonPct}%</span>
+      <span class="craft-odd-tag" style="color:#2196f3">Rare ${rarePct}%</span>
+      <span class="craft-odd-tag" style="color:#ff9800">Legendary ${legendaryPct}%</span>
+    </div>
+    ${rebirths > 0 ? `<div class="craft-rebirth-bonus">+${((rebirthStatBoost - 1) * 100).toFixed(0)}% stat value from rebirths</div>` : ''}
+    <div class="craft-inv-usage${invCount >= MAX_INVENTORY ? ' craft-inv-full' : ''}">🎒 ${invCount}/${MAX_INVENTORY} inventory slots</div>`;
 
     // Recent inventory preview
     if (this._inventory.length > 0) {
