@@ -150,7 +150,11 @@ const Crime = {
     });
     const rebirthMult = typeof Clicker !== 'undefined' ? Clicker.getEarningsMultiplier() : 1;
     const petsMult = typeof Pets !== 'undefined' ? Pets.getBoosts().incomeMult : 1;
-    return total * rebirthMult * petsMult;
+    const boosts = typeof App !== 'undefined' ? App.getAllBoosts() : {};
+    const crimeMult = 1 + (boosts.crimeBonus || 0);
+    // Hacking path gets hackingBonus on top
+    const hackMult = (this._path === 'hacking') ? 1 + (boosts.hackingBonus || 0) : 1;
+    return total * rebirthMult * petsMult * crimeMult * hackMult;
   },
 
   getSlotsBonus() {
@@ -172,6 +176,9 @@ const Crime = {
     this.paths[this._path].upgrades.forEach(upg => {
       if (this._upgrades[upg.id] && upg.raidMult) mult *= upg.raidMult;
     });
+    // Apply house/item raidReduction (bigger raidReductionMult = longer delay = fewer raids)
+    const boosts = typeof App !== 'undefined' ? App.getAllBoosts() : {};
+    mult *= (1 + (boosts.raidReductionMult || 0));
     return mult;
   },
 

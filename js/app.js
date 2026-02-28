@@ -121,8 +121,31 @@ const App = {
     else               el.value = Math.max(0.01, Math.round(n * 100) / 100);
   },
 
+  // Central boost aggregator — merges Houses + Crafting boosts
+  getAllBoosts() {
+    const out = {
+      earningsMult: 0, slotsBonus: 0, gamblingBonus: 0, luckBoost: 0,
+      stocksBonus: 0, passiveIncome: 0, hungerDecayMult: 0, raidReductionMult: 0,
+      crimeBonus: 0, hackingBonus: 0, spaceBonus: 0, craftingBonus: 0, pharmaBonus: 0,
+    };
+    function merge(src) {
+      if (!src) return;
+      for (const k in out) {
+        if (src[k]) out[k] += src[k];
+      }
+    }
+    if (typeof Houses !== 'undefined') merge(Houses.getBoosts());
+    if (typeof Crafting !== 'undefined') merge(Crafting.getEquippedBoosts());
+    return out;
+  },
+
   // Safe add that avoids floating point drift on large numbers
   addBalance(amount) {
+    // Apply earningsMult from boosts on income
+    if (amount > 0) {
+      const boosts = this.getAllBoosts();
+      amount = amount * (1 + (boosts.earningsMult || 0));
+    }
     this.balance = this.safeAdd(this.balance, amount);
     if (amount > 0) this.totalEarned = this.safeAdd(this.totalEarned, amount);
     this.updateBalance();
@@ -169,6 +192,9 @@ const App = {
       crypto: 'Crypto Mining',
       leaderboard: 'Leaderboard',
       companies: 'Player Companies',
+      houses: 'Houses',
+      inventory: 'Inventory',
+      cars: 'Car Garage',
       settings: 'Settings'
     };
 
@@ -197,6 +223,9 @@ const App = {
     if (name === 'crypto') Crypto.init();
     if (name === 'leaderboard') { if (typeof Firebase !== 'undefined') { Firebase.renderLeaderboard(); const badge = document.getElementById('lb-online-badge'); if (badge) { badge.textContent = Firebase.isOnline() ? 'Online' : 'Offline'; badge.className = 'lb-online-badge ' + (Firebase.isOnline() ? 'lb-badge-online' : ''); } } }
     if (name === 'companies') { if (typeof Companies !== 'undefined') Companies.render(); }
+    if (name === 'houses') { if (typeof Houses !== 'undefined') { Houses._refreshNpcMarket(); Houses.render(); } }
+    if (name === 'inventory') { if (typeof Crafting !== 'undefined') Crafting.render(); }
+    if (name === 'cars') { if (typeof Cars !== 'undefined') Cars.render(); }
     if (name === 'settings') Settings.render();
   },
 
@@ -235,6 +264,9 @@ const App = {
       stocks: typeof Stocks !== 'undefined' ? Stocks.getSaveData() : null,
       crypto: typeof Crypto !== 'undefined' ? Crypto.getSaveData() : null,
       companies: typeof Companies !== 'undefined' ? Companies.getSaveData() : null,
+      houses: typeof Houses !== 'undefined' ? Houses.getSaveData() : null,
+      crafting: typeof Crafting !== 'undefined' ? Crafting.getSaveData() : null,
+      cars: typeof Cars !== 'undefined' ? Cars.getSaveData() : null,
       version: 7
     };
     localStorage.setItem('retros_casino_save', JSON.stringify(data));
@@ -281,6 +313,15 @@ const App = {
       }
       if (typeof Companies !== 'undefined' && data.companies) {
         Companies.loadSaveData(data.companies);
+      }
+      if (typeof Houses !== 'undefined' && data.houses) {
+        Houses.loadSaveData(data.houses);
+      }
+      if (typeof Crafting !== 'undefined' && data.crafting) {
+        Crafting.loadSaveData(data.crafting);
+      }
+      if (typeof Cars !== 'undefined' && data.cars) {
+        Cars.loadSaveData(data.cars);
       }
     } catch (e) {}
   },
@@ -407,6 +448,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (typeof Food !== 'undefined') Food.init();
   if (typeof Stocks !== 'undefined') Stocks.init();
   if (typeof Crypto !== 'undefined') Crypto.init();
+  if (typeof Houses !== 'undefined') Houses.init();
+  if (typeof Crafting !== 'undefined') Crafting.init();
+  if (typeof Cars !== 'undefined') Cars.init();
   GameStats.initAllHUDs();
   if (isFirstTime) {
     // Defer Firebase until after the username choice

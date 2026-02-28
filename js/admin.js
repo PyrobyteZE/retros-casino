@@ -281,6 +281,7 @@ const Admin = {
     if (tab === 'cheats') content.innerHTML = this._renderCheatsTab();
     else if (tab === 'economy') content.innerHTML = this._renderEconomyTab();
     else if (tab === 'player') content.innerHTML = this._renderPlayerTab();
+    else if (tab === 'forge') content.innerHTML = this._renderForgeTab();
     else if (tab === 'rooms') content.innerHTML = this._renderRoomsTab();
     else if (tab === 'market') content.innerHTML = this._renderMarketTab();
     else if (tab === 'coins') content.innerHTML = this._renderCoinsTab();
@@ -500,6 +501,167 @@ const Admin = {
     `;
   },
 
+  _forgeItem: null,
+
+  _renderForgeTab() {
+    const CRAFT_TYPES = typeof Crafting !== 'undefined' ? Crafting.CRAFT_TYPES : {};
+    const industryOpts = Object.entries(CRAFT_TYPES).map(([k, v]) =>
+      `<option value="${k}">${v.icon || ''} ${k} — ${v.category}</option>`
+    ).join('') || `<option value="tech">📱 tech — Gadget</option>`;
+
+    const STAT_OPTS = [
+      'earningsMult','slotsBonus','gamblingBonus','luckBoost','stocksBonus',
+      'passiveIncome','raidReduction','crimeBonus','hackingBonus','spaceBonus',
+      'craftingBonus','pharmaBonus','hungerDecayMult'
+    ].map(s => `<option value="${s}">${s}</option>`).join('');
+
+    const forgedPreview = this._forgeItem
+      ? `<div class="admin-forge-preview">
+           <div style="font-size:22px">${this._forgeItem.icon || '📦'}</div>
+           <div style="font-weight:700;color:var(--${this._forgeItem.rarity === 'legendary' ? 'gold' : this._forgeItem.rarity === 'rare' ? 'blue' : 'green'})">${this._forgeItem.name}</div>
+           <div style="font-size:11px;color:var(--text-dim)">${this._forgeItem.category} · ${this._forgeItem.rarity}</div>
+           ${(this._forgeItem.stats || []).map(s => `<div style="font-size:11px">+${(s.value*100).toFixed(1)}% ${s.statType}</div>`).join('')}
+           <div style="display:flex;gap:6px;margin-top:8px;justify-content:center">
+             <button class="admin-btn win-btn" onclick="Admin.adminForgeGiveToSelf()" style="font-size:12px">Add to My Inv</button>
+             <button class="admin-btn" onclick="Admin._forgeItem=null;Admin.setTab('forge')" style="font-size:12px">Clear</button>
+           </div>
+           <div style="font-size:11px;color:var(--text-dim);margin-top:6px">Send to a player in the Player tab → Edit → Send Forged Item</div>
+         </div>`
+      : `<div style="color:var(--text-dim);font-size:12px;text-align:center;padding:12px">No item forged yet.</div>`;
+
+    return `
+      <div class="admin-section">
+        <h3>🔨 Item Forge</h3>
+        <div class="admin-row">
+          <label style="width:90px">Name:</label>
+          <input type="text" id="af-name" placeholder="Lucky Elixir" maxlength="40"
+            style="flex:1;padding:6px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:13px">
+        </div>
+        <div class="admin-row" style="margin-top:6px">
+          <label style="width:90px">Industry:</label>
+          <select id="af-industry" style="flex:1;padding:6px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:13px">
+            ${industryOpts}
+          </select>
+        </div>
+        <div class="admin-row" style="margin-top:6px">
+          <label style="width:90px">Rarity:</label>
+          <select id="af-rarity" style="flex:1;padding:6px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:13px">
+            <option value="common">Common</option>
+            <option value="uncommon">Uncommon</option>
+            <option value="rare">Rare</option>
+            <option value="legendary">Legendary</option>
+          </select>
+        </div>
+        <div class="admin-forge-stats">
+          <div style="font-size:12px;font-weight:700;color:var(--text-dim);margin-bottom:6px">Stats (up to 3):</div>
+          ${[0,1,2].map(i => `
+          <div style="display:flex;gap:4px;margin-bottom:4px;align-items:center">
+            <select id="af-stat-type-${i}" style="flex:1;padding:5px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:11px">
+              <option value="">— none —</option>
+              ${STAT_OPTS}
+            </select>
+            <input type="number" id="af-stat-val-${i}" step="0.01" placeholder="0.05"
+              style="width:60px;padding:5px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:11px">
+          </div>`).join('')}
+        </div>
+        <button class="admin-btn win-btn" onclick="Admin.adminForgeCreate()" style="width:100%;margin-top:10px;font-size:13px">⚒️ Forge Item</button>
+      </div>
+      <div class="admin-section">
+        <h3>Forged Item</h3>
+        ${forgedPreview}
+      </div>
+      <div class="admin-section">
+        <h3>🏠 Grant House to Self</h3>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select id="af-house-tier" style="flex:1;padding:6px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:13px">
+            <option value="1">Tier 1 — Cozy Home 🏠</option>
+            <option value="2">Tier 2 — Suburban House 🏡</option>
+            <option value="3">Tier 3 — Luxury Condo 🏘️</option>
+            <option value="4">Tier 4 — Mansion 🏰</option>
+            <option value="5">Tier 5 — Mega Estate 🏯</option>
+          </select>
+          <button class="admin-btn win-btn" onclick="Admin.adminGrantHouseToSelf()" style="white-space:nowrap">Grant</button>
+        </div>
+      </div>
+      <div class="admin-section">
+        <h3>🚗 Grant Car to Self</h3>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select id="af-car-cat" style="flex:1;padding:6px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:13px">
+            <option value="economy">Economy 🚗</option>
+            <option value="sport">Sport 🏎️</option>
+            <option value="luxury">Luxury 🚘</option>
+            <option value="suv">SUV 🚙</option>
+            <option value="truck">Truck 🛻</option>
+            <option value="supercar">Supercar ⚡</option>
+            <option value="hypercar">Hypercar 🚀</option>
+          </select>
+          <button class="admin-btn win-btn" onclick="Admin.adminGrantCarToSelf()" style="white-space:nowrap">Grant</button>
+        </div>
+      </div>
+    `;
+  },
+
+  adminForgeCreate() {
+    const name = document.getElementById('af-name')?.value.trim() || 'Admin Item';
+    const industry = document.getElementById('af-industry')?.value || 'tech';
+    const rarity = document.getElementById('af-rarity')?.value || 'common';
+    const craftType = typeof Crafting !== 'undefined' && Crafting.CRAFT_TYPES[industry]
+      ? Crafting.CRAFT_TYPES[industry]
+      : { category: 'Gadget', icon: '📦' };
+    const stats = [];
+    for (let i = 0; i < 3; i++) {
+      const st = document.getElementById('af-stat-type-' + i)?.value;
+      const sv = parseFloat(document.getElementById('af-stat-val-' + i)?.value);
+      if (st && !isNaN(sv) && sv !== 0) stats.push({ statType: st, value: sv, label: st });
+    }
+    if (stats.length === 0) { Toast.show('Add at least one stat', '#ff5252', 2000); return; }
+    this._forgeItem = {
+      id: 'admin_' + Date.now().toString(36),
+      name,
+      category: craftType.category || 'Item',
+      icon: craftType.icon || '📦',
+      pixels: '0'.repeat(256),
+      industry,
+      rarity,
+      stats,
+      crafterUid: typeof Firebase !== 'undefined' ? Firebase.uid : 'admin',
+      crafterName: 'Admin',
+      createdAt: Date.now(),
+    };
+    Toast.show('Item forged!', '#00e676', 2000);
+    this.setTab('forge');
+  },
+
+  adminForgeGiveToSelf() {
+    if (!this._forgeItem) return;
+    if (typeof Crafting !== 'undefined') {
+      Crafting._inventory.push({ ...this._forgeItem });
+      App.save();
+      Toast.show('Item added to your inventory!', '#00e676', 2000);
+    }
+  },
+
+  adminGrantHouseToSelf() {
+    if (typeof Houses === 'undefined') return;
+    const tier = parseInt(document.getElementById('af-house-tier')?.value) || 1;
+    const tierDef = Houses.TIERS[tier - 1];
+    if (!tierDef) return;
+    const seed = Math.floor(Math.random() * 0xffffffff);
+    const house = Houses._generateHouse(seed, tier);
+    if (!house) return;
+    Houses._owned.push(house);
+    App.save();
+    if (App.currentScreen === 'houses') Houses.render();
+    Toast.show('House granted! ' + tierDef.icon + ' ' + tierDef.name, '#00e676', 3000);
+  },
+
+  adminGrantCarToSelf() {
+    if (typeof Cars === 'undefined') return;
+    const category = document.getElementById('af-car-cat')?.value || 'economy';
+    Cars.adminGrantCar(category);
+    Toast.show('Car granted to garage!', '#00e676', 2000);
+  },
+
   _renderTrollTab() {
     return '';
   },
@@ -676,16 +838,53 @@ const Admin = {
           <button onclick="Admin.togglePlayerEdit('${safeUid}')" style="font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid var(--bg3);background:var(--bg3);color:var(--text);cursor:pointer">Edit</button>
         </div>
         <div class="admin-player-edit hidden" id="admin-player-edit-${safeUid}" data-uid="${uid}">
-          <div style="display:flex;gap:4px;margin-top:6px">
+          <!-- Balance -->
+          <div class="admin-pe-section-label">💰 Balance</div>
+          <div style="display:flex;gap:4px;margin-top:4px">
             <input type="number" id="admin-pe-bal-${safeUid}" placeholder="$ amount" style="flex:1;font-size:12px;padding:5px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;min-width:0">
             <button class="rig-btn win" onclick="Admin.playerCmd('${safeUid}','addBalance')" style="font-size:11px;white-space:nowrap">+$ Give</button>
             <button class="rig-btn" onclick="Admin.playerCmd('${safeUid}','setBalance')" style="font-size:11px;white-space:nowrap">Set $</button>
           </div>
+          <!-- Rebirth -->
+          <div class="admin-pe-section-label" style="margin-top:8px">⭐ Rebirth</div>
           <div style="display:flex;gap:4px;margin-top:4px;align-items:center">
-            <span style="font-size:11px;color:var(--text-dim);white-space:nowrap">Rebirth:</span>
-            <input type="number" id="admin-pe-reb-${safeUid}" placeholder="Lvl" min="0" style="width:50px;font-size:12px;padding:5px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px">
-            <button class="rig-btn" onclick="Admin.playerCmd('${safeUid}','setRebirth')" style="font-size:11px">Set</button>
+            <input type="number" id="admin-pe-reb-${safeUid}" placeholder="Lvl" min="0" style="width:60px;font-size:12px;padding:5px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px">
+            <button class="rig-btn" onclick="Admin.playerCmd('${safeUid}','setRebirth')" style="font-size:11px">Set Rebirth</button>
           </div>
+          <!-- Houses -->
+          <div class="admin-pe-section-label" style="margin-top:8px">🏠 Grant House</div>
+          <div style="display:flex;gap:4px;margin-top:4px;align-items:center">
+            <select id="admin-pe-house-${safeUid}" style="flex:1;font-size:12px;padding:5px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px">
+              <option value="1">Tier 1 — Cozy Home 🏠</option>
+              <option value="2">Tier 2 — Suburban House 🏡</option>
+              <option value="3">Tier 3 — Luxury Condo 🏘️</option>
+              <option value="4">Tier 4 — Mansion 🏰</option>
+              <option value="5">Tier 5 — Mega Estate 🏯</option>
+            </select>
+            <button class="rig-btn win" onclick="Admin.playerCmd('${safeUid}','grantHouse')" style="font-size:11px;white-space:nowrap">Grant</button>
+          </div>
+          <!-- Cars -->
+          <div class="admin-pe-section-label" style="margin-top:8px">🚗 Grant Car</div>
+          <div style="display:flex;gap:4px;margin-top:4px;align-items:center">
+            <select id="admin-pe-car-cat-${safeUid}" style="flex:1;font-size:12px;padding:5px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px">
+              <option value="economy">Economy 🚗</option>
+              <option value="sport">Sport 🏎️</option>
+              <option value="luxury">Luxury 🚘</option>
+              <option value="suv">SUV 🚙</option>
+              <option value="truck">Truck 🛻</option>
+              <option value="supercar">Supercar ⚡</option>
+              <option value="hypercar">Hypercar 🚀</option>
+            </select>
+            <button class="rig-btn win" onclick="Admin.playerCmd('${safeUid}','grantCar')" style="font-size:11px;white-space:nowrap">Grant</button>
+          </div>
+          <!-- Forged item -->
+          ${this._forgeItem ? `
+          <div class="admin-pe-section-label" style="margin-top:8px">📦 Send Forged Item</div>
+          <div style="display:flex;gap:4px;margin-top:4px;align-items:center">
+            <span style="flex:1;font-size:12px;color:var(--text-dim)">${this._forgeItem.name} (${this._forgeItem.rarity})</span>
+            <button class="rig-btn win" onclick="Admin.playerCmd('${safeUid}','grantItem')" style="font-size:11px;white-space:nowrap">Send Item</button>
+          </div>` : `
+          <div style="font-size:11px;color:var(--text-dim);margin-top:8px">Forge an item in the 🔨 Forge tab to send it here.</div>`}
         </div>
       </div>`;
     }).join('');
@@ -709,10 +908,19 @@ const Admin = {
       const level = parseInt(document.getElementById('admin-pe-reb-' + safeUid)?.value);
       if (isNaN(level) || level < 0) return;
       payload.level = level;
+    } else if (cmd === 'grantHouse') {
+      const tier = parseInt(document.getElementById('admin-pe-house-' + safeUid)?.value) || 1;
+      payload.tier = tier;
+    } else if (cmd === 'grantCar') {
+      const cat = document.getElementById('admin-pe-car-cat-' + safeUid)?.value || 'economy';
+      payload.category = cat;
+    } else if (cmd === 'grantItem') {
+      if (!this._forgeItem) { Toast.show('No forged item — use 🔨 Forge tab first', '#ff5252', 2000); return; }
+      payload.item = this._forgeItem;
     }
     if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
       Firebase.pushAdminPlayerCommand(realUid, payload);
-      Toast.show('Command sent!', '#00e676', 2000);
+      Toast.show('Command sent to ' + safeUid.slice(0, 6) + '!', '#00e676', 2000);
     }
   },
 

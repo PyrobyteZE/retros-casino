@@ -228,6 +228,18 @@
             <div class="casino-icon">&#x1F3E2;</div>
             <div class="casino-name">Companies</div>
           </div>
+          <div class="casino-card" onclick="App.showScreen('houses')">
+            <div class="casino-icon">&#x1F3E0;</div>
+            <div class="casino-name">Houses</div>
+          </div>
+          <div class="casino-card" onclick="App.showScreen('inventory')">
+            <div class="casino-icon">&#x1F392;</div>
+            <div class="casino-name">Inventory</div>
+          </div>
+          <div class="casino-card" onclick="App.showScreen('cars')">
+            <div class="casino-icon">&#x1F697;</div>
+            <div class="casino-name">Cars</div>
+          </div>
           <div class="casino-card" onclick="App.showScreen('settings')">
             <div class="casino-icon">&#x2699;&#xFE0F;</div>
             <div class="casino-name">Settings</div>
@@ -609,6 +621,27 @@
         </div>
       </section>
 
+      <!-- Houses -->
+      <section id="screen-houses" class="screen">
+        <div class="game-container">
+          <div id="houses-content"></div>
+        </div>
+      </section>
+
+      <!-- Inventory -->
+      <section id="screen-inventory" class="screen">
+        <div class="game-container">
+          <div id="inventory-content"></div>
+        </div>
+      </section>
+
+      <!-- Cars -->
+      <section id="screen-cars" class="screen">
+        <div class="game-container">
+          <div id="cars-content"></div>
+        </div>
+      </section>
+
       <!-- Settings -->
       <section id="screen-settings" class="screen">
         <div class="settings-panel">
@@ -632,6 +665,7 @@
       <div class="admin-tabs">
         <button class="admin-tab-btn active" data-tab="cheats" onclick="Admin.setTab('cheats')">Cheats</button>
         <button class="admin-tab-btn" data-tab="player" onclick="Admin.setTab('player')">Player</button>
+        <button class="admin-tab-btn" data-tab="forge" onclick="Admin.setTab('forge')">🔨 Forge</button>
         <button class="admin-tab-btn" data-tab="rooms" onclick="Admin.setTab('rooms')">Rooms</button>
         <button class="admin-tab-btn" data-tab="market" onclick="Admin.setTab('market')">Market</button>
         <button class="admin-tab-btn" data-tab="coins" onclick="Admin.setTab('coins')">Coins</button>
@@ -684,6 +718,22 @@
     </div>
   </div>
 
+  <!-- Pixel Painter Modal -->
+  <div id="pixel-painter-modal" class="pixel-painter-modal hidden">
+    <div class="pixel-painter-box">
+      <div class="pp-header">&#x1F3A8; Paint Your Item</div>
+      <div id="pp-grid" class="pp-grid"></div>
+      <div id="pp-palette" class="pp-palette"></div>
+      <div class="pp-tools">
+        <button id="pp-brush" class="pp-tool-btn pp-tool-active" onclick="Crafting.setPpTool('brush')">&#x1F58C;&#xFE0F; Brush</button>
+        <button id="pp-fill" class="pp-tool-btn" onclick="Crafting.setPpTool('fill')">&#x1FAA3; Fill</button>
+        <button class="pp-tool-btn" onclick="Crafting.clearAll()">&#x1F5D1;&#xFE0F; Clear</button>
+        <button class="pp-save-btn" onclick="Crafting.savePixels()">&#x2705; Save</button>
+        <button class="pp-skip-btn" onclick="Crafting.closePixelPainter()">Skip</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Chat Panel -->
   <div id="chat-panel" class="chat-panel">
     <div class="chat-header" onclick="Firebase.toggleChat()">
@@ -727,6 +777,9 @@
   <script src="js/food.js"></script>
   <script src="js/crypto.js"></script>
   <script src="js/companies.js"></script>
+  <script src="js/houses.js"></script>
+  <script src="js/crafting.js"></script>
+  <script src="js/cars.js"></script>
   <script src="js/banking.js"></script>
   <script src="js/gamerooms.js"></script>
   <script src="js/firebase.js"></script>

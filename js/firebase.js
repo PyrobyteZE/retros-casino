@@ -239,6 +239,29 @@ const Firebase = {
           Clicker.startAutoClicker();
         }
         Toast.show('⚡ Admin set your rebirth to ' + (cmd.level || 0), '#ffd740', 4000);
+      } else if (cmd.cmd === 'grantItem' && cmd.item) {
+        if (typeof Crafting !== 'undefined') {
+          Crafting._inventory.push({ ...cmd.item, id: 'granted_' + Date.now().toString(36) });
+          if (App.currentScreen === 'inventory') Crafting._triggerRender && Crafting._triggerRender();
+        }
+        Toast.show('🎁 Admin sent you an item: ' + (cmd.item.name || 'Item') + '!', '#00e676', 5000);
+      } else if (cmd.cmd === 'grantHouse') {
+        if (typeof Houses !== 'undefined') {
+          const tier = Math.max(1, Math.min(5, cmd.tier || 1));
+          const seed = Math.floor(Math.random() * 0xffffffff);
+          const house = Houses._generateHouse(seed, tier);
+          if (house) {
+            Houses._owned.push(house);
+            if (App.currentScreen === 'houses') Houses.render();
+            const t = Houses.TIERS[tier - 1];
+            Toast.show('🎁 Admin granted you: ' + (t ? t.icon + ' ' + t.name : 'a house') + '!', '#00e676', 5000);
+          }
+        }
+      } else if (cmd.cmd === 'grantCar') {
+        if (typeof Cars !== 'undefined') {
+          Cars.adminGrantCar(cmd.category || 'economy');
+          Toast.show('🎁 Admin granted you a ' + (cmd.category || 'economy') + ' car!', '#00e676', 5000);
+        }
       }
       App.save();
       this._lastCloudSave = 0;
@@ -2468,5 +2491,229 @@ const Firebase = {
     const el = btnEl.closest('.invite-overlay');
     if (el) el.remove();
     this.removeInvite(this.uid, inviteId);
+  },
+
+  // === HOUSES MARKETPLACE ===
+  listHouseForSale(house, price) {
+    if (!this.isOnline() || !this.uid) return Promise.resolve();
+    const listing = Object.assign({}, house, {
+      listingPrice: price,
+      sellerUid: this.uid,
+      sellerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+      listedAt: Date.now(),
+    });
+    return this.db.ref('houseListings/' + house.id).set(listing)
+      .catch(err => console.error('listHouseForSale error:', err));
+  },
+
+  cancelHouseListing(houseId) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('houseListings/' + houseId).remove()
+      .catch(err => console.error('cancelHouseListing error:', err));
+  },
+
+  async buyHouseListing(listingId, price, sellerUid) {
+    if (!this.isOnline() || !this.uid) return;
+    await this.db.ref('houseListings/' + listingId).remove()
+      .catch(err => console.error('buyHouseListing remove error:', err));
+    if (sellerUid) {
+      await this.db.ref('saleReceipts/' + sellerUid).push({
+        amount: price,
+        type: 'house',
+        houseId: listingId,
+        buyerUid: this.uid,
+        buyerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+        ts: Date.now(),
+      }).catch(err => console.error('buyHouseListing receipt error:', err));
+    }
+  },
+
+  listenHouseListings(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('houseListings').on('value', snap => cb(snap.val() || {}),
+      err => console.warn('listenHouseListings denied:', err.code));
+  },
+
+  // === ITEM MARKETPLACE ===
+  listItem(item, price) {
+    if (!this.isOnline() || !this.uid) return Promise.resolve();
+    const listing = {
+      sellerUid: this.uid,
+      sellerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+      item,
+      price,
+      listedAt: Date.now(),
+    };
+    return this.db.ref('itemListings').push(listing)
+      .catch(err => console.error('listItem error:', err));
+  },
+
+  delistItem(listingId) {
+    if (!this.isOnline()) return Promise.resolve();
+    this.db.ref('itemListings/' + listingId).once('value').then(snap => {
+      const listing = snap.val();
+      if (listing && listing.sellerUid === this.uid && listing.item) {
+        if (typeof Crafting !== 'undefined') {
+          Crafting._inventory.push(listing.item);
+          App.save();
+          Crafting._triggerRender();
+          Toast.show('Item returned to inventory', '#4caf50', 2000);
+        }
+      }
+    });
+    return this.db.ref('itemListings/' + listingId).remove()
+      .catch(err => console.error('delistItem error:', err));
+  },
+
+  async buyItem(listingId, price, sellerUid) {
+    if (!this.isOnline() || !this.uid) return;
+    await this.db.ref('itemListings/' + listingId).remove()
+      .catch(err => console.error('buyItem remove error:', err));
+    if (sellerUid) {
+      await this.db.ref('saleReceipts/' + sellerUid).push({
+        amount: price,
+        type: 'item',
+        listingId,
+        buyerUid: this.uid,
+        buyerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+        ts: Date.now(),
+      }).catch(err => console.error('buyItem receipt error:', err));
+    }
+  },
+
+  listenItemListings(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('itemListings').limitToFirst(50).on('value', snap => cb(snap.val() || {}),
+      err => console.warn('listenItemListings denied:', err.code));
+  },
+
+  // === GOD MANSIONS ===
+  listenGodMansions(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('godMansions').on('value', snap => cb(snap.val() || {}),
+      err => console.warn('listenGodMansions denied:', err.code));
+  },
+
+  async claimGodMansion(mansionId) {
+    if (!this.isOnline() || !this.uid) return { ok: false, reason: 'offline' };
+    const ref = this.db.ref('godMansions/' + mansionId);
+    return new Promise(resolve => {
+      ref.transaction(current => {
+        if (current && current.ownerUid) return; // abort — already owned
+        return {
+          ownerUid: this.uid,
+          ownerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+          claimedAt: Date.now(),
+          listedForSale: false,
+          listingPrice: null,
+        };
+      }, (err, committed, snap) => {
+        if (err) { resolve({ ok: false, reason: err.message }); return; }
+        if (!committed) { resolve({ ok: false, reason: 'taken' }); return; }
+        resolve({ ok: true, data: snap.val() });
+      });
+    });
+  },
+
+  updateGodMansionListing(mansionId, listingPrice) {
+    if (!this.isOnline() || !this.uid) return Promise.resolve();
+    const update = listingPrice != null
+      ? { listedForSale: true, listingPrice }
+      : { listedForSale: false, listingPrice: null };
+    return this.db.ref('godMansions/' + mansionId).update(update)
+      .catch(err => console.error('updateGodMansionListing error:', err));
+  },
+
+  async buyGodMansionListing(mansionId, price, sellerUid) {
+    if (!this.isOnline() || !this.uid) return { ok: false, reason: 'offline' };
+    const ref = this.db.ref('godMansions/' + mansionId);
+    return new Promise(resolve => {
+      ref.transaction(current => {
+        if (!current || !current.listedForSale || current.listingPrice !== price) return; // abort
+        if (current.ownerUid !== sellerUid) return; // abort
+        return {
+          ...current,
+          ownerUid: this.uid,
+          ownerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+          listedForSale: false,
+          listingPrice: null,
+          boughtAt: Date.now(),
+        };
+      }, (err, committed, snap) => {
+        if (err) { resolve({ ok: false, reason: err.message }); return; }
+        if (!committed) { resolve({ ok: false, reason: 'stale' }); return; }
+        // Send receipt to seller
+        if (sellerUid) {
+          this.db.ref('saleReceipts/' + sellerUid).push({
+            amount: price, type: 'godMansion', mansionId,
+            buyerUid: this.uid,
+            buyerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+            ts: Date.now(),
+          }).catch(() => {});
+        }
+        resolve({ ok: true, data: snap.val() });
+      });
+    });
+  },
+
+  // === CAR MARKETPLACE ===
+  listCarForSale(car, price) {
+    if (!this.isOnline() || !this.uid) return Promise.resolve(null);
+    const listing = {
+      sellerUid: this.uid,
+      sellerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+      car,
+      price,
+      listedAt: Date.now(),
+    };
+    return this.db.ref('carListings').push(listing)
+      .then(ref => ref.key)
+      .catch(err => { console.error('listCarForSale error:', err); return null; });
+  },
+
+  delistCar(listingId) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('carListings/' + listingId).once('value').then(snap => {
+      const listing = snap.val();
+      if (listing && listing.sellerUid === this.uid && listing.car) {
+        if (typeof Cars !== 'undefined') {
+          Cars._garage.push(listing.car);
+          App.save();
+          Cars._triggerRender && Cars._triggerRender();
+          Toast.show('Car returned to garage', '#4caf50', 2000);
+        }
+      }
+      return this.db.ref('carListings/' + listingId).remove();
+    }).catch(err => console.error('delistCar error:', err));
+  },
+
+  async buyCarListing(listingId, price, sellerUid) {
+    if (!this.isOnline() || !this.uid) return { ok: false, reason: 'offline' };
+    const ref = this.db.ref('carListings/' + listingId);
+    return new Promise(resolve => {
+      ref.transaction(current => {
+        if (!current || current.price !== price || current.sellerUid !== sellerUid) return; // abort
+        return null; // remove listing
+      }, (err, committed, snap) => {
+        if (err) { resolve({ ok: false, reason: err.message }); return; }
+        if (!committed) { resolve({ ok: false, reason: 'stale' }); return; }
+        // Send receipt to seller
+        if (sellerUid) {
+          this.db.ref('saleReceipts/' + sellerUid).push({
+            amount: price, type: 'car', listingId,
+            buyerUid: this.uid,
+            buyerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+            ts: Date.now(),
+          }).catch(() => {});
+        }
+        resolve({ ok: true });
+      });
+    });
+  },
+
+  listenCarListings(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('carListings').limitToFirst(100).on('value', snap => cb(snap.val() || {}),
+      err => console.warn('listenCarListings denied:', err.code));
   },
 };

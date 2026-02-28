@@ -7046,3 +7046,828 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   overflow-y: auto;
   background: var(--bg2);
 }
+
+/* ===================================================
+   HOUSES
+   =================================================== */
+.houses-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.houses-tab {
+  flex: 1;
+  padding: 8px 6px;
+  background: var(--bg2);
+  border: 1px solid var(--bg3);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  min-width: 90px;
+}
+.houses-tab.active {
+  background: var(--green-dark);
+  border-color: var(--green);
+  color: var(--green);
+  font-weight: 700;
+}
+.houses-section-label {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.houses-timer-note { font-weight: 400; opacity: 0.7; }
+.houses-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.house-card {
+  background: var(--bg2);
+  border: 1px solid var(--bg3);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.house-card-owned { border-color: var(--green); }
+.house-card-icon { font-size: 28px; text-align: center; }
+.house-card-name { font-size: 13px; font-weight: 700; text-align: center; }
+.house-card-tier { font-size: 11px; color: var(--text-dim); text-align: center; }
+.house-specials { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; }
+.house-special-tag {
+  font-size: 10px;
+  background: var(--bg3);
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: var(--text-dim);
+}
+.house-slots-note { font-size: 10px; color: var(--text-dim); text-align: center; }
+.house-buy-btn {
+  margin-top: 4px;
+  padding: 7px;
+  background: var(--green-dark);
+  color: var(--green);
+  border: 1px solid var(--green);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.house-buy-btn.unaffordable {
+  background: var(--bg3);
+  color: var(--text-dim);
+  border-color: var(--bg3);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.house-actions { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.house-action-btn {
+  padding: 6px;
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--bg3);
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.house-cancel-btn { color: var(--red); border-color: var(--red); }
+.house-listed-badge { font-size: 11px; color: var(--green); font-weight: 600; text-align: center; }
+.houses-empty { text-align: center; padding: 30px 16px; color: var(--text-dim); line-height: 1.6; }
+
+/* House Modals */
+.house-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.house-modal-box {
+  background: var(--bg2);
+  border: 1px solid var(--green);
+  border-radius: 14px;
+  padding: 20px;
+  max-width: 320px;
+  width: 90%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.house-modal-title { font-size: 15px; font-weight: 700; text-align: center; }
+.house-modal-input {
+  width: 100%;
+  padding: 10px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--bg3);
+  border-radius: 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+.house-modal-actions { display: flex; gap: 8px; }
+.house-modal-btn {
+  flex: 1;
+  padding: 10px;
+  background: var(--green-dark);
+  color: var(--green);
+  border: 1px solid var(--green);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.house-modal-cancel { background: var(--bg3); color: var(--red); border-color: var(--red); }
+
+/* Furnish Modal */
+.furnish-modal-box { max-width: 380px; }
+.furnish-slots-list { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; }
+.furnish-slot {
+  background: var(--bg);
+  border: 1px solid var(--bg3);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.furnish-slot-label { font-size: 11px; color: var(--text-dim); font-weight: 600; }
+.furnish-slot-item {
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.furnish-slot-empty { font-size: 12px; color: var(--text-dim); font-style: italic; }
+.furnish-remove-btn {
+  background: none;
+  border: none;
+  color: var(--red);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
+}
+.furnish-select {
+  width: 100%;
+  padding: 5px 6px;
+  background: var(--bg2);
+  color: var(--text);
+  border: 1px solid var(--bg3);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+/* Furniture Shop */
+.furniture-stash-info {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  background: var(--bg2);
+  border-radius: 6px;
+}
+.furniture-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+.furniture-card {
+  background: var(--bg2);
+  border: 1px solid var(--bg3);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+.furniture-icon { font-size: 24px; }
+.furniture-name { font-size: 12px; font-weight: 700; }
+.furniture-bonus { font-size: 11px; color: var(--green); }
+.furniture-owned-badge { font-size: 10px; color: var(--green); font-weight: 600; }
+.furniture-buy-btn {
+  width: 100%;
+  padding: 6px;
+  background: var(--green-dark);
+  color: var(--green);
+  border: 1px solid var(--green);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.furniture-buy-btn.unaffordable {
+  background: var(--bg3);
+  color: var(--text-dim);
+  border-color: var(--bg3);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* ===================================================
+   INVENTORY + CRAFTED ITEMS
+   =================================================== */
+.inv-equip-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.inv-equip-slot {
+  flex: 1;
+  border-radius: 10px;
+  border: 2px solid var(--bg3);
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-height: 70px;
+  position: relative;
+  background: var(--bg2);
+}
+.inv-equip-slot-filled { background: var(--bg); }
+.inv-equip-icon { font-size: 18px; }
+.inv-equip-name { font-size: 10px; font-weight: 700; text-align: center; line-height: 1.2; }
+.inv-equip-rarity { font-size: 9px; text-transform: capitalize; }
+.inv-equip-unequip {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  background: none;
+  border: none;
+  color: var(--red);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+.inv-equip-empty-label { font-size: 11px; color: var(--text-dim); font-weight: 600; }
+.inv-equip-empty-hint { font-size: 10px; color: var(--text-dim); font-style: italic; }
+
+.inv-tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+.inv-tab {
+  flex: 1;
+  padding: 8px;
+  background: var(--bg2);
+  border: 1px solid var(--bg3);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+}
+.inv-tab.active {
+  background: var(--green-dark);
+  border-color: var(--green);
+  color: var(--green);
+  font-weight: 700;
+}
+
+.inv-item-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.inv-item-card {
+  background: var(--bg2);
+  border: 2px solid var(--bg3);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.inv-item-equipped { background: var(--bg); }
+.inv-item-top { display: flex; gap: 10px; align-items: flex-start; }
+.inv-item-art { flex-shrink: 0; image-rendering: pixelated; }
+.inv-item-info { flex: 1; min-width: 0; }
+.inv-item-name { font-size: 13px; font-weight: 700; }
+.inv-item-rarity { font-size: 11px; text-transform: capitalize; }
+.inv-item-crafter { font-size: 10px; color: var(--text-dim); }
+.inv-item-stats { display: flex; flex-wrap: wrap; gap: 4px; }
+.inv-stat-tag {
+  font-size: 10px;
+  background: var(--bg3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--green);
+  font-weight: 600;
+}
+.inv-item-actions { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+.inv-equip-select {
+  flex: 1;
+  padding: 5px 6px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--bg3);
+  border-radius: 6px;
+  font-size: 11px;
+  min-width: 90px;
+}
+.inv-edit-art-btn, .inv-sell-btn {
+  padding: 5px 8px;
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--bg3);
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.inv-equipped-badge { font-size: 11px; color: var(--green); font-weight: 700; }
+.inv-empty { text-align: center; padding: 30px 16px; color: var(--text-dim); line-height: 1.6; }
+
+/* ===================================================
+   CRAFTING TAB (in companies)
+   =================================================== */
+.craft-tab-content { display: flex; flex-direction: column; gap: 10px; }
+.craft-tab-header { display: flex; justify-content: space-between; align-items: center; }
+.craft-tab-title { font-size: 14px; font-weight: 700; }
+.craft-tab-cost { font-size: 12px; color: var(--text-dim); }
+.craft-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 6px;
+}
+.craft-type-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 6px;
+  background: var(--bg2);
+  border: 1px solid var(--bg3);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text);
+}
+.craft-type-btn:hover { border-color: var(--green); }
+.craft-type-btn.unaffordable { opacity: 0.5; cursor: not-allowed; }
+.craft-type-icon { font-size: 22px; }
+.craft-type-name { font-size: 11px; font-weight: 700; }
+.craft-type-industry { font-size: 9px; color: var(--text-dim); text-transform: capitalize; }
+.craft-odds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  padding: 6px 8px;
+  background: var(--bg2);
+  border-radius: 6px;
+}
+.craft-odds-title { font-size: 11px; color: var(--text-dim); font-weight: 600; }
+.craft-odd-tag { font-size: 10px; font-weight: 600; }
+.craft-empty { padding: 20px; text-align: center; color: var(--text-dim); }
+.craft-recent-label { font-size: 11px; color: var(--text-dim); font-weight: 600; margin-top: 2px; }
+.craft-recent-list { display: flex; flex-direction: column; gap: 4px; }
+.craft-recent-item {
+  font-size: 12px;
+  padding: 4px 8px;
+  background: var(--bg2);
+  border-radius: 6px;
+}
+
+/* ===================================================
+   PIXEL PAINTER
+   =================================================== */
+.pixel-painter-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.88);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pixel-painter-modal.hidden { display: none; }
+.pixel-painter-box {
+  background: var(--bg2);
+  border: 1px solid var(--green);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 360px;
+  width: 95%;
+}
+.pp-header { font-size: 16px; font-weight: 700; color: var(--green); }
+.pp-grid {
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  grid-template-rows: repeat(16, 1fr);
+  width: 256px;
+  height: 256px;
+  border: 1px solid var(--bg3);
+  cursor: crosshair;
+  image-rendering: pixelated;
+  user-select: none;
+  touch-action: none;
+}
+.pp-cell {
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+}
+.pp-cell-transparent { background: repeating-conic-gradient(#333 0% 25%, #222 0% 50%) 0 0 / 8px 8px; }
+.pp-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  width: 256px;
+  justify-content: flex-start;
+}
+.pp-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.pp-swatch-transparent { background: repeating-conic-gradient(#444 0% 25%, #333 0% 50%) 0 0 / 8px 8px; }
+.pp-swatch-active { border-color: #fff; }
+.pp-swatch:hover { transform: scale(1.2); }
+.pp-tools {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+}
+.pp-tool-btn {
+  padding: 7px 12px;
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--bg3);
+  border-radius: 7px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.pp-tool-btn.pp-tool-active { border-color: var(--green); color: var(--green); }
+.pp-save-btn {
+  padding: 7px 14px;
+  background: var(--green-dark);
+  color: var(--green);
+  border: 1px solid var(--green);
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pp-skip-btn {
+  padding: 7px 10px;
+  background: none;
+  color: var(--text-dim);
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+}
+.pixel-art-preview { image-rendering: pixelated; flex-shrink: 0; }
+
+/* =====================================================================
+   CARS SYSTEM
+   ===================================================================== */
+
+/* Cars tabs */
+.cars-tabs { display:flex; gap:4px; margin-bottom:14px; overflow-x:auto; }
+.cars-tab {
+  flex-shrink:0;
+  padding:7px 14px;
+  background:var(--bg2);
+  border:1px solid var(--bg3);
+  border-radius:8px;
+  color:var(--text-dim);
+  font-size:13px;
+  cursor:pointer;
+}
+.cars-tab.active { background:var(--green-dark); color:var(--green); border-color:var(--green); }
+
+/* Car grid */
+.car-grid { display:flex; flex-direction:column; gap:10px; }
+
+/* Car card */
+.car-card {
+  background:var(--bg2);
+  border:1px solid var(--bg3);
+  border-radius:12px;
+  padding:12px;
+}
+.car-card-top { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.car-card-icon { font-size:28px; flex-shrink:0; }
+.car-card-info { flex:1; min-width:0; }
+.car-card-name { font-weight:700; font-size:14px; }
+.car-card-brand { font-size:11px; color:var(--text-dim); }
+.car-card-rarity { font-size:11px; font-weight:700; }
+
+/* Mini stat bars */
+.car-stats-mini { display:flex; flex-direction:column; gap:4px; margin-bottom:8px; }
+.car-mini-stat { display:flex; align-items:center; gap:6px; }
+.car-mini-stat-label { font-size:10px; color:var(--text-dim); width:70px; flex-shrink:0; }
+.car-mini-bar-wrap { flex:1; height:5px; background:var(--bg3); border-radius:3px; overflow:hidden; }
+.car-mini-bar { height:100%; background:var(--green); border-radius:3px; transition:width .3s; }
+.car-mini-stat-val { font-size:10px; color:var(--text-dim); width:24px; text-align:right; }
+
+/* Car actions */
+.car-card-actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+.car-btn {
+  padding:5px 10px;
+  background:var(--bg3);
+  border:1px solid var(--bg3);
+  border-radius:6px;
+  color:var(--text);
+  font-size:12px;
+  cursor:pointer;
+}
+.car-btn.green { border-color:var(--green); color:var(--green); }
+.car-btn.red { border-color:#f44336; color:#f44336; }
+.car-btn:disabled { opacity:0.45; cursor:default; }
+
+/* Flaw badge */
+.car-flaw-badge {
+  display:inline-block;
+  padding:2px 7px;
+  background:#3d1500;
+  border:1px solid #ff9800;
+  color:#ff9800;
+  border-radius:5px;
+  font-size:10px;
+  font-weight:700;
+}
+.car-condition-bar { height:6px; border-radius:3px; background:var(--bg3); overflow:hidden; margin-top:4px; }
+.car-condition-fill { height:100%; border-radius:3px; background:var(--green); }
+
+/* Flaw row in modal */
+.flaw-row {
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  padding:8px;
+  background:var(--bg3);
+  border-radius:8px;
+  margin-bottom:6px;
+}
+.flaw-emoji { font-size:18px; flex-shrink:0; }
+.flaw-info { flex:1; min-width:0; }
+.flaw-name { font-weight:700; font-size:13px; }
+.flaw-penalty { font-size:11px; color:#ff9800; }
+.flaw-maxfix { font-size:10px; color:var(--text-dim); }
+.flaw-repair-btn {
+  padding:5px 10px;
+  background:var(--bg2);
+  border:1px solid var(--green);
+  color:var(--green);
+  border-radius:6px;
+  font-size:12px;
+  cursor:pointer;
+  flex-shrink:0;
+}
+
+/* Brand header */
+.brand-header {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:14px;
+  background:var(--bg2);
+  border:1px solid var(--bg3);
+  border-radius:12px;
+  margin-bottom:12px;
+}
+.brand-logo { font-size:32px; }
+.brand-info { flex:1; }
+.brand-name { font-size:18px; font-weight:800; }
+.brand-slogan { font-size:11px; color:var(--text-dim); font-style:italic; }
+.brand-stats { font-size:11px; color:var(--text-dim); margin-top:2px; }
+.brand-section-label {
+  font-size:11px;
+  font-weight:700;
+  color:var(--text-dim);
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  margin:12px 0 6px;
+}
+
+/* Model list */
+.model-list { display:flex; flex-direction:column; gap:8px; }
+.model-row {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:10px;
+  background:var(--bg2);
+  border:1px solid var(--bg3);
+  border-radius:10px;
+}
+.model-icon { font-size:22px; flex-shrink:0; }
+.model-info { flex:1; }
+.model-name { font-weight:700; font-size:13px; }
+.model-desc { font-size:11px; color:var(--text-dim); }
+.model-manufacture-btn {
+  padding:6px 12px;
+  background:var(--green-dark);
+  border:1px solid var(--green);
+  color:var(--green);
+  border-radius:7px;
+  font-size:12px;
+  font-weight:700;
+  cursor:pointer;
+}
+
+/* Race panel */
+.race-panel { display:flex; flex-direction:column; gap:10px; }
+.race-panel-title { font-size:16px; font-weight:800; }
+.race-rule { font-size:12px; color:var(--text-dim); }
+.race-row { display:flex; flex-direction:column; gap:4px; }
+.race-result {
+  padding:12px;
+  border-radius:10px;
+  text-align:center;
+  font-weight:700;
+  font-size:15px;
+  margin-top:8px;
+}
+.race-result.win { background:#1b4d1e; color:#4caf50; border:1px solid #4caf50; }
+.race-result.lose { background:#4d1b1b; color:#f44336; border:1px solid #f44336; }
+
+/* Car design modal */
+.car-design-modal-box {
+  background:var(--bg2);
+  border:1px solid var(--bg3);
+  border-radius:14px;
+  padding:18px;
+  max-width:440px;
+  width:100%;
+  max-height:90vh;
+  overflow-y:auto;
+}
+.car-design-label { font-size:12px; color:var(--text-dim); margin-bottom:3px; }
+
+/* Stat preview in design modal */
+.car-stat-preview { margin-top:10px; }
+.car-stat-row { display:flex; align-items:center; gap:8px; margin-bottom:5px; }
+.car-stat-label { font-size:12px; width:80px; flex-shrink:0; }
+.car-stat-bar-wrap { flex:1; height:8px; background:var(--bg3); border-radius:4px; overflow:hidden; }
+.car-stat-bar { height:100%; background:var(--green); border-radius:4px; }
+.car-stat-value { font-size:11px; width:28px; text-align:right; color:var(--text-dim); }
+
+/* Brand discount badge */
+.car-brand-discount-badge {
+  display:inline-block;
+  padding:2px 8px;
+  background:#1a3a1a;
+  border:1px solid var(--green);
+  color:var(--green);
+  border-radius:5px;
+  font-size:10px;
+  font-weight:700;
+}
+
+/* Market summary bar */
+.mine-summary-bar {
+  display:flex;
+  gap:8px;
+  align-items:center;
+  margin-bottom:10px;
+  font-size:12px;
+  color:var(--text-dim);
+}
+.mine-summary-bar strong { color:var(--text); }
+
+/* =====================================================================
+   VAULT SYSTEM (inside Houses)
+   ===================================================================== */
+
+.vault-header {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:12px;
+  background:var(--bg2);
+  border:1px solid var(--bg3);
+  border-radius:10px;
+  margin-bottom:12px;
+}
+.vault-cap-bar {
+  flex:1;
+  height:8px;
+  background:var(--bg3);
+  border-radius:4px;
+  overflow:hidden;
+}
+.vault-cap-fill { height:100%; background:var(--green); border-radius:4px; }
+.vault-items-list { display:flex; flex-direction:column; gap:6px; margin-top:10px; }
+.vault-item-row {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:8px;
+  background:var(--bg2);
+  border:1px solid var(--bg3);
+  border-radius:8px;
+}
+.vault-item-icon { font-size:18px; flex-shrink:0; }
+.vault-item-label { flex:1; font-size:13px; }
+.vault-item-qty { font-size:12px; color:var(--text-dim); }
+.vault-withdraw-btn {
+  padding:4px 10px;
+  background:var(--bg3);
+  border:1px solid var(--bg3);
+  color:var(--text);
+  border-radius:6px;
+  font-size:11px;
+  cursor:pointer;
+}
+.vault-deposit-section {
+  margin-top:12px;
+  padding:10px;
+  background:var(--bg2);
+  border:1px solid var(--bg3);
+  border-radius:10px;
+}
+.vault-deposit-section h4 { font-size:12px; color:var(--text-dim); margin:0 0 8px; }
+
+/* God mansion extras */
+.houses-rebirth-lock {
+  text-align:center;
+  padding:20px;
+  color:var(--text-dim);
+  font-size:13px;
+}
+.house-card-god {
+  border-color:#b8860b;
+  background:linear-gradient(135deg,#1a1200,var(--bg2));
+}
+.house-god-desc { font-size:11px; color:#d4af37; margin:4px 0; }
+.house-owned-badge {
+  display:inline-block;
+  padding:2px 8px;
+  background:#1b4d1e;
+  color:var(--green);
+  border:1px solid var(--green);
+  border-radius:4px;
+  font-size:10px;
+  font-weight:700;
+}
+.house-taken-badge {
+  display:inline-block;
+  padding:2px 8px;
+  background:#3d1515;
+  color:#f44336;
+  border:1px solid #f44336;
+  border-radius:4px;
+  font-size:10px;
+  font-weight:700;
+}
+
+/* =====================================================================
+   ADMIN FORGE TAB
+   ===================================================================== */
+
+.admin-pe-section-label {
+  font-size:10px;
+  font-weight:700;
+  color:var(--text-dim);
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  margin-bottom:2px;
+  padding-top:4px;
+  border-top:1px solid var(--bg3);
+}
+.admin-forge-stats {
+  margin-top:10px;
+  padding:10px;
+  background:var(--bg);
+  border:1px solid var(--bg3);
+  border-radius:8px;
+}
+.admin-forge-preview {
+  padding:12px;
+  background:var(--bg);
+  border:1px solid var(--bg3);
+  border-radius:10px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:4px;
+  text-align:center;
+}
+
+/* Cars stat bar */
+.cars-stat-bar {
+  font-size: 12px;
+  color: var(--text-dim);
+  padding: 8px 10px;
+  background: var(--bg2);
+  border-radius: 8px;
+  margin-bottom: 10px;
+}

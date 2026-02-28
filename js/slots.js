@@ -188,6 +188,11 @@ const Slots = {
       if (typeof Crime !== 'undefined' && payout > 0) {
         payout = Math.floor(payout * Crime.getSlotsBonus());
       }
+      // Apply house/item slotsBonus and gamblingBonus
+      if (typeof App !== 'undefined' && payout > 0) {
+        const boosts = App.getAllBoosts();
+        payout = Math.floor(payout * (1 + (boosts.slotsBonus || 0) + (boosts.gamblingBonus || 0)));
+      }
       // Apply hunger penalty to payout
       if (typeof App !== 'undefined' && payout > 0) {
         payout = Math.floor(payout * (1 - App.getHungerPenalty()));

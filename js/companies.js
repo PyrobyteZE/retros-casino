@@ -1960,6 +1960,7 @@ const Companies = {
             : `<button class="co-stab${activeTab==='stocks'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'stocks')">📈 Stocks</button>
                <button class="co-stab${activeTab==='props'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'props')">🏗️ Props</button>
                <button class="co-stab${activeTab==='upgrades'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'upgrades')">🔧 Upgrades</button>
+               <button class="co-stab${activeTab==='craft'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'craft')">🔨 Craft</button>
                <button class="co-stab${activeTab==='more'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'more')">⚙️ More</button>`
           }
         </div>
@@ -2154,6 +2155,15 @@ const Companies = {
             </div>`;
           }
           html += `</div>`;
+        }
+
+        // ── CRAFT TAB ─────────────────────────────────────────────────────
+        if (activeTab === 'craft' && !drillActive) {
+          if (typeof Crafting !== 'undefined') {
+            html += Crafting.renderCraftTab(cIdx);
+          } else {
+            html += `<div class="craft-empty">Crafting system not loaded.</div>`;
+          }
         }
 
         // ── MORE TAB (rename, sell, insider intel, news org, bank, main/delete) ─
