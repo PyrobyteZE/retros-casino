@@ -1952,14 +1952,16 @@ const Companies = {
         const drillActive = this._activeSubStock && this._activeSubStock.cIdx === cIdx;
         const drillSIdx = drillActive ? this._activeSubStock.sIdx : -1;
         const drillSym = drillActive ? (c.stocks[drillSIdx]?.symbol || '') : '';
+        const showingDrill = drillActive && activeTab === 'stocks';
         html += `<div class="co-sub-tabs">
-          ${drillActive && activeTab === 'stocks'
-            ? `<button class="co-stab active" onclick="Companies._closeSubStockPanel()" style="text-align:left;flex:none;padding-left:10px">← ${this._esc(drillSym)}</button><span style="flex:1;font-size:11px;color:var(--text-dim);padding:8px 6px;align-self:center">Sub-stock</span>`
-            : `<button class="co-stab${activeTab==='stocks'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'stocks')">📈 Stocks</button>`
+          ${showingDrill
+            ? `<button class="co-stab active" onclick="Companies._closeSubStockPanel()" style="text-align:left;flex:none;padding-left:10px;gap:4px">← ${this._esc(drillSym)}</button>
+               <span style="flex:1;font-size:11px;color:var(--text-dim);padding:8px 6px;align-self:center">Sub-stock</span>`
+            : `<button class="co-stab${activeTab==='stocks'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'stocks')">📈 Stocks</button>
+               <button class="co-stab${activeTab==='props'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'props')">🏗️ Props</button>
+               <button class="co-stab${activeTab==='upgrades'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'upgrades')">🔧 Upgrades</button>
+               <button class="co-stab${activeTab==='more'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'more')">⚙️ More</button>`
           }
-          <button class="co-stab${activeTab==='props'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'props');Companies._closeSubStockPanel()">🏗️ Props</button>
-          <button class="co-stab${activeTab==='upgrades'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'upgrades');Companies._closeSubStockPanel()">🔧 Upgrades</button>
-          <button class="co-stab${activeTab==='more'?' active':''}" onclick="Companies.setCompanyTab(${cIdx},'more');Companies._closeSubStockPanel()">⚙️ More</button>
         </div>
         <div class="co-sub-content">`;
 
