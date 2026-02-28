@@ -2305,9 +2305,9 @@ const Firebase = {
   },
 
   // === NEWS ORGS ===
-  setNewsOrg(ownerUid, data) {
+  setNewsOrg(ownerUid, entityKey, data) {
     if (!this.isOnline()) return Promise.reject('offline');
-    return this.db.ref('newsOrgs/' + ownerUid).set(data);
+    return this.db.ref('newsOrgs/' + ownerUid + '/' + entityKey).set(data);
   },
 
   postNewsArticle(ownerUid, postData) {

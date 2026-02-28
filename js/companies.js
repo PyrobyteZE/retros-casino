@@ -2028,9 +2028,25 @@ const Companies = {
               });
               html += `</div></div>`;
             }
+            // News Org if entertainment
+            if (ind === 'entertainment') {
+              const subOrg = this._getMyOrg(s.symbol);
+              const subOrgEnabled = subOrg && subOrg.enabled;
+              html += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bg3)">
+                <div style="font-size:12px;font-weight:700;color:var(--text-dim);margin-bottom:6px">📰 News Organization</div>`;
+              if (!subOrgEnabled) {
+                html += `<button class="add-stock-btn" style="color:var(--accent);border-color:var(--accent)" onclick="Companies.enableSubStockNewsOrg(${cIdx},${drillSIdx})">Enable News Org — Free</button>`;
+              } else {
+                const rep = subOrg.reputation || 50;
+                html += `<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">Reputation: <strong style="color:${rep>=50?'var(--green)':'var(--red)'}">${Math.round(rep)}/100</strong></div>
+                  <textarea id="news-post-input-sub-${cIdx}-${drillSIdx}" maxlength="120" placeholder="Write a headline…" style="width:100%;height:60px;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);padding:8px;font-size:13px;resize:none;box-sizing:border-box"></textarea>
+                  <button class="company-found-btn" style="margin-top:6px;padding:8px 20px" onclick="Companies.postSubStockNews(${cIdx},${drillSIdx})">📢 Publish</button>`;
+              }
+              html += `</div>`;
+            }
             // Bank if finance
             if (ind === 'finance' && typeof Banking !== 'undefined') {
-              html += Banking.renderBankSetup(cIdx);
+              html += Banking.renderBankSetup(cIdx, true);
             }
           } else {
             // ── STOCK LIST ───────────────────────────────────────────
@@ -2171,8 +2187,8 @@ const Companies = {
           }
           // News org (entertainment)
           if ((c.industry||'tech') === 'entertainment') {
-            const myOrg = myUid ? this._newsOrgs[myUid] : null;
-            const orgEnabled = myOrg && myOrg.enabled && myOrg.companyTicker === c.ticker;
+            const myOrg = this._getMyOrg(c.ticker);
+            const orgEnabled = myOrg && myOrg.enabled;
             html += `<div class="company-manage-section news-org-section" style="margin-bottom:8px"><h3>📰 News Organization</h3>`;
             if (!orgEnabled) {
               html += `<button class="add-stock-btn" style="color:var(--accent);border-color:var(--accent)" onclick="Companies.enableNewsOrg(${cIdx})">Enable News Org — Free</button>`;
@@ -2442,15 +2458,46 @@ const Companies = {
 
   // === NEWS ORG ===
 
+  // Helper: get a player's org for a given entityKey (ticker or symbol)
+  _getMyOrg(entityKey) {
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    if (!myUid) return null;
+    const userOrgs = this._newsOrgs[myUid];
+    if (!userOrgs) return null;
+    // New format: { [entityKey]: orgData }
+    if (userOrgs[entityKey]) return userOrgs[entityKey];
+    // Old format (backward compat): flat object with enabled + companyTicker
+    if (userOrgs.enabled && userOrgs.companyTicker === entityKey) return userOrgs;
+    return null;
+  },
+
   enableNewsOrg(cIdx) {
     const c = this._companies[cIdx];
     if (!c) return;
     if (typeof Firebase === 'undefined' || !Firebase.isOnline()) { alert('Must be online.'); return; }
     const myUid = Firebase.uid;
-    Firebase.setNewsOrg(myUid, { enabled: true, companyTicker: c.ticker, reputation: 50 }).then(() => {
-      this._newsOrgs[myUid] = { enabled: true, companyTicker: c.ticker, reputation: 50 };
+    const orgData = { enabled: true, entityKey: c.ticker, reputation: 50 };
+    Firebase.setNewsOrg(myUid, c.ticker, orgData).then(() => {
+      if (!this._newsOrgs[myUid]) this._newsOrgs[myUid] = {};
+      this._newsOrgs[myUid][c.ticker] = orgData;
       this.render();
       Toast.show('\u{1F4F0} News Org enabled!', '#27ae60', 3000);
+    });
+  },
+
+  enableSubStockNewsOrg(cIdx, sIdx) {
+    const c = this._companies[cIdx];
+    if (!c) return;
+    const s = c.stocks[sIdx];
+    if (!s) return;
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) { alert('Must be online.'); return; }
+    const myUid = Firebase.uid;
+    const orgData = { enabled: true, entityKey: s.symbol, reputation: 50 };
+    Firebase.setNewsOrg(myUid, s.symbol, orgData).then(() => {
+      if (!this._newsOrgs[myUid]) this._newsOrgs[myUid] = {};
+      this._newsOrgs[myUid][s.symbol] = orgData;
+      this._triggerRender();
+      Toast.show('\u{1F4F0} News Org enabled for ' + s.symbol + '!', '#27ae60', 3000);
     });
   },
 
@@ -2459,19 +2506,39 @@ const Companies = {
     if (!c) return;
     if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
     const myUid = Firebase.uid;
-    const myOrg = this._newsOrgs[myUid];
+    const myOrg = this._getMyOrg(c.ticker);
     if (!myOrg || !myOrg.enabled) { Toast.show('Enable News Org first', '#ff5252'); return; }
     const input = document.getElementById('news-post-input-' + cIdx);
     if (!input) return;
     const text = input.value.trim().slice(0, 120);
     if (!text) { Toast.show('Enter a headline', '#ff5252'); return; }
     Firebase.postNewsArticle(myUid, {
-      text,
-      ts: Date.now(),
-      upvotes: 0,
-      downvotes: 0,
+      text, ts: Date.now(), upvotes: 0, downvotes: 0,
       authorName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Player',
-      companyTicker: c.ticker,
+      entityKey: c.ticker,
+    }).then(() => {
+      input.value = '';
+      Toast.show('\u{1F4F0} Published: ' + text.slice(0, 40), '#27ae60', 3000);
+    });
+  },
+
+  postSubStockNews(cIdx, sIdx) {
+    const c = this._companies[cIdx];
+    if (!c) return;
+    const s = c.stocks[sIdx];
+    if (!s) return;
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
+    const myUid = Firebase.uid;
+    const myOrg = this._getMyOrg(s.symbol);
+    if (!myOrg || !myOrg.enabled) { Toast.show('Enable News Org first', '#ff5252'); return; }
+    const input = document.getElementById('news-post-input-sub-' + cIdx + '-' + sIdx);
+    if (!input) return;
+    const text = input.value.trim().slice(0, 120);
+    if (!text) { Toast.show('Enter a headline', '#ff5252'); return; }
+    Firebase.postNewsArticle(myUid, {
+      text, ts: Date.now(), upvotes: 0, downvotes: 0,
+      authorName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Player',
+      entityKey: s.symbol,
     }).then(() => {
       input.value = '';
       Toast.show('\u{1F4F0} Published: ' + text.slice(0, 40), '#27ae60', 3000);
@@ -2490,21 +2557,43 @@ const Companies = {
     this._triggerRender();
   },
 
+  // Returns flat list of { uid, entityKey, org } for all enabled news orgs
+  // Handles both old format (newsOrgs/{uid} = { enabled, companyTicker }) and
+  // new format (newsOrgs/{uid}/{entityKey} = { enabled, entityKey })
+  _flatActiveOrgs() {
+    const result = [];
+    Object.entries(this._newsOrgs).forEach(([uid, val]) => {
+      if (!val) return;
+      if (val.enabled !== undefined) {
+        // Old flat format
+        if (val.enabled) result.push({ uid, entityKey: val.companyTicker || val.entityKey || uid, org: val });
+      } else {
+        // New nested format: { [entityKey]: orgData }
+        Object.entries(val).forEach(([entityKey, org]) => {
+          if (org && org.enabled) result.push({ uid, entityKey, org });
+        });
+      }
+    });
+    return result;
+  },
+
   _renderNewsTab(container) {
     let html = '';
-    const activeOrgs = Object.entries(this._newsOrgs).filter(([, o]) => o && o.enabled);
+    const activeOrgs = this._flatActiveOrgs();
     if (activeOrgs.length === 0) {
-      html = `<div style="text-align:center;color:var(--text-dim);padding:40px 16px">
+      container.innerHTML = `<div style="text-align:center;color:var(--text-dim);padding:40px 16px">
         <div style="font-size:48px;margin-bottom:12px">\u{1F4F0}</div>
         <div style="font-weight:700;margin-bottom:6px">No News Organizations</div>
-        <div style="font-size:13px">Entertainment companies can register as news orgs in the My Company tab.</div>
+        <div style="font-size:13px">Entertainment companies/stocks can enable a news org in My Company.</div>
       </div>`;
-      container.innerHTML = html;
       return;
     }
-    activeOrgs.forEach(([uid, org]) => {
+    activeOrgs.forEach(({ uid, entityKey, org }) => {
       const posts = this._newsPosts[uid] || {};
-      const postList = Object.entries(posts).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+      // Show only posts for this entityKey, fall back to all posts if no entityKey on post
+      const postList = Object.entries(posts)
+        .filter(([, p]) => !p.entityKey || p.entityKey === entityKey)
+        .sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
       postList.forEach(([postId, post]) => {
         const net = (post.upvotes || 0) - (post.downvotes || 0);
         const repColor = net > 0 ? '#27ae60' : net < 0 ? '#c0392b' : 'var(--text-dim)';
@@ -2512,11 +2601,11 @@ const Companies = {
         const ageStr = age < 60000 ? 'just now' : age < 3600000 ? Math.floor(age / 60000) + 'm ago' : Math.floor(age / 3600000) + 'h ago';
         html += `<div class="company-card" style="border-color:var(--accent)">
           <div class="company-card-header">
-            <div><span class="company-card-sym">\u{1F4F0}</span> <span>${this._esc(org.companyTicker || '')}</span></div>
+            <div><span class="company-card-sym">\u{1F4F0}</span> <span>${this._esc(entityKey)}</span></div>
             <div style="font-size:11px;color:var(--text-dim)">${ageStr}</div>
           </div>
           <div class="company-card-name" style="font-size:14px;line-height:1.4">${this._esc(post.text)}</div>
-          <div class="company-card-owner" style="font-size:11px;margin-bottom:8px">by ${this._esc(post.authorName || org.companyTicker)} &bull; Rep: ${org.reputation || 50}</div>
+          <div class="company-card-owner" style="font-size:11px;margin-bottom:8px">by ${this._esc(post.authorName || entityKey)} &bull; Rep: ${org.reputation || 50}</div>
           <div class="company-card-actions" style="justify-content:space-between">
             <div>
               <button class="company-buy-btn" style="background:#27ae60;padding:4px 12px;font-size:13px" onclick="Companies.voteNews('${uid}','${postId}','up')">\u{1F44D} ${post.upvotes || 0}</button>
@@ -2532,24 +2621,26 @@ const Companies = {
   },
 
   _renderNewsFeed(html) {
-    const activeOrgs = Object.entries(this._newsOrgs).filter(([, o]) => o && o.enabled);
+    const activeOrgs = this._flatActiveOrgs();
     if (activeOrgs.length === 0) return html;
     html += '<div class="player-stocks-market-header" style="margin-top:16px">\u{1F4F0} News Feed</div>';
     html += '<div style="display:flex;flex-direction:column;gap:10px">';
-    activeOrgs.forEach(([uid, org]) => {
+    activeOrgs.forEach(({ uid, entityKey, org }) => {
       const posts = this._newsPosts[uid] || {};
-      const postList = Object.entries(posts).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+      const postList = Object.entries(posts)
+        .filter(([, p]) => !p.entityKey || p.entityKey === entityKey)
+        .sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
       if (postList.length === 0) return;
       const [postId, latest] = postList[0];
       const net = (latest.upvotes || 0) - (latest.downvotes || 0);
       const repColor = net > 0 ? '#27ae60' : net < 0 ? '#c0392b' : 'var(--text-dim)';
       html += `<div class="company-card" style="border-color:var(--accent)">
         <div class="company-card-header">
-          <div><span class="company-card-sym">\u{1F4F0}</span> <span>${this._esc(org.companyTicker || '')}</span></div>
+          <div><span class="company-card-sym">\u{1F4F0}</span> <span>${this._esc(entityKey)}</span></div>
           <div style="font-size:11px;color:${repColor}">&#x2764; ${latest.upvotes || 0} &nbsp; \u{1F44E} ${latest.downvotes || 0}</div>
         </div>
         <div class="company-card-name" style="font-size:13px">${this._esc(latest.text)}</div>
-        <div class="company-card-owner" style="font-size:11px">by ${this._esc(latest.authorName || org.companyTicker)} &bull; Rep: ${org.reputation || 50}</div>
+        <div class="company-card-owner" style="font-size:11px">by ${this._esc(latest.authorName || entityKey)} &bull; Rep: ${org.reputation || 50}</div>
         <div class="company-card-actions">
           <button class="company-buy-btn" style="background:#27ae60;padding:4px 12px;font-size:13px" onclick="Companies.voteNews('${uid}','${postId}','up')">&#x1F44D; Like</button>
           <button class="company-sell-btn" style="padding:4px 12px;font-size:13px" onclick="Companies.voteNews('${uid}','${postId}','down')">&#x1F44E; Dislike</button>

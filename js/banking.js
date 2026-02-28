@@ -455,9 +455,9 @@ const Banking = {
     container.innerHTML = html;
   },
 
-  renderBankSetup(companyIdx) {
+  renderBankSetup(companyIdx, forceShow = false) {
     const c = typeof Companies !== 'undefined' ? Companies._companies[companyIdx] : null;
-    if (!c || (c.industry || 'tech') !== 'finance') return '';
+    if (!c || (!forceShow && (c.industry || 'tech') !== 'finance')) return '';
     const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
     const rebirth = typeof App !== 'undefined' ? (App.rebirth || 0) : 0;
     const bank = myUid ? this._banks[myUid] : null;
