@@ -283,6 +283,7 @@ const Admin = {
     else if (tab === 'player') content.innerHTML = this._renderPlayerTab();
     else if (tab === 'rooms') content.innerHTML = this._renderRoomsTab();
     else if (tab === 'market') content.innerHTML = this._renderMarketTab();
+    else if (tab === 'coins') content.innerHTML = this._renderCoinsTab();
     else if (tab === 'data') content.innerHTML = this._renderDataTab();
     this._populateTabValues(tab);
   },
@@ -320,9 +321,10 @@ const Admin = {
       this.renderOnlinePlayers();
     } else if (tab === 'market') {
       this.renderPlayerStockControls();
-      this.renderPlayerCoinControls();
       this.renderBankControls();
       this.renderStockControls();
+    } else if (tab === 'coins') {
+      this.renderPlayerCoinControls();
       this.renderCryptoControls();
     } else if (tab === 'data') {
       this.renderHistory();
@@ -631,6 +633,18 @@ const Admin = {
         </div>
       </div>
       <div class="admin-section">
+        <h3>Hunger Controls</h3>
+        <div class="admin-actions">
+          <button class="admin-btn win-btn" onclick="Admin.feedEveryone(100)">Feed Everyone (100%)</button>
+          <button class="admin-btn danger" onclick="Admin.feedEveryone(10)">Starve Everyone (10%)</button>
+        </div>
+        <div class="admin-row">
+          <label>Set My Hunger:</label>
+          <input type="number" id="admin-hunger-val" min="0" max="100" value="100" style="width:60px">
+          <button onclick="Admin.setHunger()">Set</button>
+        </div>
+      </div>
+      <div class="admin-section">
         <h3>Online Players</h3>
         <div id="admin-online-players"><span style="color:var(--text-dim);font-size:12px">Loading...</span></div>
       </div>
@@ -705,28 +719,12 @@ const Admin = {
   _renderMarketTab() {
     return `
       <div class="admin-section">
-        <h3>Hunger Controls</h3>
-        <div class="admin-actions">
-          <button class="admin-btn win-btn" onclick="Admin.feedEveryone(100)">Feed Everyone (100%)</button>
-          <button class="admin-btn danger" onclick="Admin.feedEveryone(10)">Starve Everyone (10%)</button>
-        </div>
-        <div class="admin-row">
-          <label>Set My Hunger:</label>
-          <input type="number" id="admin-hunger-val" min="0" max="100" value="100" style="width:60px">
-          <button onclick="Admin.setHunger()">Set</button>
-        </div>
-      </div>
-      <div class="admin-section">
         <h3>Player Stocks</h3>
         <div class="admin-actions">
           <button class="admin-btn win-btn" onclick="Admin.playerStocksBoom()">Player Boom (+100%)</button>
           <button class="admin-btn danger" onclick="Admin.playerStocksCrash()">Player Crash (-50%)</button>
         </div>
         <div id="admin-player-stock-controls" class="admin-stock-controls"></div>
-      </div>
-      <div class="admin-section">
-        <h3>Player Coins</h3>
-        <div id="admin-player-coin-controls" class="admin-stock-controls"></div>
       </div>
       <div class="admin-section">
         <h3>Player Banks</h3>
@@ -765,8 +763,17 @@ const Admin = {
           <button class="admin-btn" onclick="Stocks._triggerSoloEvent('peace')">Peace Deal</button>
         </div>
       </div>
+    `;
+  },
+
+  _renderCoinsTab() {
+    return `
       <div class="admin-section">
-        <h3>Crypto Mining</h3>
+        <h3>Player Coins</h3>
+        <div id="admin-player-coin-controls" class="admin-stock-controls"></div>
+      </div>
+      <div class="admin-section">
+        <h3>System Crypto</h3>
         <div class="admin-actions">
           <button class="admin-btn win-btn" onclick="Admin.cryptoPump()">Pump All (3x)</button>
           <button class="admin-btn danger" onclick="Admin.cryptoDump()">Dump All (-70%)</button>
