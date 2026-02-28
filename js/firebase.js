@@ -55,6 +55,9 @@ const Firebase = {
   _activeDmId: null,
   _dmPanelOpen: false,
 
+  // Private room invites
+  _seenInviteIds: {},
+
   // === INIT ===
   init() {
     this._updateChatStatus('Connecting...');
@@ -214,6 +217,8 @@ const Firebase = {
       Loans._startCounterLoanTimer();
     }
     if (typeof MainRoom !== 'undefined') MainRoom.init();
+    // Private room invites
+    this.listenInvites(this.uid, invites => this._onInvites(invites));
     // Admin player commands (targeted at this specific player)
     this.db.ref('adminPlayerCommands/' + this.uid).on('value', snap => {
       const cmd = snap.val();
@@ -647,7 +652,7 @@ const Firebase = {
   },
 
   _updateChatBadge() {
-    const btn = document.getElementById('chat-toggle-btn');
+    const btn = document.getElementById('chat-toggle-btn-bar');
     if (!btn) return;
     let badge = btn.querySelector('.chat-badge-count');
     if (this._chatUnreadCount > 0) {
@@ -784,7 +789,7 @@ const Firebase = {
   },
 
   // === PVP COIN FLIP ===
-  createPvpFlip(amount, choice) {
+  createPvpFlip(amount, choice, targetUid = null) {
     if (!this.isOnline()) return;
     const name = typeof Settings !== 'undefined' ? Settings.profile.name : 'Player';
     const avatar = typeof Settings !== 'undefined' ? Settings.avatars[Settings.profile.avatar] : '';
@@ -798,6 +803,7 @@ const Firebase = {
       status: 'open',
       timestamp: firebase.database.ServerValue.TIMESTAMP,
     };
+    if (targetUid) flipData.targetUid = targetUid;
     this.db.ref('pvpFlips').push(flipData).catch(err => {
       console.error('Firebase pvpFlip write error:', err);
       App.addBalance(amount); // refund on failure
@@ -2356,5 +2362,111 @@ const Firebase = {
     this.db.ref('chat').push({
       name: '\u{1F4E2} SYSTEM', text, ts: Date.now(), uid: 'system', system: true,
     }).catch(() => {});
+  },
+
+  // === M&A ACQUISITION TRANSFERS ===
+  sendAcquisitionTransfer(buyerUid, data) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('acquisitionTransfers/' + buyerUid).push(data);
+  },
+  listenAcquisitionTransfers(uid, cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('acquisitionTransfers/' + uid).on('value', snap => cb(snap.val() || {}));
+  },
+  removeAcquisitionTransfer(uid, transferId) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('acquisitionTransfers/' + uid + '/' + transferId).remove();
+  },
+
+  // === PRIVATE ROOMS ===
+  createPrivateRoom(roomId, data) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('privateRooms/' + roomId).set(data);
+  },
+  listenPrivateRoom(roomId, cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('privateRooms/' + roomId).on('value', snap => cb(snap.val()));
+  },
+  stopListenPrivateRoom(roomId) {
+    if (!this.db) return;
+    this.db.ref('privateRooms/' + roomId).off();
+  },
+  updatePrivateRoom(roomId, updates) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('privateRooms/' + roomId).update(updates);
+  },
+  joinPrivateRoom(roomId, uid, playerData) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('privateRooms/' + roomId + '/players/' + uid).set(playerData);
+  },
+  deletePrivateRoom(roomId) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('privateRooms/' + roomId).remove();
+  },
+  sendInvite(targetUid, inviteData) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('playerInvites/' + targetUid).push(inviteData);
+  },
+  removeInvite(targetUid, inviteId) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('playerInvites/' + targetUid + '/' + inviteId).remove();
+  },
+  listenInvites(uid, cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('playerInvites/' + uid).on('value', snap => cb(snap.val() || {}));
+  },
+
+  _onInvites(invites) {
+    for (const id in invites) {
+      if (!this._seenInviteIds[id]) {
+        this._seenInviteIds[id] = true;
+        this._showInviteOverlay(id, invites[id]);
+      }
+    }
+  },
+
+  _showInviteOverlay(inviteId, inv) {
+    const appEl = document.getElementById('app');
+    if (!appEl) return;
+    const el = document.createElement('div');
+    el.className = 'invite-overlay';
+    el.id = 'invite-' + inviteId;
+    const gameName = inv.type === 'coinflip' ? 'Coin Flip Challenge'
+      : (inv.game ? inv.game.charAt(0).toUpperCase() + inv.game.slice(1) : 'Game');
+    const hostName = this._escapeHtml(inv.hostName || 'Someone');
+    const code = inv.code ? `<div class="invite-code">${this._escapeHtml(inv.code)}</div>` : '';
+    el.innerHTML = `
+      <div class="invite-box">
+        <div class="invite-title">\u{1F514} ${hostName} invited you</div>
+        <div class="invite-body">${gameName}${code}</div>
+        <div class="invite-actions">
+          <button class="invite-accept" onclick="Firebase._acceptInvite('${inviteId}','${inv.roomId || ''}','${inv.game || ''}',this)">Accept</button>
+          <button class="invite-decline" onclick="Firebase._declineInvite('${inviteId}',this)">Decline</button>
+        </div>
+      </div>`;
+    appEl.appendChild(el);
+    // Slide in
+    requestAnimationFrame(() => el.classList.add('invite-visible'));
+    // Auto-remove after 30s
+    setTimeout(() => { if (el.parentNode) { el.remove(); this.removeInvite(this.uid, inviteId); } }, 30000);
+  },
+
+  _acceptInvite(inviteId, roomId, game, btnEl) {
+    const el = btnEl.closest('.invite-overlay');
+    if (el) el.remove();
+    this.removeInvite(this.uid, inviteId);
+    if (game === 'coinflip') {
+      App.showScreen('coinflip');
+      if (typeof CoinFlip !== 'undefined') { CoinFlip.setTab('pvp'); }
+    } else if (roomId && game) {
+      App.showScreen(game);
+      if (typeof PrivateRoom !== 'undefined') PrivateRoom.join(roomId, game);
+    }
+  },
+
+  _declineInvite(inviteId, btnEl) {
+    const el = btnEl.closest('.invite-overlay');
+    if (el) el.remove();
+    this.removeInvite(this.uid, inviteId);
   },
 };

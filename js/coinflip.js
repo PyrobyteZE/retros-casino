@@ -134,6 +134,8 @@ const CoinFlip = {
           <button class="pvp-choice-btn ${selectedT}" onclick="CoinFlip._selectChoice('tails')">Tails</button>
         </div>
         <button class="pvp-create-btn" onclick="CoinFlip._createPvpFlip()">Create Flip</button>
+        <button class="pvp-challenge-btn" onclick="CoinFlip._toggleChallengePicker()">🎯 Challenge Player</button>
+        <div id="pvp-challenge-picker" class="pvp-challenge-picker" style="display:none"></div>
       </div>`;
 
     // Your pending flips
@@ -158,7 +160,8 @@ const CoinFlip = {
     }
 
     // Open challenges from others
-    const openFlips = this.pvpFlips.filter(f => f.status === 'open' && f.creatorSessionId !== mySession);
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    const openFlips = this.pvpFlips.filter(f => f.status === 'open' && f.creatorSessionId !== mySession && f.creatorUid !== myUid && (!f.targetUid || f.targetUid === myUid));
     html += '<div class="pvp-section-title">Open Challenges</div>';
     if (openFlips.length === 0) {
       html += '<div class="pvp-empty">No open challenges</div>';
@@ -218,6 +221,47 @@ const CoinFlip = {
     }
     App.addBalance(-amount);
     Firebase.createPvpFlip(amount, this._pvpChoice);
+  },
+
+  _toggleChallengePicker() {
+    const picker = document.getElementById('pvp-challenge-picker');
+    if (!picker) return;
+    const open = picker.style.display !== 'none';
+    if (open) { picker.style.display = 'none'; return; }
+    const players = Object.entries(Firebase.onlinePlayers || {})
+      .filter(([uid]) => uid !== Firebase.uid);
+    if (players.length === 0) {
+      picker.innerHTML = '<div class="pvp-empty">No players online</div>';
+    } else {
+      picker.innerHTML = players.map(([uid, p]) =>
+        `<div class="online-pick-row">${this._escapeHtml(p.name || 'Player')}
+          <button class="prm-invite-btn" onclick="CoinFlip._createTargetedFlip('${uid}')">Challenge</button>
+        </div>`
+      ).join('');
+    }
+    picker.style.display = 'block';
+  },
+
+  _createTargetedFlip(targetUid) {
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
+    const input = document.getElementById('pvp-amount');
+    const amount = Math.max(1, Math.round(Number(input?.value) || 0));
+    if (amount > App.balance) { alert('Not enough money!'); return; }
+    App.addBalance(-amount);
+    Firebase.createPvpFlip(amount, this._pvpChoice, targetUid);
+    const target = (Firebase.onlinePlayers || {})[targetUid];
+    const targetName = target ? target.name : 'Player';
+    const myName = typeof Settings !== 'undefined' ? Settings.profile.name : 'Player';
+    Firebase.sendInvite(targetUid, {
+      type: 'coinflip',
+      hostUid: Firebase.uid,
+      hostName: myName,
+      game: 'coinflip',
+      ts: Date.now(),
+    });
+    Toast.show('\u{1F3AF} Challenge sent to ' + targetName + '!', '#bb86fc', 3000);
+    const picker = document.getElementById('pvp-challenge-picker');
+    if (picker) picker.style.display = 'none';
   },
 
   _acceptPvpFlip(flipId) {

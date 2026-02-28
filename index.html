@@ -314,6 +314,7 @@
           <div class="game-actions">
             <button class="game-btn" id="crash-btn" onclick="Crash.toggle()">Start</button>
           </div>
+          <button class="mp-private-btn" onclick="PrivateRoom.showRoomPanel('crash')">🔒 Private Room</button>
         </div>
       </section>
 
@@ -457,7 +458,7 @@
           <div id="rl-auto-timer" class="rl-auto-timer"></div>
 
           <!-- Admin controls -->
-
+          <button class="mp-private-btn" onclick="PrivateRoom.showRoomPanel('roulette')">🔒 Private Room</button>
         </div>
       </section>
 
@@ -483,6 +484,7 @@
           <div class="game-actions">
             <button class="game-btn" id="horses-race-btn" onclick="Horses.race()">RACE!</button>
           </div>
+          <button class="mp-private-btn" onclick="PrivateRoom.showRoomPanel('horses')">🔒 Private Room</button>
         </div>
       </section>
 
@@ -600,6 +602,7 @@
         <div class="game-container">
           <div class="company-tabs">
             <button class="company-tab-btn active" data-tab="browse" onclick="Companies.setTab('browse')">Browse</button>
+            <button class="company-tab-btn" data-tab="news" onclick="Companies.setTab('news')">&#x1F4F0; News</button>
             <button class="company-tab-btn" data-tab="manage" onclick="Companies.setTab('manage')">My Company</button>
           </div>
           <div id="companies-content"></div>
@@ -695,9 +698,6 @@
       </div>
     </div>
   </div>
-
-  <!-- Chat Toggle Button -->
-  <button id="chat-toggle-btn" class="chat-toggle-btn" onclick="Firebase.toggleChat()">&#x1F4AC;</button>
 
   <!-- DM / Friends Toggle Button -->
   <button id="dm-toggle-btn" class="dm-toggle-btn" onclick="Firebase.toggleDmPanel()">&#x1F465;</button>

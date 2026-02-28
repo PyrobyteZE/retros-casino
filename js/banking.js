@@ -221,11 +221,13 @@ const Banking = {
     };
 
     Firebase.depositToVault(ownerUid, myUid, vaultData).then(() => {
-      // Update bank total
-      Firebase.updateBank(ownerUid, {
-        totalDeposited: (bank.totalDeposited || 0) + cash,
-        depositorCount: Object.keys(this._myVaults).length + (this._myVaults[ownerUid] ? 0 : 1),
-      });
+      // Owner depositing into own bank: don't add to totalDeposited (no stress liability)
+      if (myUid !== ownerUid) {
+        Firebase.updateBank(ownerUid, {
+          totalDeposited: (bank.totalDeposited || 0) + cash,
+          depositorCount: Object.keys(this._myVaults).length + (this._myVaults[ownerUid] ? 0 : 1),
+        });
+      }
       App.save();
       document.getElementById('modal-overlay')?.remove();
       Toast.show('🏦 Deposited!', '#27ae60', 3000);
@@ -245,15 +247,17 @@ const Banking = {
     if (!myVault) return;
     const myUid = Firebase.uid;
 
-    // Track for bank run
-    const now = Date.now();
-    if (!bank._recentWithdrawals) bank._recentWithdrawals = [];
-    bank._recentWithdrawals = bank._recentWithdrawals.filter(t => now - t < 2 * 60 * 1000);
-    bank._recentWithdrawals.push(now);
-    if (bank._recentWithdrawals.length >= 3) {
-      const fraudLvl = (bank.upgrades && bank.upgrades.fraudProtect) || 0;
-      const stressGain = this.UPGRADES.fraudProtect.stressGain[fraudLvl];
-      Firebase.updateBank(ownerUid, { stressLevel: Math.min(100, (bank.stressLevel || 0) + stressGain) });
+    // Track for bank run (skip if the bank owner is withdrawing their own deposit)
+    if (myUid !== ownerUid) {
+      const now = Date.now();
+      if (!bank._recentWithdrawals) bank._recentWithdrawals = [];
+      bank._recentWithdrawals = bank._recentWithdrawals.filter(t => now - t < 2 * 60 * 1000);
+      bank._recentWithdrawals.push(now);
+      if (bank._recentWithdrawals.length >= 3) {
+        const fraudLvl = (bank.upgrades && bank.upgrades.fraudProtect) || 0;
+        const stressGain = this.UPGRADES.fraudProtect.stressGain[fraudLvl];
+        Firebase.updateBank(ownerUid, { stressLevel: Math.min(100, (bank.stressLevel || 0) + stressGain) });
+      }
     }
 
     // Return assets to player
@@ -275,9 +279,12 @@ const Banking = {
     }
 
     Firebase.removeVault(ownerUid, myUid).then(() => {
-      Firebase.updateBank(ownerUid, {
-        totalDeposited: Math.max(0, (bank.totalDeposited || 0) - cash),
-      });
+      // Owner's own deposit was never counted in totalDeposited, so don't decrement it
+      if (myUid !== ownerUid) {
+        Firebase.updateBank(ownerUid, {
+          totalDeposited: Math.max(0, (bank.totalDeposited || 0) - cash),
+        });
+      }
       App.save();
       Toast.show('💸 Withdrawn!', '#27ae60', 3000);
       this._renderBankCards();

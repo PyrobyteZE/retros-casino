@@ -329,6 +329,7 @@ const Stocks = {
   },
 
   _startCatFight() {
+    Toast.show('\u{1F431} Cat fight triggered!', '#bb86fc', 3000);
     this._catFightActive = true;
     this._catFightCooldown = Date.now() + 30 * 60 * 1000;
     if (typeof Firebase !== 'undefined') {
@@ -345,6 +346,7 @@ const Stocks = {
 
     const tie = Math.random() < 0.01;
     if (tie) {
+      Toast.show('\u{1F639} It\u2019s a TIE! Both stocks explode!', '#bb86fc', 3000);
       if (typeof Firebase !== 'undefined') Firebase.pushSystemAnnouncement('\u{1F639} BREAKING: Luna and Goose have TIED \u2014 both knocked each other out simultaneously! Chaos erupts! Investors panic-buy both stocks!');
       if (lunaIdx >= 0) this.setGradualTarget(lunaIdx, 1_000_000_000_000, 60);
       if (gooseIdx >= 0) this.setGradualTarget(gooseIdx, 1_000_000_000_000, 60);
@@ -355,9 +357,11 @@ const Stocks = {
     } else {
       const lunaWins = Math.random() < 0.5;
       if (lunaWins) {
+        Toast.show('\u{1F431} Luna wins!', '#bb86fc', 3000);
         if (typeof Firebase !== 'undefined') Firebase.pushSystemAnnouncement('\u{1F431} UPDATE: Luna wins the fight! Goose has retreated to stress-eat an entire lasagna. LUNA surges!');
         if (lunaIdx >= 0) this.setGradualTarget(lunaIdx, this.prices[lunaIdx] * 5, 20);
       } else {
+        Toast.show('\u{1F9A2} Goose wins!', '#bb86fc', 3000);
         if (typeof Firebase !== 'undefined') Firebase.pushSystemAnnouncement('\u{1F9A2} UPDATE: Goose wins the fight! Luna has stormed off. GOOSE surges!');
         if (gooseIdx >= 0) this.setGradualTarget(gooseIdx, this.prices[gooseIdx] * 5, 20);
       }
@@ -366,6 +370,8 @@ const Stocks = {
   },
 
   _triggerSoloEvent(event) {
+    const labels = { hairball: '\u{1F431} Hairball Crisis!', eaten: '\u{1F357} Report Eaten!', nap: '\u{1F634} Catnap!', viral: '\u{1F4F9} Viral Video!', peace: '\u{1F91D} Peace Deal!' };
+    Toast.show(labels[event] || '\u{1F431} Event!', '#bb86fc', 3000);
     const lunaIdx = this.stocks.findIndex(s => s.symbol === 'LUNA');
     const gooseIdx = this.stocks.findIndex(s => s.symbol === 'GOOSE');
     const cooldown = 10 * 60 * 1000;

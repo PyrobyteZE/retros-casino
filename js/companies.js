@@ -119,6 +119,13 @@ const Companies = {
       maxLevel: 3,
       costs: [2_000_000, 6_000_000, 15_000_000],
     },
+    acquisitionLicense: {
+      name: 'M&A Division',
+      icon: '\u{1F91D}',
+      desc: 'Enables acquisition offers on rival sub-stocks. Buy a sub-stock from another company and absorb it into yours. 7-stock portfolio cap total.',
+      maxLevel: 1,
+      costs: [5_000_000],
+    },
   },
 
   // === INDUSTRIES (each links to system stock symbols for cross-influence) ===
@@ -154,6 +161,8 @@ const Companies = {
   _peakHolds: {},          // { [sym]: ticksLeft } — plateau counter before hard-cap decay
   _monopolyTriggered: false, // anti-monopoly easter egg in-flight flag
   _stockOffers: {},           // { [targetTicker]: { [offererUid]: offerData } }
+  _acquisitionTransfers: {},  // { [transferId]: transferData } — incoming absorbed stocks
+  _appliedTransferIds: null,  // Set of already-applied transfer IDs
   _newsOrgs: {},              // { [ownerUid]: { enabled, companyTicker, reputation } }
   _newsPosts: {},             // { [ownerUid]: { [postId]: post } }
   activeTab: 'browse',
@@ -202,6 +211,16 @@ const Companies = {
       Firebase.listenStockOffers(data => {
         this._stockOffers = data || {};
         this._triggerRender();
+      });
+      if (!this._appliedTransferIds) this._appliedTransferIds = new Set();
+      Firebase.listenAcquisitionTransfers(Firebase.uid, data => {
+        this._acquisitionTransfers = data || {};
+        for (const id in this._acquisitionTransfers) {
+          if (!this._appliedTransferIds.has(id)) {
+            this._appliedTransferIds.add(id);
+            this._applyAcquisitionTransfer(id, this._acquisitionTransfers[id]);
+          }
+        }
       });
       Firebase.listenNewsOrgs(data => { this._newsOrgs = data || {}; this._triggerRender(); });
       Firebase.listenNewsPosts(data => { this._newsPosts = data || {}; this._triggerRender(); });
@@ -1561,6 +1580,9 @@ const Companies = {
   // === RENDER ===
   setTab(tab) {
     this.activeTab = tab;
+    document.querySelectorAll('.company-tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
     this.render();
   },
 
@@ -1576,6 +1598,7 @@ const Companies = {
     const focused = document.activeElement;
     const userTyping = focused && (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA');
     if (this.activeTab === 'browse') this._renderBrowse(container);
+    else if (this.activeTab === 'news') this._renderNewsTab(container);
     else if (!userTyping) this._renderManage(container);
   },
 
@@ -1655,6 +1678,16 @@ const Companies = {
             <button class="company-buy-btn" onclick="Companies.promptBuy('${s.symbol}')">Buy</button>
             ${owned > 0 ? `<button class="company-sell-btn" onclick="Companies.promptSell('${s.symbol}')">Sell</button>` : ''}
             ${!isMyStock ? `<button class="company-buy-btn" style="background:var(--bg3);border-color:var(--accent)" onclick="Companies.promptStockOffer('${s.symbol}')">&#x1F4BC; Offer</button>` : ''}
+            ${(() => {
+              if (isMyStock) return '';
+              const isSubStock = (s.companyStocks || []).length > 1 && (s.companyStocks[s.companyMainIdx || 0]?.symbol !== s.symbol);
+              if (!isSubStock) return '';
+              const hasMAD = this._companies.some(c => (c.upgrades?.acquisitionLicense || 0) >= 1);
+              if (!hasMAD) return '';
+              const totalStocks = this._countTotalPlayerStocks();
+              if (totalStocks >= 7) return '<span style="font-size:10px;color:var(--text-dim)">Portfolio full (7)</span>';
+              return `<button class="company-buy-btn" style="background:#1a2a4a;border-color:#82b1ff;color:#82b1ff" onclick="Companies.promptAcquisitionOffer('${s.symbol}')">&#x1F91D; Acquire</button>`;
+            })()}
           </div>
           ${compControls}
         </div>`;
@@ -1731,9 +1764,6 @@ const Companies = {
       html += '</div>';
     }
 
-    // 📰 News Feed
-    html = this._renderNewsFeed(html);
-
     // 🏦 Active Banks section
     html += `<div style="margin-top:16px">
       <div class="player-stocks-market-header">🏦 Active Banks</div>
@@ -1806,8 +1836,10 @@ const Companies = {
         html += `<div class="company-stock-row" style="align-items:flex-start">
           <div style="flex:1;min-width:0">
             <span class="csr-sym">${this._esc(sym)}</span>
+            ${offer.type === 'acquisition' ? '<span style="font-size:10px;background:#1a2a4a;color:#82b1ff;border:1px solid #82b1ff55;border-radius:4px;padding:1px 5px;margin-left:4px">&#x1F91D; ACQUISITION</span>' : ''}
             <div style="font-size:12px;color:var(--text-dim)">Offer: <strong>${App.formatMoney(offer.amount)}</strong></div>
             <div style="font-size:11px;color:var(--text-dim)">from ${this._esc(offer.offererName || 'Player')} (${this._esc(offer.offererCompanyTicker || '')})</div>
+            ${offer.type === 'acquisition' ? `<div style="font-size:10px;color:#82b1ff">→ absorb into their ${this._esc(offer.recipientCompanyTicker || '')}</div>` : ''}
           </div>
           <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
             <button class="csr-toggle-btn" style="color:var(--green);border-color:var(--green);font-size:11px" onclick="Companies.acceptStockOffer('${sym}','${offererUid}')">Accept</button>
@@ -2301,6 +2333,47 @@ const Companies = {
     this._triggerRender();
   },
 
+  _renderNewsTab(container) {
+    let html = '';
+    const activeOrgs = Object.entries(this._newsOrgs).filter(([, o]) => o && o.enabled);
+    if (activeOrgs.length === 0) {
+      html = `<div style="text-align:center;color:var(--text-dim);padding:40px 16px">
+        <div style="font-size:48px;margin-bottom:12px">\u{1F4F0}</div>
+        <div style="font-weight:700;margin-bottom:6px">No News Organizations</div>
+        <div style="font-size:13px">Entertainment companies can register as news orgs in the My Company tab.</div>
+      </div>`;
+      container.innerHTML = html;
+      return;
+    }
+    activeOrgs.forEach(([uid, org]) => {
+      const posts = this._newsPosts[uid] || {};
+      const postList = Object.entries(posts).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+      postList.forEach(([postId, post]) => {
+        const net = (post.upvotes || 0) - (post.downvotes || 0);
+        const repColor = net > 0 ? '#27ae60' : net < 0 ? '#c0392b' : 'var(--text-dim)';
+        const age = Date.now() - (post.ts || 0);
+        const ageStr = age < 60000 ? 'just now' : age < 3600000 ? Math.floor(age / 60000) + 'm ago' : Math.floor(age / 3600000) + 'h ago';
+        html += `<div class="company-card" style="border-color:var(--accent)">
+          <div class="company-card-header">
+            <div><span class="company-card-sym">\u{1F4F0}</span> <span>${this._esc(org.companyTicker || '')}</span></div>
+            <div style="font-size:11px;color:var(--text-dim)">${ageStr}</div>
+          </div>
+          <div class="company-card-name" style="font-size:14px;line-height:1.4">${this._esc(post.text)}</div>
+          <div class="company-card-owner" style="font-size:11px;margin-bottom:8px">by ${this._esc(post.authorName || org.companyTicker)} &bull; Rep: ${org.reputation || 50}</div>
+          <div class="company-card-actions" style="justify-content:space-between">
+            <div>
+              <button class="company-buy-btn" style="background:#27ae60;padding:4px 12px;font-size:13px" onclick="Companies.voteNews('${uid}','${postId}','up')">\u{1F44D} ${post.upvotes || 0}</button>
+              <button class="company-sell-btn" style="padding:4px 12px;font-size:13px" onclick="Companies.voteNews('${uid}','${postId}','down')">\u{1F44E} ${post.downvotes || 0}</button>
+            </div>
+            <div style="font-size:12px;color:${repColor};font-weight:700">${net > 0 ? '+' : ''}${net} net</div>
+          </div>
+        </div>`;
+      });
+    });
+    if (!html) html = `<div style="text-align:center;color:var(--text-dim);padding:32px">No posts yet.</div>`;
+    container.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;padding-top:8px">${html}</div>`;
+  },
+
   _renderNewsFeed(html) {
     const activeOrgs = Object.entries(this._newsOrgs).filter(([, o]) => o && o.enabled);
     if (activeOrgs.length === 0) return html;
@@ -2328,6 +2401,107 @@ const Companies = {
     });
     html += '</div>';
     return html;
+  },
+
+  // === M&A HELPERS ===
+
+  _countTotalPlayerStocks() {
+    return this._companies.reduce((sum, c) => sum + (c.stocks || []).length, 0);
+  },
+
+  // === M&A ACQUISITION OFFERS ===
+
+  promptAcquisitionOffer(sym) {
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) { alert('Must be online.'); return; }
+    const s = this._allPlayerStocks[sym];
+    if (!s) return;
+
+    // Eligible recipient companies: has M&A upgrade + has room for a stock (< 3)
+    const eligible = this._companies.filter(c => (c.upgrades?.acquisitionLicense || 0) >= 1 && (c.stocks || []).length < this.MAX_STOCKS);
+    if (eligible.length === 0) { alert('No eligible company — buy the M&A Division upgrade and ensure a company has fewer than 3 stocks.'); return; }
+
+    const totalStocks = this._countTotalPlayerStocks();
+    if (totalStocks >= 7) { alert('Portfolio cap reached (7 stocks max). Sell or remove a stock to make room.'); return; }
+
+    const companyOptions = eligible.map(c => `<option value="${this._esc(c.ticker)}">${this._esc(c.name)} (${c.stocks.length}/3 stocks)</option>`).join('');
+    const html = `<div class="stock-trade-modal">
+      <div class="stock-trade-title">&#x1F91D; Acquire ${this._esc(sym)}</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Sub-stock of ${this._esc(s.companyName || '')} &bull; Price: ${App.formatMoney(s.price)}/share</div>
+      <div style="font-size:13px;margin-bottom:6px">Receive into company:</div>
+      <select id="acq-recipient" style="width:100%;font-size:13px;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);padding:7px;margin-bottom:10px">${companyOptions}</select>
+      <div style="font-size:13px;margin-bottom:6px">Offer amount (total cash to seller):</div>
+      <input type="number" id="acq-offer-amt" placeholder="Offer amount $" style="width:100%;font-size:14px;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);padding:8px;margin-bottom:10px">
+      <div style="display:flex;gap:8px">
+        <button class="stock-buy-btn" style="flex:1" onclick="Companies._sendAcquisitionOffer('${sym}')">Send Offer</button>
+        <button class="stock-trade-cancel" onclick="Companies._closeStockOfferModal()">Cancel</button>
+      </div>
+    </div>`;
+
+    let modal = document.getElementById('stock-offer-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'stock-offer-modal';
+      modal.className = 'stock-modal-overlay';
+      document.getElementById('app').appendChild(modal);
+    }
+    modal.innerHTML = html;
+    modal.classList.remove('hidden');
+  },
+
+  _sendAcquisitionOffer(sym) {
+    const amountInput = document.getElementById('acq-offer-amt');
+    const recipientSelect = document.getElementById('acq-recipient');
+    if (!amountInput || !recipientSelect) return;
+    const amount = parseFloat(amountInput.value);
+    if (!amount || amount <= 0) { Toast.show('Enter a valid amount', '#ff5252'); return; }
+    if (amount > App.balance) { Toast.show('Not enough funds', '#ff5252'); return; }
+
+    const recipientCompanyTicker = recipientSelect.value;
+    const recipientComp = this._companies.find(c => c.ticker === recipientCompanyTicker);
+    if (!recipientComp) { Toast.show('Company not found', '#ff5252'); return; }
+    if ((recipientComp.stocks || []).length >= this.MAX_STOCKS) { Toast.show('That company is at max stocks (3)', '#ff5252'); return; }
+    if (this._countTotalPlayerStocks() >= 7) { Toast.show('Portfolio cap reached (7 stocks max)', '#ff5252'); return; }
+
+    const myName = typeof Settings !== 'undefined' ? Settings.profile.name : 'Player';
+    const offerData = {
+      amount,
+      offererUid: Firebase.uid,
+      offererName: myName,
+      offererCompanyTicker: recipientCompanyTicker,
+      type: 'acquisition',
+      recipientCompanyTicker,
+    };
+    const s = this._allPlayerStocks[sym];
+    if (!s) return;
+
+    Firebase.postStockOffer(sym, Firebase.uid, offerData).then(() => {
+      this._closeStockOfferModal();
+      Toast.show('\u{1F91D} Acquisition offer sent for ' + sym + ' — ' + App.formatMoney(amount), '#82b1ff', 3000);
+    });
+  },
+
+  _applyAcquisitionTransfer(transferId, data) {
+    if (!data || !data.stock) return;
+    const stock = data.stock;
+    const recipientTicker = data.recipientCompanyTicker;
+
+    // Find recipient company — prefer the requested one, fallback to any with space
+    let targetComp = this._companies.find(c => c.ticker === recipientTicker && (c.stocks || []).length < this.MAX_STOCKS);
+    if (!targetComp) targetComp = this._companies.find(c => (c.stocks || []).length < this.MAX_STOCKS);
+    if (!targetComp) {
+      Toast.show('\u{26A0} Acquisition transfer received but no company slot available!', '#ff5252', 6000);
+      Firebase.removeAcquisitionTransfer(Firebase.uid, transferId).catch(() => {});
+      return;
+    }
+
+    // Add the stock to the target company
+    targetComp.stocks.push({ ...stock });
+    this._saveLocal();
+    this._pushToFirebase();
+    App.save();
+    Firebase.removeAcquisitionTransfer(Firebase.uid, transferId).catch(() => {});
+    this._triggerRender();
+    Toast.show('\u{1F91D} Acquired ' + stock.symbol + ' \u2192 added to ' + targetComp.name + '!', '#82b1ff', 5000);
   },
 
   // === STOCK TRANSFER (company-to-company offers) ===
@@ -2389,17 +2563,30 @@ const Companies = {
     if (!offer) return;
     const myComp = this._companies.find(c => c.stocks && c.stocks.some(s => s.symbol === sym));
     if (!myComp) { Toast.show('You no longer own this stock', '#ff5252'); return; }
+    // Grab the stock object before removing (needed for acquisition transfer)
+    const stockObj = myComp.stocks.find(s => s.symbol === sym);
     // Remove stock from my company
     myComp.stocks = myComp.stocks.filter(s => s.symbol !== sym);
+    if ((myComp.mainIdx || 0) >= myComp.stocks.length) myComp.mainIdx = 0;
     App.addBalance(offer.amount);
     this._saveLocal();
     this._pushToFirebase();
-    // Remove offer and let buyer know via stock deletion + receipt
     Firebase.removeStockOffer(sym, offererUid).catch(() => {});
-    Firebase.removeStockOffer(sym, Firebase.uid).catch(() => {}); // remove any other offers for same sym
+    Firebase.removeStockOffer(sym, Firebase.uid).catch(() => {});
     App.save();
     this.render();
-    Toast.show('\u{1F4B0} Sold ' + sym + ' to ' + (offer.offererName || 'buyer') + ' for ' + App.formatMoney(offer.amount) + '!', '#27ae60', 5000);
+    if (offer.type === 'acquisition' && offererUid && stockObj) {
+      // Send the stock directly to the buyer's company via Firebase transfer
+      Firebase.sendAcquisitionTransfer(offererUid, {
+        stock: stockObj,
+        recipientCompanyTicker: offer.recipientCompanyTicker || '',
+        sellerName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Player',
+        sym,
+      }).catch(() => {});
+      Toast.show('\u{1F91D} Acquisition accepted! ' + sym + ' transferred to ' + (offer.offererName || 'buyer') + ' for ' + App.formatMoney(offer.amount) + '!', '#82b1ff', 5000);
+    } else {
+      Toast.show('\u{1F4B0} Sold ' + sym + ' to ' + (offer.offererName || 'buyer') + ' for ' + App.formatMoney(offer.amount) + '!', '#27ae60', 5000);
+    }
   },
 
   declineStockOffer(sym, offererUid) {
