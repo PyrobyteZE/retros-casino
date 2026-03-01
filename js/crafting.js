@@ -64,6 +64,7 @@ const Crafting = {
   _inventory: [],       // [ itemObj ]
   _equipped: { slot0: null, slot1: null, slot2: null },
   _itemListings: {},    // { listingId: { sellerUid, sellerName, item, price, listedAt } }
+  _templates: {},       // { [templateId]: templateObj } — limited edition listings from Firebase
   _activeTab: 'bag',    // 'bag' | 'market'
 
   // Pixel painter state
@@ -71,13 +72,20 @@ const Crafting = {
   _ppColor: 1,          // selected palette index
   _ppTool: 'brush',     // 'brush' | 'fill'
   _ppPainting: false,
-  _ppItemDraft: null,   // item being crafted (waiting for paint)
+  _ppItemDraft: null,   // item being crafted (waiting for paint), or 'template:[id]'
+
+  // Craft setup modal draft
+  _craftSetupDraft: null, // { name, isTemplate, price, mintLimit, cIdx, industry }
 
   // === INIT ===
   init() {
     if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
       Firebase.listenItemListings(data => {
         this._itemListings = data || {};
+        this._triggerRender();
+      });
+      Firebase.listenItemTemplates(data => {
+        this._templates = data || {};
         this._triggerRender();
       });
     }
@@ -129,7 +137,7 @@ const Crafting = {
     return Math.max(10_000, level * 50_000);
   },
 
-  craftItem(company, industry) {
+  craftItem(company, industry, overrideName) {
     const craftType = this.CRAFT_TYPES[industry];
     if (!craftType) { Toast.show('Invalid craft type', '#f44336', 2000); return; }
     const isGod = typeof Admin !== 'undefined' && Admin.godMode;
@@ -211,7 +219,7 @@ const Crafting = {
 
     const item = {
       id: 'item_' + seed.toString(36) + '_' + Math.floor(rng() * 9999).toString(36),
-      name: craftType.category + ' #' + hexSuffix,
+      name: overrideName || (craftType.category + ' #' + hexSuffix),
       category: craftType.category,
       icon: craftType.icon,
       pixels: '0'.repeat(256),
@@ -346,6 +354,19 @@ const Crafting = {
 
   savePixels() {
     if (!this._ppItemDraft || !this._ppPixels) { this.closePixelPainter(); return; }
+    // Template path
+    if (this._ppItemDraft.startsWith('template:')) {
+      const templateId = this._ppItemDraft.slice(9);
+      const tpl = this._templates[templateId];
+      if (tpl) tpl.baseItem.pixels = this._ppPixels;
+      if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+        Firebase.updateItemTemplatePixels(templateId, this._ppPixels);
+      }
+      this.closePixelPainter();
+      this._toast('🖼️ Art saved for Limited Edition!');
+      this._triggerRender();
+      return;
+    }
     const item = this._inventory.find(i => i.id === this._ppItemDraft);
     if (item) {
       item.pixels = this._ppPixels;
@@ -565,6 +586,7 @@ const Crafting = {
                 <option value="slot1">Slot 2</option>
                 <option value="slot2">Slot 3</option>
               </select>`}
+          ${item.crafterUid === ((typeof Firebase !== 'undefined' ? Firebase.uid : null) || 'local') ? `<button class="inv-edit-art-btn" onclick="Crafting.renameItem('${item.id}')">✏️</button>` : ''}
           <button class="inv-edit-art-btn" onclick="Crafting.openPixelPainter('${item.id}')">🎨 Edit Art</button>
           <button class="inv-sell-btn" onclick="Crafting._showListItemModal('${item.id}')">💰 Sell</button>
         </div>
@@ -576,11 +598,49 @@ const Crafting = {
 
   _renderMarket() {
     const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+
+    // === Limited Edition Templates section ===
+    const tplEntries = Object.entries(this._templates);
+    let html = '';
+    if (tplEntries.length > 0) {
+      html += `<div style="font-weight:700;font-size:13px;margin:8px 0 6px">🏭 Limited Editions</div>
+        <div class="inv-item-grid" style="margin-bottom:14px">`;
+      for (const [tid, tpl] of tplEntries) {
+        const item = tpl.baseItem;
+        const rarityColor = this.RARITY_COLORS[item.rarity] || '#aaa';
+        const isMine = tpl.crafterUid === myUid;
+        const soldOut = tpl.mintCount >= tpl.mintLimit;
+        const canAfford = App.balance >= tpl.price || (typeof Admin !== 'undefined' && Admin.godMode);
+        html += `<div class="inv-item-card" style="border-color:${rarityColor}">
+          <div class="inv-item-top">
+            <div class="inv-item-art">${this.renderPixelArt(item.pixels, 48)}</div>
+            <div class="inv-item-info">
+              <div class="inv-item-name">${this._esc(item.name)}</div>
+              <div class="inv-item-rarity" style="color:${rarityColor}">${item.rarity} ${item.category}</div>
+              <div class="inv-item-crafter">by ${this._esc(tpl.crafterName || '?')} | ${tpl.mintCount}/${tpl.mintLimit} minted</div>
+            </div>
+          </div>
+          <div class="inv-item-actions">
+            ${isMine
+              ? `<button class="inv-edit-art-btn" onclick="Crafting.renameTemplate('${tid}')">✏️ Rename</button>
+                 <button class="inv-sell-btn" onclick="Firebase.delistItemTemplate('${tid}')">🗑 Delist</button>`
+              : soldOut
+                ? `<span style="color:var(--text-dim);font-size:12px">Sold Out</span>`
+                : `<button class="house-buy-btn${canAfford?'':' unaffordable'}" onclick="Crafting.mintTemplate('${tid}')">Mint ${App.formatMoney(tpl.price)}</button>`}
+          </div>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+
     const listings = Object.entries(this._itemListings);
-    if (listings.length === 0) {
+    if (listings.length === 0 && tplEntries.length === 0) {
       return `<div class="inv-empty">No items listed yet.<br>Craft items and sell them from your Bag!</div>`;
     }
-    let html = `<div class="inv-item-grid">`;
+    if (listings.length > 0) {
+      html += `<div style="font-weight:700;font-size:13px;margin:8px 0 6px">🛒 Listed Items</div>`;
+    }
+    html += `<div class="inv-item-grid">`;
     for (const [lid, listing] of listings) {
       const item = listing.item;
       if (!item) continue;
@@ -622,6 +682,14 @@ const Crafting = {
     const company = typeof Companies !== 'undefined' ? Companies._companies[cIdx] : null;
     if (!company) return '<div class="craft-empty">No company data</div>';
 
+    // Industry-specific intercepts
+    if (company.industry === 'automotive') {
+      return typeof Cars !== 'undefined' ? Cars.renderBrandCraftTab(cIdx) : '<div class="craft-empty">Cars not loaded</div>';
+    }
+    if (company.industry === 'entertainment') {
+      return this._renderEntertainmentCraftTab(cIdx);
+    }
+
     const types = this.getAvailableTypes(company);
     const cost = this.getCraftCost(company);
     const canAfford = App.balance >= cost || (typeof Admin !== 'undefined' && Admin.godMode);
@@ -637,7 +705,7 @@ const Crafting = {
       const ct = this.CRAFT_TYPES[industry];
       if (!ct) continue;
       html += `<button class="craft-type-btn${canAfford?'':' unaffordable'}"
-        onclick="Crafting.craftItem(Companies._companies[${cIdx}],'${industry}')">
+        onclick="Crafting.showCraftSetupModal(${cIdx},'${industry}')">
         <span class="craft-type-icon">${ct.icon}</span>
         <span class="craft-type-name">${ct.category}</span>
         <span class="craft-type-industry">${industry}</span>
@@ -683,6 +751,300 @@ const Crafting = {
 
     html += `</div>`;
     return html;
+  },
+
+  // === CRAFT SETUP MODAL ===
+  showCraftSetupModal(cIdx, industry) {
+    const company = typeof Companies !== 'undefined' ? Companies._companies[cIdx] : null;
+    if (!company) return;
+    const craftType = this.CRAFT_TYPES[industry];
+    if (!craftType) return;
+    const hexSuffix = Math.floor(Math.random() * 0xffff).toString(16).toUpperCase().padStart(4, '0');
+    const defaultName = craftType.category + ' #' + hexSuffix;
+
+    const existing = document.getElementById('craft-setup-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'craft-setup-modal';
+    modal.className = 'house-modal-overlay';
+    modal.innerHTML = `
+      <div class="house-modal-box" style="max-width:340px">
+        <div class="house-modal-title">${craftType.icon} Craft ${craftType.category}</div>
+        <div class="car-design-row">
+          <label class="car-design-label">Item Name</label>
+          <input id="craft-setup-name" type="text" maxlength="32" class="house-modal-input" value="${this._esc(defaultName)}">
+        </div>
+        <div class="car-design-row" style="gap:8px;margin-bottom:10px">
+          <label style="font-size:13px;color:var(--text-dim)">Mode:</label>
+          <label style="font-size:13px;cursor:pointer"><input type="radio" name="craft-mode" value="inventory" checked onchange="document.getElementById('craft-template-opts').style.display='none'"> To Inventory</label>
+          <label style="font-size:13px;cursor:pointer"><input type="radio" name="craft-mode" value="template" onchange="document.getElementById('craft-template-opts').style.display='block'"> Limited Edition</label>
+        </div>
+        <div id="craft-template-opts" style="display:none">
+          <div class="car-design-row">
+            <label class="car-design-label">Price ($)</label>
+            <input id="craft-setup-price" type="text" class="sh-input house-modal-input" placeholder="e.g. 50k">
+            <span class="sh-preview" style="display:none"></span>
+          </div>
+          <div class="car-design-row">
+            <label class="car-design-label">Mint Limit (2–50)</label>
+            <input id="craft-setup-mint" type="number" min="2" max="50" value="10" class="house-modal-input">
+          </div>
+        </div>
+        <div class="house-modal-actions">
+          <button class="house-modal-btn" onclick="Crafting.confirmCraftSetup(${cIdx},'${industry}')">Confirm</button>
+          <button class="house-modal-btn house-modal-cancel" onclick="document.getElementById('craft-setup-modal').remove()">Cancel</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    document.getElementById('craft-setup-name').focus();
+  },
+
+  confirmCraftSetup(cIdx, industry) {
+    const company = typeof Companies !== 'undefined' ? Companies._companies[cIdx] : null;
+    if (!company) return;
+    const nameEl = document.getElementById('craft-setup-name');
+    const modeEl = document.querySelector('input[name="craft-mode"]:checked');
+    const name = (nameEl ? nameEl.value.trim() : '') || industry + ' item';
+    const isTemplate = modeEl && modeEl.value === 'template';
+
+    if (isTemplate) {
+      const priceEl = document.getElementById('craft-setup-price');
+      const mintEl = document.getElementById('craft-setup-mint');
+      const price = App.parseAmount(priceEl ? priceEl.value : '0');
+      const mintLimit = Math.max(2, Math.min(50, parseInt(mintEl ? mintEl.value : '10') || 10));
+      if (isNaN(price) || price <= 0) { alert('Enter a valid price'); return; }
+      this._craftSetupDraft = { name, isTemplate: true, price, mintLimit, cIdx, industry };
+      document.getElementById('craft-setup-modal')?.remove();
+      this.craftTemplate();
+    } else {
+      this._craftSetupDraft = { name, isTemplate: false, cIdx, industry };
+      document.getElementById('craft-setup-modal')?.remove();
+      this.craftItem(company, industry, name);
+    }
+  },
+
+  // === TEMPLATE CRAFTING (Limited Edition) ===
+  craftTemplate() {
+    const draft = this._craftSetupDraft;
+    if (!draft || !draft.isTemplate) return;
+    const company = typeof Companies !== 'undefined' ? Companies._companies[draft.cIdx] : null;
+    if (!company) return;
+    const craftType = this.CRAFT_TYPES[draft.industry];
+    if (!craftType) return;
+    const isGod = typeof Admin !== 'undefined' && Admin.godMode;
+    const cost = this.getCraftCost(company);
+    if (!isGod && App.balance < cost) { this._toast('Not enough money!'); return; }
+    if (!isGod) App.addBalance(-cost);
+
+    // Roll base stats (same logic as craftItem)
+    const rebirths = App.rebirth || 0;
+    const rarityBoost = Math.min(rebirths * 0.005, 0.25);
+    const roll = Math.random();
+    let rarity, statCount;
+    if      (roll < 0.02 + rarityBoost * 0.5) { rarity = 'legendary'; statCount = 3; }
+    else if (roll < 0.10 + rarityBoost * 0.8) { rarity = 'rare';      statCount = 3; }
+    else if (roll < 0.30 + rarityBoost)        { rarity = 'uncommon';  statCount = 2; }
+    else                                        { rarity = 'common';    statCount = 1; }
+
+    const seed = Date.now();
+    const rng = this._seededRng(seed);
+    const statPool = [...craftType.statPool];
+    const rebirthStatBoost = 1 + Math.min(rebirths * 0.03, 2.0);
+    const ranges = { common:[0.01,0.05*rebirthStatBoost], uncommon:[0.03,0.10*rebirthStatBoost], rare:[0.05,0.15*rebirthStatBoost], legendary:[0.10,0.25*rebirthStatBoost] };
+    const [minV, maxV] = ranges[rarity];
+    const boosts = App.getAllBoosts();
+    const craftMult = 1 + (boosts.craftingBonus || 0);
+    const stats = [];
+    for (let i = 0; i < statCount && statPool.length > 0; i++) {
+      const idx = Math.floor(rng() * statPool.length);
+      const statType = statPool.splice(idx, 1)[0];
+      let value = minV + rng() * (maxV - minV) * craftMult;
+      if (statType === 'passiveIncome') value = Math.round(value * 10000);
+      else value = Math.round(value * 100) / 100;
+      stats.push({ statType, value, label: this.STAT_LABELS[statType] || statType });
+    }
+
+    const templateId = 'tpl_' + seed.toString(36) + '_' + Math.floor(rng() * 9999).toString(36);
+    const baseItem = {
+      name: draft.name,
+      category: craftType.category,
+      icon: craftType.icon,
+      pixels: '0'.repeat(256),
+      industry: draft.industry,
+      rarity,
+      stats,
+    };
+    const templateData = {
+      templateId,
+      crafterUid: typeof Firebase !== 'undefined' ? Firebase.uid : 'local',
+      crafterName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'You',
+      baseItem,
+      price: draft.price,
+      mintLimit: draft.mintLimit,
+      mintCount: 0,
+      listedAt: Date.now(),
+    };
+
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.postItemTemplate(templateId, templateData);
+    } else {
+      this._templates[templateId] = templateData;
+    }
+
+    this._ppItemDraft = 'template:' + templateId;
+    this._ppPixels = '0'.repeat(256);
+    this._ppColor = 1;
+    this._ppTool = 'brush';
+    const modal = document.getElementById('pixel-painter-modal');
+    if (modal) {
+      modal.classList.remove('hidden');
+      this._buildPpGrid();
+      this._buildPpPalette();
+    }
+    this._craftSetupDraft = null;
+    this._toast(`${craftType.icon} Template created! Paint your art, then save.`);
+  },
+
+  mintTemplate(templateId) {
+    const tpl = this._templates[templateId];
+    if (!tpl) { this._toast('Template not found'); return; }
+    if (tpl.mintCount >= tpl.mintLimit) { this._toast('Sold out!'); return; }
+    const isGod = typeof Admin !== 'undefined' && Admin.godMode;
+    if (!isGod && App.balance < tpl.price) { this._toast('Not enough money!'); return; }
+    if (!isGod) App.addBalance(-tpl.price);
+
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.mintItemTemplate(templateId).then(result => {
+        if (!result.ok) { App.addBalance(tpl.price); this._toast('Sold out!'); return; }
+        const item = Object.assign({}, tpl.baseItem, {
+          id: 'item_' + Date.now().toString(36) + '_' + Math.floor(Math.random()*9999).toString(36),
+          crafterUid: tpl.crafterUid,
+          crafterName: tpl.crafterName,
+          createdAt: Date.now(),
+        });
+        this._inventory.push(item);
+        App.save();
+        this._toast(`${item.icon} Minted "${item.name}"!`);
+        this._triggerRender();
+      });
+    } else {
+      // Offline: just add directly
+      tpl.mintCount = (tpl.mintCount || 0) + 1;
+      const item = Object.assign({}, tpl.baseItem, {
+        id: 'item_' + Date.now().toString(36),
+        crafterUid: tpl.crafterUid,
+        crafterName: tpl.crafterName,
+        createdAt: Date.now(),
+      });
+      this._inventory.push(item);
+      App.save();
+      this._toast(`${item.icon} Minted "${item.name}"!`);
+      this._triggerRender();
+    }
+  },
+
+  renameTemplate(templateId) {
+    const tpl = this._templates[templateId];
+    if (!tpl) return;
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : 'local';
+    if (tpl.crafterUid !== myUid) return;
+    const newName = prompt('Rename template:', tpl.baseItem.name);
+    if (!newName || !newName.trim()) return;
+    tpl.baseItem.name = newName.trim();
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.updateItemTemplateName(templateId, newName.trim());
+    }
+    this._triggerRender();
+  },
+
+  renameItem(itemId) {
+    const item = this._inventory.find(i => i.id === itemId);
+    if (!item) return;
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : 'local';
+    if (item.crafterUid !== myUid) { this._toast('Only the creator can rename this item'); return; }
+    const newName = prompt('Rename item:', item.name);
+    if (!newName || !newName.trim()) return;
+    item.name = newName.trim();
+    App.save();
+    this._triggerRender();
+  },
+
+  // === ENTERTAINMENT CONTENT CREATION ===
+  _renderEntertainmentCraftTab(cIdx) {
+    const co = typeof Companies !== 'undefined' ? Companies._companies[cIdx] : null;
+    if (!co) return '<div class="craft-empty">No company data</div>';
+    const props = co.properties || [];
+    const cds = co.contentCooldowns || {};
+    const now = Date.now();
+
+    const TYPES = {
+      music: { prop:'ent_1', label:'🎵 Music Single', cost:50_000,   reward:150_000,   stockPct:0.01, cd:15*60_000,   cdLabel:'15m' },
+      movie: { prop:'ent_2', label:'🎬 Movie',        cost:250_000,  reward:750_000,   stockPct:0.03, cd:60*60_000,   cdLabel:'1h' },
+      tv:    { prop:'ent_3', label:'📺 TV Show',       cost:600_000,  reward:2_000_000, stockPct:0.05, cd:120*60_000,  cdLabel:'2h' },
+    };
+
+    let html = `<div class="craft-tab-content"><div class="craft-tab-header"><div class="craft-tab-title">🎭 Produce Content</div></div>`;
+    for (const [type, cfg] of Object.entries(TYPES)) {
+      const hasProp = props.includes(cfg.prop);
+      const lastProd = cds[type] || 0;
+      const cdLeft = Math.max(0, cfg.cd - (now - lastProd));
+      const onCd = cdLeft > 0;
+      const cdStr = onCd ? Math.ceil(cdLeft / 60000) + 'm left' : 'Ready';
+      const canAfford = App.balance >= cfg.cost || (typeof Admin !== 'undefined' && Admin.godMode);
+      const disabled = !hasProp || onCd || (!canAfford);
+      html += `<div class="craft-recent-item" style="margin-bottom:10px;padding:12px;border:1px solid var(--bg3);border-radius:8px;display:flex;flex-direction:column;gap:6px">
+        <div style="font-weight:700">${cfg.label}</div>
+        <div style="font-size:12px;color:var(--text-dim)">Cost: ${App.formatMoney(cfg.cost)} → Reward: +${App.formatMoney(cfg.reward)} | +${Math.round(cfg.stockPct*100)}% stock</div>
+        <div style="font-size:12px;color:${onCd?'var(--red)':'var(--green)'}">Cooldown: ${cdStr} (${cfg.cdLabel})</div>
+        ${hasProp
+          ? `<button class="house-action-btn${disabled?' unaffordable':''}" ${disabled?'disabled':''} onclick="Crafting.produceContent(${cIdx},'${type}')">🎬 Produce</button>`
+          : `<button class="house-action-btn unaffordable" disabled>🔒 Need property tier</button>`}
+      </div>`;
+    }
+    html += `</div>`;
+    return html;
+  },
+
+  produceContent(cIdx, type) {
+    const co = typeof Companies !== 'undefined' ? Companies._companies[cIdx] : null;
+    if (!co) return;
+    const TYPES = {
+      music: { prop:'ent_1', cost:50_000,   reward:150_000,   stockPct:0.01, cd:15*60_000 },
+      movie: { prop:'ent_2', cost:250_000,  reward:750_000,   stockPct:0.03, cd:60*60_000 },
+      tv:    { prop:'ent_3', cost:600_000,  reward:2_000_000, stockPct:0.05, cd:120*60_000 },
+    };
+    const cfg = TYPES[type]; if (!cfg) return;
+    if (!(co.properties || []).includes(cfg.prop)) return;
+    const cds = co.contentCooldowns || {};
+    if (Date.now() - (cds[type] || 0) < cfg.cd) return;
+    const isGod = typeof Admin !== 'undefined' && Admin.godMode;
+    if (!isGod && App.balance < cfg.cost) { this._toast('Not enough funds'); return; }
+    if (!isGod) App.addBalance(-cfg.cost);
+
+    // Bump own stock
+    const sym = co.stocks && co.stocks[co.mainIdx || 0] ? co.stocks[co.mainIdx || 0].symbol : null;
+    if (sym && typeof Companies !== 'undefined' && Companies._allPlayerStocks[sym]) {
+      Companies._allPlayerStocks[sym].price *= (1 + cfg.stockPct);
+      if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+        Firebase.pushTradeInfluence(sym, 1, cfg.stockPct);
+      }
+    }
+
+    App.addBalance(cfg.reward);
+
+    if (!co.contentCooldowns) co.contentCooldowns = {};
+    co.contentCooldowns[type] = Date.now();
+
+    if ((type === 'movie' || type === 'tv') && typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      const labels = { movie:'🎬 New movie release!', tv:'📺 Hit TV show premieres!' };
+      Firebase.pushStockNews(labels[type] + ' ' + co.name + ' stock is climbing.', true);
+    }
+
+    if (typeof Companies !== 'undefined') { Companies._saveLocal(); Companies._pushToFirebase(); }
+    App.save();
+    this._toast('✅ Content produced! +' + App.formatMoney(cfg.reward));
+    this._triggerRender();
   },
 
   // === SAVE / LOAD ===
