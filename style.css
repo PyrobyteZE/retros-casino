@@ -5919,8 +5919,8 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   white-space: nowrap;
   flex-shrink: 0;
   position: sticky;
-  top: 44px;
-  z-index: 99;
+  top: 0;           /* JS will set this to header height */
+  z-index: 101;     /* above top-bar (100) so it never goes behind */
 }
 .stock-ticker.hidden { display: none; }
 
@@ -8297,4 +8297,11 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   border-color: var(--bg3);
   color: var(--text-dim);
   font-weight: 400;
+}
+
+/* Curse stat tag (negative effect on item) */
+.inv-stat-curse {
+  background: #2d0a0a !important;
+  color: #f44336 !important;
+  border-color: #f44336 !important;
 }

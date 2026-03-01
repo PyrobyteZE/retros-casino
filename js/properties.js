@@ -18,6 +18,9 @@ const Properties = {
   // Factory production type
   _factoryGoods: 'generic',  // 'generic' | 'auto_parts' | 'electronics' | 'produce'
 
+  // Other players' energy companies (populated from Firebase)
+  _playerOilCompanies: [],  // [{ uid, ownerName, ticker, name }]
+
   FACTORY_GOODS: {
     generic:     { label: '🏭 Generic Goods',     mult: 1.00, desc: 'Standard production' },
     auto_parts:  { label: '🔩 Auto Parts',         mult: 1.18, desc: '+18% income. Bonus if you own Cars.' },
@@ -63,6 +66,27 @@ const Properties = {
     this.startTick();
     this.startEvents();
     this.startRival();
+    // Listen for other players' energy companies for gas station supplier
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.listenAllCompaniesForProperties(data => {
+        const myUid = Firebase.uid;
+        this._playerOilCompanies = [];
+        for (const [uid, playerData] of Object.entries(data || {})) {
+          if (uid === myUid) continue; // own companies handled separately
+          const companies = playerData.companies || [];
+          for (const c of companies) {
+            if ((c.industry || '') === 'energy') {
+              this._playerOilCompanies.push({
+                uid, ownerName: c.ownerName || playerData.ownerName || 'Unknown',
+                name: c.name, ticker: c.ticker || c.stocks?.[0]?.symbol || 'OIL',
+                stocks: c.stocks || [],
+              });
+            }
+          }
+        }
+        if (App.currentScreen === 'properties') this.render();
+      });
+    }
   },
 
   startTick() {
@@ -162,6 +186,19 @@ const Properties = {
       // Own energy company: free oil + premium brand = +30% income
       return 1.30;
     }
+    if (this._gasSupplier && this._gasSupplier !== 'npc') {
+      // Another player's energy company: +15% income (cheaper deal, mutual benefit)
+      // Find the player company and check its stock price vs base for a small multiplier variation
+      const pc = this._playerOilCompanies.find(c => c.uid === this._gasSupplier);
+      if (pc && pc.stocks && pc.stocks.length > 0) {
+        const s = pc.stocks[0];
+        const ratio = s.price && s.basePrice ? s.price / s.basePrice : 1;
+        // Cheaper stock = cheaper oil for us = slightly higher margin
+        const bonus = Math.max(-0.05, Math.min(0.05, (1 - ratio) * 0.1));
+        return 1.15 + bonus;
+      }
+      return 1.15;
+    }
     // NPC oil: income reduced when oil stocks are high (market price)
     if (typeof Companies !== 'undefined') {
       let oilPrice = 0, oilBase = 0, count = 0;
@@ -174,7 +211,6 @@ const Properties = {
       }
       if (count > 0 && oilBase > 0) {
         const ratio = oilPrice / oilBase;
-        // High oil price cuts into gas station margins: -15% income at 2x oil price
         return Math.max(0.70, 1 - (ratio - 1) * 0.15);
       }
     }
@@ -513,19 +549,22 @@ const Properties = {
       if (biz.id === 1) {
         const supVal = this._gasSupplier || 'npc';
         const supMult = this._getGasSupplierMult();
-        // Check if player owns an energy company
         let hasOwnEnergy = false;
         if (typeof Companies !== 'undefined') {
           hasOwnEnergy = Companies._companies.some(c => (c.industry || '') === 'energy');
         }
+        const playerOpts = this._playerOilCompanies.map(pc =>
+          `<option value="${pc.uid}"${supVal===pc.uid?' selected':''}>${pc.ownerName}'s ${pc.name} (+15%)</option>`
+        ).join('');
         specialHtml = `<div class="prop-special-row">
           <span class="prop-special-label">⛽ Oil Supplier:</span>
           <select class="prop-special-select" onchange="event.stopPropagation();Properties.setGasSupplier(this.value)">
-            <option value="npc"${supVal==='npc'?' selected':''}>NPC Market</option>
-            ${hasOwnEnergy ? `<option value="own"${supVal==='own'?' selected':''}>Own Oil Company (+30%)</option>` : ''}
+            <option value="npc"${supVal==='npc'?' selected':''}>🌍 Open Market (price varies)</option>
+            ${hasOwnEnergy ? `<option value="own"${supVal==='own'?' selected':''}>⭐ Own Oil Company (+30%)</option>` : ''}
+            ${playerOpts}
           </select>
         </div>
-        <div class="prop-special-note">Supply mult: ${(supMult * 100).toFixed(0)}%</div>`;
+        <div class="prop-special-note">Supply bonus: ${supMult >= 1 ? '+' : ''}${((supMult - 1) * 100).toFixed(0)}%</div>`;
       }
 
       // Factory goods UI

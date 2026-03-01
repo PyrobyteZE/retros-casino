@@ -175,6 +175,12 @@ const Crafting = {
     const boosts = typeof App !== 'undefined' ? App.getAllBoosts() : { craftingBonus: 0 };
     const craftMult = 1 + (boosts.craftingBonus || 0);
 
+    // Curse stats pool (negative effects that appear on some items)
+    const CURSE_POOL = ['luckBoost','gamblingBonus','slotsBonus','crimeBonus','hackingBonus'];
+    // Curse chance by rarity: common 35%, uncommon 25%, rare 15%, legendary 5%
+    const curseChancs = { common: 0.35, uncommon: 0.25, rare: 0.15, legendary: 0.05 };
+    const curseChance = curseChancs[rarity] || 0.25;
+
     for (let i = 0; i < statCount && statPool.length > 0; i++) {
       const idx = Math.floor(rng() * statPool.length);
       const statType = statPool.splice(idx, 1)[0];
@@ -185,6 +191,19 @@ const Crafting = {
       else value = Math.round(value * 100) / 100;
 
       stats.push({ statType, value, label: this.STAT_LABELS[statType] || statType });
+    }
+
+    // Possibly add a curse stat (negative side effect)
+    if (rng() < curseChance) {
+      // Pick a curse stat not already in stats
+      const usedTypes = new Set(stats.map(s => s.statType));
+      const available = CURSE_POOL.filter(t => !usedTypes.has(t));
+      if (available.length > 0) {
+        const cType = available[Math.floor(rng() * available.length)];
+        // Curse value is negative, smaller than the positive stats
+        const curseVal = -(Math.round((minV * 0.4 + rng() * minV * 0.6) * 100) / 100);
+        stats.push({ statType: cType, value: curseVal, label: this.STAT_LABELS[cType] || cType, isCurse: true });
+      }
     }
 
     // Generate hex ID suffix
@@ -529,10 +548,12 @@ const Crafting = {
         </div>
         <div class="inv-item-stats">`;
       for (const stat of (item.stats || [])) {
+        const isCurse = stat.isCurse || stat.value < 0;
+        const sign = (!isCurse && stat.value >= 0) ? '+' : '';
         const pct = stat.statType === 'passiveIncome'
-          ? '+' + App.formatMoney(stat.value) + '/s'
-          : '+' + Math.round(stat.value * 100) + '% ' + (this.STAT_LABELS[stat.statType] || stat.statType);
-        html += `<span class="inv-stat-tag">${pct}</span>`;
+          ? sign + App.formatMoney(stat.value) + '/s'
+          : sign + Math.round(stat.value * 100) + '% ' + (this.STAT_LABELS[stat.statType] || stat.statType);
+        html += `<span class="inv-stat-tag${isCurse ? ' inv-stat-curse' : ''}">${pct}</span>`;
       }
       html += `</div>
         <div class="inv-item-actions">
@@ -577,10 +598,12 @@ const Crafting = {
         </div>
         <div class="inv-item-stats">`;
       for (const stat of (item.stats || [])) {
+        const isCurse = stat.isCurse || stat.value < 0;
+        const sign = (!isCurse && stat.value >= 0) ? '+' : '';
         const pct = stat.statType === 'passiveIncome'
-          ? '+' + App.formatMoney(stat.value) + '/s'
-          : '+' + Math.round(stat.value * 100) + '% ' + (this.STAT_LABELS[stat.statType] || stat.statType);
-        html += `<span class="inv-stat-tag">${pct}</span>`;
+          ? sign + App.formatMoney(stat.value) + '/s'
+          : sign + Math.round(stat.value * 100) + '% ' + (this.STAT_LABELS[stat.statType] || stat.statType);
+        html += `<span class="inv-stat-tag${isCurse ? ' inv-stat-curse' : ''}">${pct}</span>`;
       }
       html += `</div>
         <div class="inv-item-actions">

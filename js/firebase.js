@@ -2716,4 +2716,11 @@ const Firebase = {
     this.db.ref('carListings').limitToFirst(100).on('value', snap => cb(snap.val() || {}),
       err => console.warn('listenCarListings denied:', err.code));
   },
+
+  // All player companies — used by Properties gas station supplier
+  listenAllCompaniesForProperties(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('companies').on('value', snap => cb(snap.val() || {}),
+      err => console.warn('listenAllCompanies denied:', err.code));
+  },
 };

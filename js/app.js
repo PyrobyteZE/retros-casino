@@ -439,6 +439,15 @@ function showFirstTimeUsernamePrompt() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Pin ticker directly below top-bar using its real rendered height
+  const _pinTicker = () => {
+    const bar = document.getElementById('top-bar');
+    const ticker = document.getElementById('stock-ticker');
+    if (bar && ticker) ticker.style.top = bar.offsetHeight + 'px';
+  };
+  _pinTicker();
+  window.addEventListener('resize', _pinTicker);
+
   const isFirstTime = !localStorage.getItem('retros_casino_save');
   App.init();
   Clicker.init();
