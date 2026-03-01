@@ -2587,6 +2587,99 @@ const Firebase = {
       err => console.warn('listenItemListings denied:', err.code));
   },
 
+  // === ITEM TEMPLATES (Limited Edition) ===
+  listenItemTemplates(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('itemTemplates').limitToFirst(100).on('value', snap => cb(snap.val() || {}),
+      err => console.warn('listenItemTemplates denied:', err.code));
+  },
+
+  postItemTemplate(id, data) {
+    if (!this.isOnline() || !this.uid) return Promise.resolve();
+    return this.db.ref('itemTemplates/' + id).set(data)
+      .catch(err => console.error('postItemTemplate error:', err));
+  },
+
+  delistItemTemplate(id) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('itemTemplates/' + id).remove()
+      .catch(err => console.error('delistItemTemplate error:', err));
+  },
+
+  updateItemTemplateName(id, name) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('itemTemplates/' + id + '/baseItem/name').set(name)
+      .catch(err => console.error('updateItemTemplateName error:', err));
+  },
+
+  updateItemTemplatePixels(id, pixels) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('itemTemplates/' + id + '/baseItem/pixels').set(pixels)
+      .catch(err => console.error('updateItemTemplatePixels error:', err));
+  },
+
+  async mintItemTemplate(id) {
+    if (!this.isOnline() || !this.uid) return { ok: false };
+    const ref = this.db.ref('itemTemplates/' + id + '/mintCount');
+    const tplRef = this.db.ref('itemTemplates/' + id);
+    // Read limit first
+    const snap = await tplRef.once('value').catch(() => null);
+    if (!snap) return { ok: false };
+    const tpl = snap.val();
+    if (!tpl) return { ok: false };
+    const limit = tpl.mintLimit || 0;
+    return new Promise(resolve => {
+      ref.transaction(current => {
+        const count = current || 0;
+        if (count >= limit) return; // abort
+        return count + 1;
+      }, (err, committed, snap) => {
+        if (err || !committed) { resolve({ ok: false }); return; }
+        resolve({ ok: true, newCount: snap.val() });
+      });
+    });
+  },
+
+  // === BANK LOANS ===
+  createBankLoan(lenderUid, borrowerUid, data) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('playerBankLoans/' + lenderUid + '/' + borrowerUid).set(data)
+      .catch(err => console.error('createBankLoan error:', err));
+  },
+
+  updateBankLoan(lenderUid, borrowerUid, updates) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('playerBankLoans/' + lenderUid + '/' + borrowerUid).update(updates)
+      .catch(err => console.error('updateBankLoan error:', err));
+  },
+
+  repayBankLoan(lenderUid, borrowerUid) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('playerBankLoans/' + lenderUid + '/' + borrowerUid).remove()
+      .catch(err => console.error('repayBankLoan error:', err));
+  },
+
+  listenBankLoans(lenderUid, cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('playerBankLoans/' + lenderUid).on('value', snap => cb(snap.val() || {}),
+      err => console.warn('listenBankLoans denied:', err.code));
+  },
+
+  listenMyLoansOwed(myUid, cb) {
+    if (!this.isOnline()) return;
+    // Listen to all lender buckets for this borrower
+    this.db.ref('playerBankLoans').on('value', snap => {
+      const all = snap.val() || {};
+      const owed = {};
+      for (const lenderUid in all) {
+        if (all[lenderUid] && all[lenderUid][myUid]) {
+          owed[lenderUid] = all[lenderUid][myUid];
+        }
+      }
+      cb(owed);
+    }, err => console.warn('listenMyLoansOwed denied:', err.code));
+  },
+
   // === GOD MANSIONS ===
   listenGodMansions(cb) {
     if (!this.isOnline()) return;
