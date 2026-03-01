@@ -864,8 +864,15 @@ const Stocks = {
       const idx = this.stocks.findIndex(s => s.symbol === sym);
       if (idx >= 0) {
         total += this.holdings[sym].shares * this.prices[idx];
-      } else if (typeof Companies !== 'undefined' && Companies._allPlayerStocks[sym]) {
-        total += this.holdings[sym].shares * (Companies._allPlayerStocks[sym].price || 0);
+      }
+    }
+    // Add player stock holdings from Companies
+    if (typeof Companies !== 'undefined') {
+      for (const sym in Companies._holdings) {
+        const h = Companies._holdings[sym];
+        if (!h || !h.shares) continue;
+        const ps = Companies._allPlayerStocks[sym];
+        if (ps) total += h.shares * (ps.price || 0);
       }
     }
     return total;
@@ -1200,8 +1207,15 @@ const Stocks = {
   },
 
   _renderPortfolio(container) {
-    const keys = Object.keys(this.holdings);
-    if (keys.length === 0) {
+    // Merge system holdings + player stock holdings (Companies._holdings)
+    const sysKeys = Object.keys(this.holdings);
+    const playerHoldings = typeof Companies !== 'undefined' ? Companies._holdings : {};
+    const playerKeys = Object.keys(playerHoldings).filter(sym =>
+      playerHoldings[sym] && playerHoldings[sym].shares > 0 &&
+      typeof Companies !== 'undefined' && Companies._allPlayerStocks[sym]
+    );
+
+    if (sysKeys.length === 0 && playerKeys.length === 0) {
       container.innerHTML = '<div class="stock-empty">No stocks owned. Go to Market tab to buy!</div>';
       return;
     }
@@ -1212,19 +1226,13 @@ const Stocks = {
     html += '</div>';
 
     html += '<div class="portfolio-list">';
-    keys.forEach(sym => {
+
+    // System stocks
+    sysKeys.forEach(sym => {
       const h = this.holdings[sym];
       const idx = this.stocks.findIndex(s => s.symbol === sym);
-      let price;
-      let isPlayerStock = false;
-      if (idx >= 0) {
-        price = this.prices[idx];
-      } else if (typeof Companies !== 'undefined' && Companies._allPlayerStocks[sym]) {
-        price = Companies._allPlayerStocks[sym].price || 0;
-        isPlayerStock = true;
-      } else {
-        return; // unknown stock, skip
-      }
+      if (idx < 0) return;
+      const price = this.prices[idx];
       const value = h.shares * price;
       const costBasis = h.shares * h.avgCost;
       const pl = value - costBasis;
@@ -1232,7 +1240,7 @@ const Stocks = {
 
       html += `<div class="portfolio-item">
         <div class="portfolio-item-header">
-          <span class="portfolio-symbol">${sym}${isPlayerStock ? ' <span style="font-size:10px;color:var(--text-dim)">[P]</span>' : ''}</span>
+          <span class="portfolio-symbol">${sym}</span>
           <span class="portfolio-value">${App.formatMoney(value)}</span>
         </div>
         <div class="portfolio-details">
@@ -1240,11 +1248,39 @@ const Stocks = {
           <span class="${pl >= 0 ? 'stock-up' : 'stock-down'}">${pl >= 0 ? '+' : ''}${App.formatMoney(pl)} (${plPct >= 0 ? '+' : ''}${plPct.toFixed(1)}%)</span>
         </div>
         <div class="stock-actions">
-          ${isPlayerStock ? '' : `<button class="stock-buy-btn" onclick="Stocks.promptBuy('${sym}')">Buy More</button>`}
+          <button class="stock-buy-btn" onclick="Stocks.promptBuy('${sym}')">Buy More</button>
           <button class="stock-sell-btn" onclick="Stocks.promptSell('${sym}')">Sell</button>
         </div>
       </div>`;
     });
+
+    // Player stocks (Companies._holdings)
+    playerKeys.forEach(sym => {
+      const h = playerHoldings[sym];
+      const ps = Companies._allPlayerStocks[sym];
+      if (!ps) return;
+      const price = ps.price || 0;
+      const value = h.shares * price;
+      const costBasis = h.shares * (h.avgCost || 0);
+      const pl = value - costBasis;
+      const plPct = costBasis > 0 ? (pl / costBasis * 100) : 0;
+
+      html += `<div class="portfolio-item">
+        <div class="portfolio-item-header">
+          <span class="portfolio-symbol">${sym} <span style="font-size:10px;color:var(--gold)">[P]</span></span>
+          <span class="portfolio-value">${App.formatMoney(value)}</span>
+        </div>
+        <div class="portfolio-details">
+          <span>${h.shares.toFixed(2)} shares @ ${App.formatMoney(h.avgCost || 0)}</span>
+          <span class="${pl >= 0 ? 'stock-up' : 'stock-down'}">${pl >= 0 ? '+' : ''}${App.formatMoney(pl)} (${plPct >= 0 ? '+' : ''}${plPct.toFixed(1)}%)</span>
+        </div>
+        <div class="stock-actions">
+          <button class="stock-buy-btn" onclick="Companies.promptBuy('${sym}')">Buy More</button>
+          <button class="stock-sell-btn" onclick="Companies.promptSell('${sym}')">Sell</button>
+        </div>
+      </div>`;
+    });
+
     html += '</div>';
     container.innerHTML = html;
   },
