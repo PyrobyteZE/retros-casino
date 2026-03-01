@@ -3,6 +3,8 @@ const Banking = {
   _banks: {},        // { [ownerUid]: bankMeta }
   _myVaults: {},     // { [ownerUid]: vaultData } — my deposits
   _bankVaults: {},   // { [ownerUid]: { [depositorUid]: vaultData } } — if I'm owner
+  _loansOwed: {},    // { [lenderUid]: { principal, loanRate, borrowedAt, lastInterestAt, totalOwed } }
+  _myLoans: {},      // { [borrowerUid]: loanRecord } — visible to bank owner
   _tickTimer: null,
   _initialized: false,
 
@@ -38,6 +40,14 @@ const Banking = {
       Firebase.listenBankVaults(Firebase.uid, data => {
         this._bankVaults[Firebase.uid] = data || {};
       });
+      // Loan listeners
+      Firebase.listenMyLoansOwed(Firebase.uid, data => {
+        this._loansOwed = data || {};
+        this._renderBankCards();
+      });
+      Firebase.listenBankLoans(Firebase.uid, data => {
+        this._myLoans = data || {};
+      });
       if (!this._tickTimer) {
         this._tickTimer = setInterval(() => this._tick(), 5 * 60 * 1000); // every 5 min
       }
@@ -58,6 +68,8 @@ const Banking = {
     if ((c.industry || 'tech') !== 'finance') { alert('Only Finance industry companies can enable banking.'); return; }
 
     const maxDeposit = parseInt(document.getElementById('bank-maxdeposit-' + companyIdx)?.value) || 0;
+    const loanRateEl = document.getElementById('bank-loanrate-' + companyIdx);
+    const loanRate = Math.max(1, Math.min(20, parseFloat(loanRateEl?.value) || 5));
     App.addBalance(-this.ENABLE_COST);
 
     const bankData = {
@@ -65,6 +77,7 @@ const Banking = {
       companyTicker: c.ticker,
       ownerName: (typeof Settings !== 'undefined') ? Settings.profile.name : 'Player',
       interestRate: 0.02,
+      loanRate,
       maxDeposit: maxDeposit,
       totalDeposited: 0,
       depositorCount: 0,
@@ -294,6 +307,53 @@ const Banking = {
     });
   },
 
+  // === LOANS ===
+
+  requestLoan(lenderUid, amount) {
+    if (!Firebase || !Firebase.isOnline()) { alert('Must be online.'); return; }
+    const bank = this._banks[lenderUid];
+    if (!bank || !bank.enabled) { alert('Bank not available.'); return; }
+    if (!bank.loanRate) { alert('This bank has not enabled loans.'); return; }
+    if (this._loansOwed[lenderUid]) { alert('You already have a loan from this bank. Repay it first.'); return; }
+    const maxBorrow = Math.min(500_000, (App.balance + App.totalEarned) * 0.25);
+    if (amount <= 0 || amount > maxBorrow) { alert(`Loan amount must be between $1 and ${App.formatMoney(maxBorrow)}.`); return; }
+    const myUid = Firebase.uid;
+    const loanData = {
+      principal: amount,
+      loanRate: bank.loanRate,
+      borrowedAt: Date.now(),
+      lastInterestAt: Date.now(),
+      totalOwed: amount,
+    };
+    Firebase.createBankLoan(lenderUid, myUid, loanData).then(() => {
+      App.addBalance(amount);
+      App.save();
+      Toast.show('💸 Loan of ' + App.formatMoney(amount) + ' received! Rate: ' + bank.loanRate + '%/hr', '#27ae60', 4000);
+      this._renderBankCards();
+    }).catch(err => alert('Loan error: ' + err));
+  },
+
+  repayLoan(lenderUid) {
+    if (!Firebase || !Firebase.isOnline()) { alert('Must be online.'); return; }
+    const loan = this._loansOwed[lenderUid];
+    if (!loan) { alert('No loan found from this bank.'); return; }
+    const totalOwed = loan.totalOwed || loan.principal;
+    const isGod = typeof Admin !== 'undefined' && Admin.godMode;
+    if (!isGod && App.balance < totalOwed) { alert('Not enough to repay. Need ' + App.formatMoney(totalOwed)); return; }
+    if (!confirm('Repay ' + App.formatMoney(totalOwed) + ' to clear this loan?')) return;
+    if (!isGod) App.addBalance(-totalOwed);
+    const myUid = Firebase.uid;
+    Firebase.repayBankLoan(lenderUid, myUid);
+    const bank = this._banks[lenderUid];
+    if (bank) {
+      const interestEarned = totalOwed - loan.principal;
+      Firebase.updateBank(lenderUid, { totalEarned: (bank.totalEarned || 0) + interestEarned });
+    }
+    App.save();
+    Toast.show('✅ Loan repaid!', '#27ae60', 3000);
+    this._renderBankCards();
+  },
+
   // === INTEREST TICK ===
 
   _tick() {
@@ -341,6 +401,24 @@ const Banking = {
     // Random audit (0.5% chance)
     if (Math.random() < 0.005) {
       this.bankruptBank(myUid, 'Regulatory audit');
+    }
+
+    // Accrue interest on player bank loans I owe
+    const isGod = typeof Admin !== 'undefined' && Admin.godMode;
+    for (const lenderUid in this._loansOwed) {
+      const loan = this._loansOwed[lenderUid];
+      if (!loan) continue;
+      const elapsed = Date.now() - (loan.lastInterestAt || loan.borrowedAt);
+      const interest = (loan.totalOwed || loan.principal) * (loan.loanRate / 100) * (elapsed / 3600000);
+      if (interest > 0.01) {
+        if (!isGod) App.addBalance(-interest);
+        if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+          Firebase.updateBankLoan(lenderUid, myUid, {
+            totalOwed: (loan.totalOwed || loan.principal) + interest,
+            lastInterestAt: Date.now(),
+          });
+        }
+      }
     }
   },
 
@@ -446,9 +524,13 @@ const Banking = {
           <span class="bank-stress-label" style="font-size:11px;color:${stressColor};flex-shrink:0">${stress}%</span>
         </div>
         ${myDeposit > 0 ? `<div style="font-size:12px;color:var(--gold);margin:4px 0">My deposit: ${App.formatMoney(myDeposit)}</div>` : ''}
-        <div style="display:flex;gap:6px;margin-top:6px">
+        ${bank.loanRate ? `<div style="font-size:11px;color:var(--text-dim);margin:2px 0">💸 Loan rate: <strong>${bank.loanRate}%/hr</strong></div>` : ''}
+        ${this._loansOwed[ownerUid] ? `<div style="font-size:11px;color:var(--red);margin:2px 0">⚠️ Loan owed: ${App.formatMoney(this._loansOwed[ownerUid].totalOwed || this._loansOwed[ownerUid].principal)}</div>` : ''}
+        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
           <button class="company-buy-btn" style="flex:1" onclick="Banking.openDepositModal('${ownerUid}')">Deposit</button>
           ${myDeposit > 0 ? `<button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red)" onclick="Banking.withdraw('${ownerUid}', 'all')">Withdraw</button>` : ''}
+          ${bank.loanRate && !this._loansOwed[ownerUid] && ownerUid !== myUid ? `<button class="csr-toggle-btn" onclick="(function(){const a=prompt('Borrow how much? (max ${App.formatMoney(Math.min(500_000,(App.balance+App.totalEarned)*0.25))})');if(a){Banking.requestLoan('${ownerUid}',App.parseAmount(a))}})()">💸 Borrow</button>` : ''}
+          ${this._loansOwed[ownerUid] ? `<button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red)" onclick="Banking.repayLoan('${ownerUid}')">Repay Loan</button>` : ''}
         </div>
       </div>`;
     }
@@ -476,6 +558,10 @@ const Banking = {
         <div class="admin-row" style="margin-bottom:8px">
           <label style="min-width:120px;font-size:12px">Max deposit/player:</label>
           <input type="number" id="bank-maxdeposit-${companyIdx}" placeholder="0 = unlimited" style="flex:1;font-size:13px;padding:5px">
+        </div>
+        <div class="admin-row" style="margin-bottom:8px">
+          <label style="min-width:120px;font-size:12px">Loan rate (%/hr):</label>
+          <input type="number" id="bank-loanrate-${companyIdx}" min="1" max="20" value="5" style="flex:1;font-size:13px;padding:5px">
         </div>
         <button class="company-buy-btn" style="width:100%" onclick="Banking.enableBank(${companyIdx})">Enable Banking — ${App.formatMoney(this.ENABLE_COST)}</button>
       </div>`;
