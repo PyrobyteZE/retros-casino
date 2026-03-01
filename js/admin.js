@@ -1064,6 +1064,7 @@ const Admin = {
     if (!this.isAdmin()) { document.getElementById('admin-godmode').checked = false; return; }
     this.godMode = document.getElementById('admin-godmode').checked;
     document.getElementById('balance-display').classList.toggle('godmode', this.godMode);
+    if (typeof App !== 'undefined') App.updateBalance();
   },
 
   // Revoke admin if name changes away from RetroByte

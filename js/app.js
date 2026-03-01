@@ -141,6 +141,8 @@ const App = {
 
   // Safe add that avoids floating point drift on large numbers
   addBalance(amount) {
+    // God mode: block all negative balance changes
+    if (amount < 0 && typeof Admin !== 'undefined' && Admin.godMode) return;
     // Apply earningsMult from boosts on income
     if (amount > 0) {
       const boosts = this.getAllBoosts();
@@ -164,6 +166,11 @@ const App = {
 
   updateBalance() {
     const balEl = document.getElementById('balance');
+    if (typeof Admin !== 'undefined' && Admin.godMode) {
+      balEl.textContent = '∞';
+      balEl.classList.remove('balance-danger');
+      return;
+    }
     balEl.textContent = this.formatMoney(this.balance).slice(1);
     // Red balance when very low and in debt
     if (typeof Loans !== 'undefined' && Loans.debt > 0 && this.balance < Loans.debt * 0.1) {
@@ -222,17 +229,185 @@ const App = {
     if (name === 'stocks') Stocks.init();
     if (name === 'crypto') Crypto.init();
     if (name === 'leaderboard') { if (typeof Firebase !== 'undefined') { Firebase.renderLeaderboard(); const badge = document.getElementById('lb-online-badge'); if (badge) { badge.textContent = Firebase.isOnline() ? 'Online' : 'Offline'; badge.className = 'lb-online-badge ' + (Firebase.isOnline() ? 'lb-badge-online' : ''); } } }
+    if (name === 'casino') this.renderCasinoGrid();
     if (name === 'companies') { if (typeof Companies !== 'undefined') Companies.render(); }
     if (name === 'houses') { if (typeof Houses !== 'undefined') { Houses._refreshNpcMarket(); Houses.render(); } }
     if (name === 'inventory') { if (typeof Crafting !== 'undefined') Crafting.render(); }
     if (name === 'cars') { if (typeof Cars !== 'undefined') Cars.render(); }
     if (name === 'settings') Settings.render();
+    // Refresh drawer nav highlight if drawer is open
+    if (document.getElementById('side-drawer')?.classList.contains('open')) this._renderDrawerNav();
   },
 
   goBack() {
     const prev = this.screenHistory.pop() || 'home';
     this.showScreen(prev);
     this.screenHistory.pop();
+  },
+
+  // ── Side Drawer ──────────────────────────────────────────────────────
+  toggleDrawer() {
+    const drawer = document.getElementById('side-drawer');
+    const overlay = document.getElementById('drawer-overlay');
+    const open = drawer.classList.toggle('open');
+    overlay.classList.toggle('open', open);
+    if (open) this._renderDrawerNav();
+  },
+
+  closeDrawer() {
+    document.getElementById('side-drawer')?.classList.remove('open');
+    document.getElementById('drawer-overlay')?.classList.remove('open');
+  },
+
+  _renderDrawerNav() {
+    // Update player info
+    const name = typeof Settings !== 'undefined' ? (Settings.profile.name || 'Guest') : 'Guest';
+    const el = document.getElementById('drawer-name');
+    if (el) el.textContent = name;
+    const balEl = document.getElementById('drawer-balance');
+    if (balEl) balEl.textContent = this.formatMoney(this.balance);
+
+    const nav = document.getElementById('drawer-nav');
+    if (!nav) return;
+
+    const sections = [
+      { label: 'Home', links: [
+        { id: 'home', icon: '🏠', label: 'Home' },
+        { id: 'casino', icon: '🎲', label: 'Casino' },
+      ]},
+      { label: 'Casino Games', links: [
+        { id: 'coinflip', icon: '🪙', label: 'Coin Flip' },
+        { id: 'slots', icon: '🎰', label: 'Slots' },
+        { id: 'crash', icon: '🚀', label: 'Crash' },
+        { id: 'blackjack', icon: '🃏', label: 'Blackjack' },
+        { id: 'plinko', icon: '⚪', label: 'Plinko' },
+        { id: 'roulette', icon: '🎯', label: 'Roulette' },
+      ]},
+      { label: 'Sports & Luck', links: [
+        { id: 'horses', icon: '🏇', label: 'Horse Racing' },
+        { id: 'lottery', icon: '🎟', label: 'Lottery' },
+      ]},
+      { label: 'Business', links: [
+        { id: 'properties', icon: '🏢', label: 'Properties' },
+        { id: 'crime', icon: '🚨', label: 'Crime' },
+        { id: 'companies', icon: '🏛', label: 'Companies' },
+        { id: 'houses', icon: '🏠', label: 'Houses' },
+        { id: 'cars', icon: '🚗', label: 'Cars' },
+      ]},
+      { label: 'Markets', links: [
+        { id: 'stocks', icon: '📈', label: 'Stocks' },
+        { id: 'crypto', icon: '⛏️', label: 'Crypto' },
+      ]},
+      { label: 'Other', links: [
+        { id: 'inventory', icon: '🎒', label: 'Inventory' },
+        { id: 'pets', icon: '🐾', label: 'Pets' },
+        { id: 'leaderboard', icon: '🏆', label: 'Leaderboard' },
+        { id: 'settings', icon: '⚙️', label: 'Settings' },
+      ]},
+    ];
+
+    let html = '';
+    sections.forEach(sec => {
+      html += `<div class="drawer-nav-section">${sec.label}</div>`;
+      sec.links.forEach(link => {
+        const active = this.currentScreen === link.id ? ' active' : '';
+        html += `<button class="drawer-nav-link${active}" onclick="App.showScreen('${link.id}');App.closeDrawer()">${link.icon} ${link.label}</button>`;
+      });
+    });
+    nav.innerHTML = html;
+  },
+
+  // ── Home Tabs ────────────────────────────────────────────────────────
+  setHomeTab(tab) {
+    document.querySelectorAll('.home-tab-panel').forEach(p => p.classList.add('hidden'));
+    const panel = document.getElementById('home-tab-' + tab);
+    if (panel) panel.classList.remove('hidden');
+    document.querySelectorAll('.home-tab').forEach(b => {
+      b.classList.toggle('active', b.dataset.tab === tab);
+    });
+  },
+
+  // ── Casino Categories + Favorites ────────────────────────────────────
+  favorites: [],
+
+  CASINO_CATEGORIES: [
+    { label: '🎰 Casino Games',  screens: ['coinflip','slots','crash','blackjack','plinko','roulette'] },
+    { label: '🐎 Sports & Luck', screens: ['horses','lottery'] },
+    { label: '💼 Business',      screens: ['properties','crime','companies','houses','cars'] },
+    { label: '📈 Markets',       screens: ['stocks','crypto'] },
+    { label: '🎒 Inventory',     screens: ['inventory'] },
+    { label: '🐾 Social',        screens: ['pets','leaderboard'] },
+    { label: '⚙️ System',        screens: ['settings'] },
+  ],
+
+  CASINO_SCREEN_META: {
+    coinflip:   { icon: '🪙', label: 'Coin Flip' },
+    slots:      { icon: '🎰', label: 'Slots' },
+    crash:      { icon: '🚀', label: 'Crash' },
+    blackjack:  { icon: '🃏', label: 'Blackjack' },
+    plinko:     { icon: '⚪', label: 'Plinko' },
+    roulette:   { icon: '🎯', label: 'Roulette' },
+    horses:     { icon: '🏇', label: 'Horse Racing' },
+    lottery:    { icon: '🎟', label: 'Lottery' },
+    properties: { icon: '🏢', label: 'Properties' },
+    crime:      { icon: '🚨', label: 'Crime' },
+    companies:  { icon: '🏛', label: 'Companies' },
+    houses:     { icon: '🏠', label: 'Houses' },
+    cars:       { icon: '🚗', label: 'Cars' },
+    stocks:     { icon: '📈', label: 'Stocks' },
+    crypto:     { icon: '⛏️', label: 'Crypto' },
+    inventory:  { icon: '🎒', label: 'Inventory' },
+    pets:       { icon: '🐾', label: 'Pets' },
+    leaderboard:{ icon: '🏆', label: 'Leaderboard' },
+    settings:   { icon: '⚙️', label: 'Settings' },
+  },
+
+  renderCasinoGrid() {
+    const grid = document.getElementById('casino-grid');
+    if (!grid) return;
+
+    const _makeCard = (screenId) => {
+      const meta = this.CASINO_SCREEN_META[screenId];
+      if (!meta) return '';
+      const isFav = this.favorites.includes(screenId);
+      return `<div class="casino-card" onclick="App.showScreen('${screenId}')">
+        <button class="fav-pin-btn" onclick="App.toggleFavorite('${screenId}',event)">${isFav ? '⭐' : '☆'}</button>
+        <div class="casino-icon">${meta.icon}</div>
+        <div class="casino-name">${meta.label}</div>
+      </div>`;
+    };
+
+    let html = '';
+
+    // Favorites strip
+    if (this.favorites.length > 0) {
+      html += `<div class="casino-category-label">⭐ Favorites</div>`;
+      html += `<div class="casino-favs-strip">`;
+      this.favorites.forEach(id => { html += _makeCard(id); });
+      html += `</div>`;
+    }
+
+    // Categories
+    this.CASINO_CATEGORIES.forEach(cat => {
+      html += `<div class="casino-category-label">${cat.label}</div>`;
+      html += `<div class="casino-grid-section">`;
+      cat.screens.forEach(id => { html += _makeCard(id); });
+      html += `</div>`;
+    });
+
+    grid.innerHTML = html;
+  },
+
+  toggleFavorite(screenId, event) {
+    if (event) { event.stopPropagation(); }
+    const idx = this.favorites.indexOf(screenId);
+    if (idx >= 0) {
+      this.favorites.splice(idx, 1);
+    } else {
+      this.favorites.push(screenId);
+    }
+    this.save();
+    this.renderCasinoGrid();
   },
 
   getHungerPenalty() {
@@ -267,6 +442,7 @@ const App = {
       houses: typeof Houses !== 'undefined' ? Houses.getSaveData() : null,
       crafting: typeof Crafting !== 'undefined' ? Crafting.getSaveData() : null,
       cars: typeof Cars !== 'undefined' ? Cars.getSaveData() : null,
+      favorites: this.favorites,
       version: 7
     };
     localStorage.setItem('retros_casino_save', JSON.stringify(data));
@@ -292,6 +468,7 @@ const App = {
       this.luckBoostUntil = data.luckBoostUntil || 0;
       this.luckBoostPct = data.luckBoostPct || 0;
       this.decaySlowUntil = data.decaySlowUntil || 0;
+      this.favorites = Array.isArray(data.favorites) ? data.favorites : [];
       if (typeof Loans !== 'undefined') {
         if (data.loans) Loans.loadSaveData(data.loans);
         else { Loans.debt = data.debt || 0; Loans.loanTime = data.loanTime || 0; } // legacy
@@ -450,6 +627,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const isFirstTime = !localStorage.getItem('retros_casino_save');
   App.init();
+  App.renderCasinoGrid();
   Clicker.init();
   Loans.init();
   Properties.init();

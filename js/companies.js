@@ -80,6 +80,12 @@ const Companies = {
       { key: 'vib_3',    name: '🌀 Manifestation Campus',   cost:  2_000_000, income:  4_200 },
       { key: 'vib_4',    name: '🌌 The Vibes Dimension',    cost:  8_500_000, income: 17_000 },
     ],
+    automotive: [
+      { key: 'auto_1',   name: '🏪 Car Showroom',           cost:    300_000, income:    600 },
+      { key: 'auto_2',   name: '🏭 Assembly Plant',          cost:  1_500_000, income:  3_000 },
+      { key: 'auto_3',   name: '🏎️ Test Track',             cost:  5_000_000, income: 10_000 },
+      { key: 'auto_4',   name: '🏟️ Hyperdrome',              cost: 20_000_000, income: 40_000 },
+    ],
   },
 
   // Per-company upgrades definition
@@ -140,6 +146,7 @@ const Companies = {
     { id: 'pharma',        label: '\u{1F48A} Pharma',        stocks: [] },
     { id: 'crime',         label: '\u{1F977} Crime',         stocks: [] },
     { id: 'vibes',         label: '\u2728 Vibes-Based',     stocks: [] },
+    { id: 'automotive',   label: '\u{1F697} Automotive',   stocks: [] },
   ],
 
   // === STATE ===
@@ -155,6 +162,7 @@ const Companies = {
   _processedBankrupt: null,// Set<string> of tickers already handled locally
   _scandals: {},           // { [symbol]: { text, ownerUid, firedAt, suppressed } }
   _scandalCooldowns: {},   // { [symbol]: timestamp } — prevent spam
+  _sabotageCooldowns: {},  // { [theirUid]: lastSabotageTimestamp }
   _competitors: {},        // { [theirUid]: { name, ticker, setAt } }
   _allies: {},             // { [theirUid]: { name, ticker, setAt } }
   _shareOffers: {},        // { [offerId]: offer } — incoming private share offers
@@ -274,7 +282,7 @@ const Companies = {
   },
 
   getSaveData() {
-    return { companies: this._companies, companySlots: this._companySlots, mainCompanyTicker: this._mainCompanyTicker, holdings: this._holdings };
+    return { companies: this._companies, companySlots: this._companySlots, mainCompanyTicker: this._mainCompanyTicker, holdings: this._holdings, sabotageCooldowns: this._sabotageCooldowns };
   },
 
   loadSaveData(data) {
@@ -287,6 +295,7 @@ const Companies = {
     if (data.companySlots) this._companySlots = Math.max(1, data.companySlots);
     if (data.mainCompanyTicker) this._mainCompanyTicker = data.mainCompanyTicker;
     if (data.holdings) this._holdings = data.holdings;
+    if (data.sabotageCooldowns) this._sabotageCooldowns = data.sabotageCooldowns;
     // Immediately persist so a hard-refresh doesn't lose the imported data
     this._saveLocal();
     this._pushToFirebase();
@@ -999,6 +1008,14 @@ const Companies = {
     if (!myUid || theirUid === myUid) { alert("Can't sabotage yourself."); return; }
     const comp = this._competitors[theirUid];
     if (!comp) return;
+    const cdMs = 10 * 60 * 1000; // 10 minutes
+    const lastHit = this._sabotageCooldowns[theirUid] || 0;
+    const remaining = cdMs - (Date.now() - lastHit);
+    if (remaining > 0) {
+      const mins = Math.ceil(remaining / 60000);
+      alert('Sabotage on cooldown. Try again in ' + mins + ' min.');
+      return;
+    }
     const cost = this.sabotageCost(theirUid);
     if (App.balance < cost) { alert('Not enough funds. Need ' + App.formatMoney(cost)); return; }
     if (!confirm('Sabotage ' + this._esc(comp.name || comp.ticker) + ' for ' + App.formatMoney(cost) + '?\n\n65% success: their stock crashes\n35% fail: your stock drops + they get a warning')) return;
@@ -1038,6 +1055,7 @@ const Companies = {
       if (typeof Firebase !== 'undefined') Firebase.pushSabotageNotification(theirUid, myName, false, comp.ticker || '');
       this._toast('\u274C Sabotage backfired! Your own stock took damage.');
     }
+    this._sabotageCooldowns[theirUid] = Date.now();
     this._triggerRender();
   },
 
@@ -2002,6 +2020,7 @@ const Companies = {
                 <button class="csr-toggle-btn" style="color:#82b1ff;border-color:#82b1ff" onclick="Companies.promptRebrandIndustry(${cIdx},${drillSIdx})">🏭 Industry</button>
                 ${s.type==='private'?`<button class="csr-toggle-btn" style="color:var(--gold);border-color:var(--gold)" onclick="Companies.offerShares(${cIdx},${drillSIdx})">Offer Shares</button>`:''}
                 <button class="csr-toggle-btn" style="font-size:11px" onclick="Companies.setMainStock(${cIdx},${drillSIdx});Companies._closeSubStockPanel()">Set as Main</button>
+                ${this._companies.length > 1 ? `<button class="csr-toggle-btn" style="color:#bb86fc;border-color:#bb86fc;font-size:11px" onclick="Companies.openTransferModal(${cIdx},${drillSIdx})">↔️ Transfer</button>` : ''}
                 <button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);font-size:11px" onclick="if(confirm('Remove this sub-stock?')){Companies.removeStock(${cIdx},${drillSIdx});Companies._closeSubStockPanel()}">🗑 Remove</button>
               </div>
             </div>`;
@@ -2925,6 +2944,82 @@ const Companies = {
   declineStockOffer(sym, offererUid) {
     Firebase.removeStockOffer(sym, offererUid).catch(() => {});
     Toast.show('Offer declined', '#ff5252', 2000);
+  },
+
+  // === SUB-STOCK TRANSFER ===
+  _transferSrc: null,  // { cIdx, sIdx }
+
+  openTransferModal(cIdx, sIdx) {
+    const src = this._companies[cIdx];
+    if (!src) return;
+    const sub = src.stocks[sIdx];
+    if (!sub || sIdx === (src.mainIdx || 0)) {
+      alert('Cannot transfer the main stock.');
+      return;
+    }
+    if (this._companies.length < 2) {
+      alert('You need at least 2 companies to transfer between.');
+      return;
+    }
+    this._transferSrc = { cIdx, sIdx };
+
+    let modal = document.getElementById('transfer-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'transfer-modal';
+      modal.className = 'modal-overlay hidden';
+      modal.innerHTML = `
+        <div class="modal-box">
+          <div class="modal-title">↔️ Transfer Sub-Stock</div>
+          <p id="transfer-sub-name" style="margin:10px 0;font-size:14px;color:var(--text-dim)"></p>
+          <div id="transfer-dest-list" style="display:flex;flex-direction:column;gap:8px;margin:12px 0"></div>
+          <button class="csr-toggle-btn" style="width:100%;margin-top:4px" onclick="Companies.closeTransferModal()">Cancel</button>
+        </div>`;
+      document.getElementById('app').appendChild(modal);
+    }
+
+    document.getElementById('transfer-sub-name').textContent = 'Move "' + sub.name + '" (' + sub.symbol + ') to:';
+    const list = document.getElementById('transfer-dest-list');
+    list.innerHTML = '';
+    this._companies.forEach((co, i) => {
+      if (i === cIdx) return;
+      const btn = document.createElement('button');
+      btn.className = 'transfer-dest-btn';
+      btn.textContent = (co.icon || '🏢') + ' ' + co.name + ' (' + co.ticker + ')';
+      btn.onclick = () => Companies.confirmTransfer(i);
+      list.appendChild(btn);
+    });
+
+    modal.classList.remove('hidden');
+  },
+
+  confirmTransfer(destIdx) {
+    const src = this._transferSrc;
+    if (!src) return;
+    const { cIdx, sIdx } = src;
+    const srcCo = this._companies[cIdx];
+    const destCo = this._companies[destIdx];
+    if (!srcCo || !destCo) return;
+    if (sIdx === (srcCo.mainIdx || 0)) { alert('Cannot transfer the main stock.'); return; }
+
+    const [sub] = srcCo.stocks.splice(sIdx, 1);
+    // Fix mainIdx if needed
+    if ((srcCo.mainIdx || 0) >= srcCo.stocks.length) srcCo.mainIdx = 0;
+    destCo.stocks.push(sub);
+
+    this._saveLocal();
+    this._pushToFirebase();
+    App.save();
+    this.closeTransferModal();
+    this._activeSubStock = null;
+    this._triggerRender();
+    Toast.show('↔️ ' + sub.symbol + ' transferred to ' + destCo.name + '!', 'var(--green)', 3000);
+  },
+
+  closeTransferModal() {
+    this._transferSrc = null;
+    const modal = document.getElementById('transfer-modal');
+    if (modal) modal.classList.add('hidden');
   },
 
   _checkMonopolyThreshold() {
