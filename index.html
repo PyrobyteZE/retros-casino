@@ -641,22 +641,19 @@
     <!-- Shark Reckoning Overlay (10T debt) -->
     <div id="shark-reckoning" class="shark-duel hidden">
       <div class="duel-title" style="color:#ff5252">&#x1F9A8; THE RECKONING</div>
-      <div class="duel-score" style="color:var(--text-dim);font-size:13px">You owe 10 TRILLION. The Shark demands a final coin flip.</div>
+      <div class="duel-score" style="color:var(--text-dim);font-size:13px">You owe 10 TRILLION. Pick a side.</div>
       <div style="font-size:48px;margin:16px 0">&#x1FA99;</div>
       <div class="duel-result" id="reckoning-result"></div>
       <div style="font-size:12px;color:var(--text-dim);margin:8px 0">
         WIN: Debt cleared, walk free<br>
         LOSE: Rebirths reset, loans locked for 10 rebirths
       </div>
-      <button class="game-btn" id="reckoning-flip-btn" onclick="Loans.reckoningFlip()" style="background:#ff5252;color:#fff;font-size:18px;padding:14px 28px">&#x1FA99; FLIP THE COIN</button>
-      <div id="reckoning-cf-section" style="margin-top:14px;border-top:1px solid rgba(255,255,255,0.1);padding-top:12px">
-        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;letter-spacing:1px">— OR USE THE COINFLIP GAME —</div>
-        <div style="font-size:11px;color:var(--gold);margin-bottom:8px" id="reckoning-cf-odds"></div>
-        <div style="display:flex;gap:10px;justify-content:center">
-          <button class="game-btn heads" id="reckoning-heads-btn" onclick="Loans.reckoningCoinFlip('heads')" style="font-size:15px;padding:10px 20px">Heads</button>
-          <button class="game-btn tails" id="reckoning-tails-btn" onclick="Loans.reckoningCoinFlip('tails')" style="font-size:15px;padding:10px 20px">Tails</button>
-        </div>
+      <div style="font-size:12px;color:var(--gold);margin-bottom:10px" id="reckoning-cf-odds"></div>
+      <div style="display:flex;gap:12px;justify-content:center">
+        <button class="game-btn heads" id="reckoning-heads-btn" onclick="Loans.reckoningCoinFlip('heads')" style="font-size:16px;padding:12px 24px">Heads</button>
+        <button class="game-btn tails" id="reckoning-tails-btn" onclick="Loans.reckoningCoinFlip('tails')" style="font-size:16px;padding:12px 24px">Tails</button>
       </div>
+      <button class="game-btn" id="reckoning-flip-btn" style="display:none">CLOSE</button>
     </div>
 
     <!-- Shark Duel Overlay -->

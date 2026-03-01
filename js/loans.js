@@ -616,63 +616,38 @@ const Loans = {
     this._reckoningActive = true;
     this.stopInterest();
 
-    // Show the reckoning overlay
     const overlay = document.getElementById('shark-reckoning');
     if (overlay) {
       document.getElementById('reckoning-result').textContent = '';
       document.getElementById('reckoning-result').className = 'duel-result';
-      const flipBtn = document.getElementById('reckoning-flip-btn');
-      if (flipBtn) { flipBtn.disabled = false; flipBtn.textContent = '\uD83E\uDE99 FLIP THE COIN'; flipBtn.onclick = () => Loans.reckoningFlip(); }
       const headsBtn = document.getElementById('reckoning-heads-btn');
       const tailsBtn = document.getElementById('reckoning-tails-btn');
-      if (headsBtn) { headsBtn.disabled = false; }
-      if (tailsBtn) { tailsBtn.disabled = false; }
+      if (headsBtn) { headsBtn.disabled = false; headsBtn.textContent = 'Heads'; }
+      if (tailsBtn) { tailsBtn.disabled = false; tailsBtn.textContent = 'Tails'; }
+      const closeBtn = document.getElementById('reckoning-flip-btn');
+      if (closeBtn) closeBtn.style.display = 'none';
       // Show coinflip win chance
       const oddsEl = document.getElementById('reckoning-cf-odds');
       if (oddsEl && typeof CoinFlip !== 'undefined') {
-        const pct = CoinFlip.getWinChance();
         const tier = CoinFlip.getCurrentTier();
-        oddsEl.textContent = tier.name + ' — ' + pct + '% win chance';
+        oddsEl.textContent = tier.name + ' \u2014 ' + CoinFlip.getWinChance() + '% win chance';
+      } else if (oddsEl) {
+        oddsEl.textContent = '50% win chance';
       }
       overlay.classList.remove('hidden');
     }
   },
 
-  reckoningFlip() {
-    const btn = document.getElementById('reckoning-flip-btn');
-    const resultEl = document.getElementById('reckoning-result');
-    if (!btn || !resultEl) return;
-
-    btn.disabled = true;
-    const win = Math.random() < 0.5;
-    const coin = win ? 'HEADS' : 'TAILS';
-
-    // Animate briefly then show result
-    let ticks = 0;
-    const faces = ['\uD83E\uDE99', '\u{1FA99}'];
-    const anim = setInterval(() => {
-      btn.textContent = faces[ticks % 2];
-      ticks++;
-      if (ticks >= 10) {
-        clearInterval(anim);
-        this._resolveReckoning(win, coin, resultEl, btn);
-      }
-    }, 100);
-  },
-
   reckoningCoinFlip(choice) {
-    const flipBtn = document.getElementById('reckoning-flip-btn');
     const headsBtn = document.getElementById('reckoning-heads-btn');
     const tailsBtn = document.getElementById('reckoning-tails-btn');
     const resultEl = document.getElementById('reckoning-result');
     if (!resultEl) return;
 
-    // Disable all flip options while animating
-    if (flipBtn) flipBtn.disabled = true;
     if (headsBtn) headsBtn.disabled = true;
     if (tailsBtn) tailsBtn.disabled = true;
 
-    // Use CoinFlip win chance (lucky coin upgrades, hunger penalty, etc.)
+    // Use CoinFlip win chance (lucky coin upgrades, hunger penalty, food luck)
     let winChance = typeof CoinFlip !== 'undefined' ? CoinFlip.getWinChance() / 100 : 0.5;
     if (typeof App !== 'undefined') {
       const penalty = App.getHungerPenalty ? App.getHungerPenalty() : 0;
@@ -686,10 +661,8 @@ const Loans = {
     const win = choice === result;
     const coinLabel = result === 'heads' ? 'HEADS' : 'TAILS';
 
-    // Animate
     let ticks = 0;
     const faces = ['\uD83E\uDE99', '\u{1FA99}'];
-    const btn = headsBtn || flipBtn; // use one of the buttons to animate text
     const anim = setInterval(() => {
       if (headsBtn) headsBtn.textContent = faces[ticks % 2];
       if (tailsBtn) tailsBtn.textContent = faces[(ticks + 1) % 2];
@@ -698,31 +671,29 @@ const Loans = {
         clearInterval(anim);
         if (headsBtn) headsBtn.textContent = 'Heads';
         if (tailsBtn) tailsBtn.textContent = 'Tails';
-        this._resolveReckoning(win, coinLabel, resultEl, flipBtn || headsBtn);
+        this._resolveReckoning(win, coinLabel, resultEl);
       }
     }, 100);
   },
 
-  _resolveReckoning(win, coin, resultEl, btn) {
+  _resolveReckoning(win, coin, resultEl) {
     this.debt = 0;
     this.loanTime = 0;
     this.stopInterest();
     this._reckoningActive = false;
 
-    // Hide the coinflip game section after any flip resolves
-    const cfSection = document.getElementById('reckoning-cf-section');
-    if (cfSection) cfSection.style.display = 'none';
+    // Hide choice buttons, show CLOSE
+    const headsBtn = document.getElementById('reckoning-heads-btn');
+    const tailsBtn = document.getElementById('reckoning-tails-btn');
+    const closeBtn = document.getElementById('reckoning-flip-btn');
+    if (headsBtn) headsBtn.style.display = 'none';
+    if (tailsBtn) tailsBtn.style.display = 'none';
+    if (closeBtn) { closeBtn.style.display = ''; closeBtn.textContent = 'CLOSE'; closeBtn.onclick = () => this.closeReckoning(); }
 
-    // Show result on the main flip button
-    const mainBtn = document.getElementById('reckoning-flip-btn') || btn;
     if (win) {
-      resultEl.textContent = `${coin} — You WIN! The Shark spares you. Debt cleared!`;
+      resultEl.textContent = `${coin} \u2014 You WIN! The Shark spares you. Debt cleared!`;
       resultEl.className = 'duel-result duel-win';
-      mainBtn.textContent = 'CLOSE';
-      mainBtn.disabled = false;
-      mainBtn.onclick = () => this.closeReckoning();
     } else {
-      // Lose: reset rebirths, lock loans for 10 rebirths
       this._reckoningRebirthThreshold = (App.rebirth || 0) + 10;
       App.rebirth = 0;
       if (typeof Clicker !== 'undefined') {
@@ -732,11 +703,8 @@ const Loans = {
         Clicker.startAutoClicker();
         Clicker.startAutoBet();
       }
-      resultEl.textContent = `${coin} — You LOSE! The Shark takes everything. Rebirths RESET. Rebirth 10 times before borrowing again.`;
+      resultEl.textContent = `${coin} \u2014 You LOSE! The Shark takes everything. Rebirths RESET. Rebirth 10 times before borrowing again.`;
       resultEl.className = 'duel-result duel-lose';
-      mainBtn.textContent = 'CLOSE';
-      mainBtn.disabled = false;
-      mainBtn.onclick = () => this.closeReckoning();
     }
 
     this.updateUI();
@@ -747,12 +715,13 @@ const Loans = {
   closeReckoning() {
     const overlay = document.getElementById('shark-reckoning');
     if (overlay) overlay.classList.add('hidden');
-    // Reset main button for next time
-    const btn = document.getElementById('reckoning-flip-btn');
-    if (btn) { btn.textContent = '\uD83E\uDE99 FLIP THE COIN'; btn.onclick = () => Loans.reckoningFlip(); }
-    // Restore coinflip section
-    const cfSection = document.getElementById('reckoning-cf-section');
-    if (cfSection) cfSection.style.display = '';
+    // Restore buttons for next reckoning
+    const headsBtn = document.getElementById('reckoning-heads-btn');
+    const tailsBtn = document.getElementById('reckoning-tails-btn');
+    const closeBtn = document.getElementById('reckoning-flip-btn');
+    if (headsBtn) { headsBtn.style.display = ''; headsBtn.disabled = false; }
+    if (tailsBtn) { tailsBtn.style.display = ''; tailsBtn.disabled = false; }
+    if (closeBtn) closeBtn.style.display = 'none';
   },
 
   // ============ BARGAIN SYSTEM ============
