@@ -979,9 +979,9 @@ const Crafting = {
     const now = Date.now();
 
     const TYPES = {
-      music: { prop:'ent_1', label:'🎵 Music Single', cost:50_000,   reward:150_000,   stockPct:0.01, cd:15*60_000,   cdLabel:'15m' },
-      movie: { prop:'ent_2', label:'🎬 Movie',        cost:250_000,  reward:750_000,   stockPct:0.03, cd:60*60_000,   cdLabel:'1h' },
-      tv:    { prop:'ent_3', label:'📺 TV Show',       cost:600_000,  reward:2_000_000, stockPct:0.05, cd:120*60_000,  cdLabel:'2h' },
+      music: { prop:'ent_1', label:'🎵 Music Single', cost:50_000,   reward:150_000,   stockPct:0.01, cd:15*60_000,   cdLabel:'15m', itemIcon:'🎵', itemCategory:'Music Single', itemRarity:'uncommon' },
+      movie: { prop:'ent_2', label:'🎬 Movie',        cost:250_000,  reward:750_000,   stockPct:0.03, cd:60*60_000,   cdLabel:'1h',  itemIcon:'🎬', itemCategory:'Movie',        itemRarity:'rare' },
+      tv:    { prop:'ent_3', label:'📺 TV Show',       cost:600_000,  reward:2_000_000, stockPct:0.05, cd:120*60_000,  cdLabel:'2h',  itemIcon:'📺', itemCategory:'TV Show',      itemRarity:'legendary' },
     };
 
     let html = `<div class="craft-tab-content"><div class="craft-tab-header"><div class="craft-tab-title">🎭 Produce Content</div></div>`;
@@ -994,12 +994,15 @@ const Crafting = {
       const canAfford = App.balance >= cfg.cost || (typeof Admin !== 'undefined' && Admin.godMode);
       const disabled = !hasProp || onCd || (!canAfford);
       html += `<div class="craft-recent-item" style="margin-bottom:10px;padding:12px;border:1px solid var(--bg3);border-radius:8px;display:flex;flex-direction:column;gap:6px">
-        <div style="font-weight:700">${cfg.label}</div>
+        <div style="font-weight:700">${cfg.label} <span style="font-size:11px;color:${this.RARITY_COLORS[cfg.itemRarity]||'#aaa'}">(${cfg.itemRarity})</span></div>
         <div style="font-size:12px;color:var(--text-dim)">Cost: ${App.formatMoney(cfg.cost)} → Reward: +${App.formatMoney(cfg.reward)} | +${Math.round(cfg.stockPct*100)}% stock</div>
         <div style="font-size:12px;color:${onCd?'var(--red)':'var(--green)'}">Cooldown: ${cdStr} (${cfg.cdLabel})</div>
-        ${hasProp
-          ? `<button class="house-action-btn${disabled?' unaffordable':''}" ${disabled?'disabled':''} onclick="Crafting.produceContent(${cIdx},'${type}')">🎬 Produce</button>`
-          : `<button class="house-action-btn unaffordable" disabled>🔒 Need property tier</button>`}
+        ${hasProp ? `
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <button class="house-action-btn${disabled?' unaffordable':''}" ${disabled?'disabled':''} onclick="Crafting.produceContent(${cIdx},'${type}')">🎬 Produce</button>
+            <input type="text" inputmode="decimal" id="ent-list-price-${cIdx}-${type}" class="sh-input" placeholder="List price…" style="width:100px;padding:5px 8px;font-size:12px;flex:1;min-width:80px">
+            <button class="house-action-btn${disabled?' unaffordable':''}" ${disabled?'disabled':''} onclick="Crafting.produceContentAndList(${cIdx},'${type}')">📦 List</button>
+          </div>` : `<button class="house-action-btn unaffordable" disabled>🔒 Need property tier</button>`}
       </div>`;
     }
     html += `</div>`;
@@ -1044,6 +1047,91 @@ const Crafting = {
     if (typeof Companies !== 'undefined') { Companies._saveLocal(); Companies._pushToFirebase(); }
     App.save();
     this._toast('✅ Content produced! +' + App.formatMoney(cfg.reward));
+    this._triggerRender();
+  },
+
+  produceContentAndList(cIdx, type) {
+    const co = typeof Companies !== 'undefined' ? Companies._companies[cIdx] : null;
+    if (!co) return;
+
+    const priceEl = document.getElementById('ent-list-price-' + cIdx + '-' + type);
+    const price = typeof App !== 'undefined' ? App.parseAmount(priceEl ? priceEl.value : '0') : parseFloat(priceEl ? priceEl.value : '0');
+    if (!price || price <= 0) { this._toast('Enter a listing price first'); return; }
+
+    const TYPES = {
+      music: { prop:'ent_1', cost:50_000,   reward:150_000,   stockPct:0.01, cd:15*60_000,  itemIcon:'🎵', itemCategory:'Music Single', itemRarity:'uncommon'  },
+      movie: { prop:'ent_2', cost:250_000,  reward:750_000,   stockPct:0.03, cd:60*60_000,  itemIcon:'🎬', itemCategory:'Movie',        itemRarity:'rare'       },
+      tv:    { prop:'ent_3', cost:600_000,  reward:2_000_000, stockPct:0.05, cd:120*60_000, itemIcon:'📺', itemCategory:'TV Show',       itemRarity:'legendary'  },
+    };
+    const cfg = TYPES[type]; if (!cfg) return;
+    if (!(co.properties || []).includes(cfg.prop)) return;
+    const cds = co.contentCooldowns || {};
+    if (Date.now() - (cds[type] || 0) < cfg.cd) return;
+    const isGod = typeof Admin !== 'undefined' && Admin.godMode;
+    if (!isGod && App.balance < cfg.cost) { this._toast('Not enough funds'); return; }
+    if (!isGod) App.addBalance(-cfg.cost);
+
+    // Bump stock
+    const sym = co.stocks && co.stocks[co.mainIdx || 0] ? co.stocks[co.mainIdx || 0].symbol : null;
+    if (sym && typeof Companies !== 'undefined' && Companies._allPlayerStocks[sym]) {
+      Companies._allPlayerStocks[sym].price *= (1 + cfg.stockPct);
+      if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushTradeInfluence(sym, 1, cfg.stockPct);
+    }
+
+    App.addBalance(cfg.reward);
+    if (!co.contentCooldowns) co.contentCooldowns = {};
+    co.contentCooldowns[type] = Date.now();
+
+    if ((type === 'movie' || type === 'tv') && typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      const labels = { movie:'🎬 New movie release!', tv:'📺 Hit TV show premieres!' };
+      Firebase.pushStockNews(labels[type] + ' ' + co.name + ' stock is climbing.', true);
+    }
+
+    // Build content item and list it
+    const seed = Date.now();
+    const rng = this._seededRng(seed);
+    const statPool = ['luckBoost', 'gamblingBonus', 'earningsMult'];
+    const rarity = cfg.itemRarity;
+    const statCount = rarity === 'uncommon' ? 2 : rarity === 'rare' ? 3 : 3;
+    const rebirths = typeof App !== 'undefined' ? (App.rebirth || 0) : 0;
+    const rebirthBoost = 1 + Math.min(rebirths * 0.03, 2.0);
+    const ranges = {
+      uncommon:  [0.03, 0.10 * rebirthBoost],
+      rare:      [0.05, 0.15 * rebirthBoost],
+      legendary: [0.10, 0.25 * rebirthBoost],
+    };
+    const [minV, maxV] = ranges[rarity] || [0.03, 0.10];
+    const pool = [...statPool];
+    const stats = [];
+    for (let i = 0; i < statCount && pool.length > 0; i++) {
+      const statType = pool.splice(Math.floor(rng() * pool.length), 1)[0];
+      const value = Math.round((minV + rng() * (maxV - minV)) * 100) / 100;
+      stats.push({ statType, value, label: this.STAT_LABELS[statType] || statType });
+    }
+    const hexSuffix = Math.floor(rng() * 0xffff).toString(16).toUpperCase().padStart(4, '0');
+    const item = {
+      id: 'item_' + seed.toString(36) + '_' + Math.floor(rng() * 9999).toString(36),
+      name: co.name + ' \u2014 ' + cfg.itemCategory + ' #' + hexSuffix,
+      category: cfg.itemCategory,
+      icon: cfg.itemIcon,
+      pixels: '0'.repeat(256),
+      industry: 'entertainment',
+      rarity,
+      stats,
+      crafterUid: typeof Firebase !== 'undefined' ? (Firebase.uid || 'local') : 'local',
+      crafterName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'You',
+      createdAt: seed,
+    };
+
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.listItem(item, price);
+    } else {
+      this._toast('Must be online to list items');
+    }
+
+    if (typeof Companies !== 'undefined') { Companies._saveLocal(); Companies._pushToFirebase(); }
+    App.save();
+    this._toast(cfg.itemIcon + ' Produced & listed for ' + App.formatMoney(price) + '!');
     this._triggerRender();
   },
 
