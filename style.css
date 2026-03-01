@@ -51,7 +51,7 @@ input, textarea, select {
   gap: 12px;
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: 200;
 }
 
 #back-btn {
@@ -5927,7 +5927,7 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   flex-shrink: 0;
   position: sticky;
   top: 0;           /* JS will set this to header height */
-  z-index: 101;     /* above top-bar (100) so it never goes behind */
+  z-index: 101;     /* above content; top-bar is 200 so dropdowns clear it */
 }
 .stock-ticker.hidden { display: none; }
 
