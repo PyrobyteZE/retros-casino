@@ -10,9 +10,21 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- Side Drawer -->
+  <div id="side-drawer" class="side-drawer">
+    <div class="drawer-player-info">
+      <div id="drawer-avatar" class="drawer-avatar">🎰</div>
+      <div id="drawer-name" class="drawer-name">Player</div>
+      <div id="drawer-balance" class="drawer-balance">$0</div>
+    </div>
+    <nav id="drawer-nav" class="drawer-nav"></nav>
+  </div>
+  <div id="drawer-overlay" class="drawer-overlay" onclick="App.closeDrawer()"></div>
+
   <div id="app">
     <!-- Top Bar -->
     <header id="top-bar">
+      <button id="hamburger-btn" class="hamburger-btn" onclick="App.toggleDrawer()">&#9776;</button>
       <button id="back-btn" class="hidden" onclick="App.goBack()">&larr;</button>
       <h1 id="page-title" onclick="Admin.tapTitle()">Retro's Casino</h1>
       <div id="admin-indicator" class="hidden" onclick="Admin.open()">ADM</div>
@@ -54,112 +66,131 @@
             <button id="rebirth-btn" class="rebirth-btn hidden" onclick="Clicker.doRebirth()">REBIRTH</button>
           </div>
 
-          <div id="click-stats">
-            <div class="stat"><span class="stat-label">$/click</span><span id="stat-vpc">$0.01</span></div>
-            <div class="stat"><span class="stat-label">$/sec</span><span id="stat-cps">$0</span></div>
-            <div class="stat"><span class="stat-label">Total Earned</span><span id="stat-earned">$0</span></div>
-            <div class="stat"><span class="stat-label">Total Clicks</span><span id="stat-clicks">0</span></div>
+          <button id="click-btn" onclick="Clicker.click(event)">🎰<br><span id="click-value">$1</span></button>
+
+          <!-- Home Tab Bar -->
+          <div class="home-tabs-bar">
+            <button class="home-tab active" data-tab="upgrades" onclick="App.setHomeTab('upgrades')">&#x2B06; Upgrades</button>
+            <button class="home-tab" data-tab="loans" onclick="App.setHomeTab('loans')">&#x1F988; Loans</button>
+            <button class="home-tab" data-tab="stats" onclick="App.setHomeTab('stats')">&#x1F4CA; Stats</button>
           </div>
-          <button id="click-btn" onclick="Clicker.click(event)">CLICK<br><span id="click-value">$1</span></button>
-          <div id="upgrades">
-            <h3>Upgrades</h3>
-            <div id="upgrade-list"></div>
-          </div>
-        </div>
-        <!-- Loan Shark -->
-        <div id="loan-panel" class="loan-panel">
-          <div class="loan-header" onclick="document.getElementById('loan-body').classList.toggle('hidden')">
-            <span class="loan-title">&#x1F988; Loan Shark</span>
-            <span class="loan-toggle">&#x25BC;</span>
-          </div>
-          <div id="loan-body" class="loan-body">
-            <div id="shark-dialogue" class="shark-dialogue hidden"></div>
-            <div class="loan-status">
-              <div class="loan-stat">
-                <span class="stat-label">Debt</span>
-                <span id="loan-debt-amount" class="loan-debt-value">$0</span>
-              </div>
-              <div class="loan-stat">
-                <span class="stat-label">Interest</span>
-                <span id="loan-interest-rate">0%</span>
-              </div>
-            </div>
-            <div id="loan-warning" class="loan-warning"></div>
-            <div id="loan-lock-warning" class="loan-warning danger hidden"></div>
-            <div id="loan-options" class="loan-options"></div>
-            <!-- Custom amount + Bargain -->
-            <div class="loan-custom-row">
-              <input type="number" id="loan-custom-amount" class="loan-custom-input" placeholder="Custom amount...">
-              <button class="loan-custom-btn" onclick="Loans.takeCustomLoan()">Borrow</button>
-              <button class="loan-bargain-btn" onclick="Loans.startBargain()">Bargain</button>
-            </div>
-            <div id="loan-pay-section" class="loan-pay-section hidden">
-              <div class="loan-pay-row">
-                <button class="loan-pay-btn" onclick="Loans.payBack(Loans.debt * 0.1)">Pay 10%</button>
-                <button class="loan-pay-btn" onclick="Loans.payBack(Loans.debt * 0.5)">Pay 50%</button>
-                <button class="loan-pay-btn loan-pay-all" onclick="Loans.payAll()">Pay All</button>
-              </div>
-              <button id="shark-duel-btn" class="loan-duel-btn hidden" onclick="Loans.startDuel()">&#x1F3B2; Challenge Shark</button>
+
+          <!-- Upgrades Tab -->
+          <div id="home-tab-upgrades" class="home-tab-panel">
+            <div id="upgrades">
+              <div id="upgrade-list"></div>
             </div>
           </div>
-        </div>
 
-        <!-- P2P Player Loans -->
-        <div class="p2p-loan-panel">
-          <div class="p2p-loan-header" onclick="document.getElementById('p2p-loan-body').classList.toggle('hidden')">
-            <span class="p2p-loan-title">&#x1F91D; Player Loans</span>
-            <span class="loan-toggle">&#x25BC;</span>
-          </div>
-          <div id="p2p-loan-body" class="p2p-loan-body hidden">
-            <div class="p2p-create-section">
-              <label>Offer a loan to another player:</label>
-              <div class="p2p-name-combo">
-                <input type="text" id="p2p-borrower-name" placeholder="Search player..." autocomplete="off" oninput="Loans.filterBorrowerDropdown()">
-                <div id="p2p-name-dropdown" class="p2p-name-dropdown hidden"></div>
+          <!-- Loans Tab -->
+          <div id="home-tab-loans" class="home-tab-panel hidden">
+            <!-- Loan Shark -->
+            <div id="loan-panel" class="loan-panel">
+              <div class="loan-header" onclick="document.getElementById('loan-body').classList.toggle('hidden')">
+                <span class="loan-title">&#x1F988; Loan Shark</span>
+                <span class="loan-toggle">&#x25BC;</span>
               </div>
-              <div class="p2p-input-row">
-                <input type="number" id="p2p-loan-amount" placeholder="Amount">
-                <input type="number" id="p2p-interest-rate" placeholder="Rate %" min="1" max="100" value="5">
-                <span>%/min</span>
+              <div id="loan-body" class="loan-body">
+                <div id="shark-dialogue" class="shark-dialogue hidden"></div>
+                <div class="loan-status">
+                  <div class="loan-stat">
+                    <span class="stat-label">Debt</span>
+                    <span id="loan-debt-amount" class="loan-debt-value">$0</span>
+                  </div>
+                  <div class="loan-stat">
+                    <span class="stat-label">Interest</span>
+                    <span id="loan-interest-rate">0%</span>
+                  </div>
+                </div>
+                <div id="loan-warning" class="loan-warning"></div>
+                <div id="loan-lock-warning" class="loan-warning danger hidden"></div>
+                <div id="loan-options" class="loan-options"></div>
+                <!-- Custom amount + Bargain -->
+                <div class="loan-custom-row">
+                  <input type="number" id="loan-custom-amount" class="loan-custom-input" placeholder="Custom amount...">
+                  <button class="loan-custom-btn" onclick="Loans.takeCustomLoan()">Borrow</button>
+                  <button class="loan-bargain-btn" onclick="Loans.startBargain()">Bargain</button>
+                </div>
+                <div id="loan-pay-section" class="loan-pay-section hidden">
+                  <div class="loan-pay-row">
+                    <button class="loan-pay-btn" onclick="Loans.payBack(Loans.debt * 0.1)">Pay 10%</button>
+                    <button class="loan-pay-btn" onclick="Loans.payBack(Loans.debt * 0.5)">Pay 50%</button>
+                    <button class="loan-pay-btn loan-pay-all" onclick="Loans.payAll()">Pay All</button>
+                  </div>
+                  <button id="shark-duel-btn" class="loan-duel-btn hidden" onclick="Loans.startDuel()">&#x1F3B2; Challenge Shark</button>
+                </div>
               </div>
-              <button class="p2p-offer-btn" onclick="Loans.createPlayerLoan()">&#x1F4E4; Send Loan Offer</button>
             </div>
-            <div class="p2p-divider"></div>
-            <div id="p2p-loan-content"><div class="p2p-empty">No active player loans</div></div>
-          </div>
-        </div>
 
-        <!-- R5+ Counter-Loan -->
-        <div class="p2p-loan-panel r5-panel" id="counter-loan-panel">
-          <div class="p2p-loan-header" onclick="document.getElementById('counter-loan-body').classList.toggle('hidden')">
-            <span class="p2p-loan-title">&#x1F4B0; Counter-Loan (R5)</span>
-            <span class="loan-toggle">&#x25BC;</span>
-          </div>
-          <div id="counter-loan-body" class="p2p-loan-body hidden">
-            <div id="counter-loan-section"></div>
-          </div>
-        </div>
+            <!-- P2P Player Loans -->
+            <div class="p2p-loan-panel">
+              <div class="p2p-loan-header" onclick="document.getElementById('p2p-loan-body').classList.toggle('hidden')">
+                <span class="p2p-loan-title">&#x1F91D; Player Loans</span>
+                <span class="loan-toggle">&#x25BC;</span>
+              </div>
+              <div id="p2p-loan-body" class="p2p-loan-body hidden">
+                <div class="p2p-create-section">
+                  <label>Offer a loan to another player:</label>
+                  <div class="p2p-name-combo">
+                    <input type="text" id="p2p-borrower-name" placeholder="Search player..." autocomplete="off" oninput="Loans.filterBorrowerDropdown()">
+                    <div id="p2p-name-dropdown" class="p2p-name-dropdown hidden"></div>
+                  </div>
+                  <div class="p2p-input-row">
+                    <input type="number" id="p2p-loan-amount" placeholder="Amount">
+                    <input type="number" id="p2p-interest-rate" placeholder="Rate %" min="1" max="100" value="5">
+                    <span>%/min</span>
+                  </div>
+                  <button class="p2p-offer-btn" onclick="Loans.createPlayerLoan()">&#x1F4E4; Send Loan Offer</button>
+                </div>
+                <div class="p2p-divider"></div>
+                <div id="p2p-loan-content"><div class="p2p-empty">No active player loans</div></div>
+              </div>
+            </div>
 
-        <!-- R5+ Shark Negotiator -->
-        <div class="p2p-loan-panel r5-panel" id="negotiator-panel">
-          <div class="p2p-loan-header" onclick="document.getElementById('negotiator-body').classList.toggle('hidden')">
-            <span class="p2p-loan-title">&#x1F91D; Shark Negotiator (R5)</span>
-            <span class="loan-toggle">&#x25BC;</span>
-          </div>
-          <div id="negotiator-body" class="p2p-loan-body hidden">
-            <div id="negotiator-section"></div>
-          </div>
-        </div>
+            <!-- R5+ Counter-Loan -->
+            <div class="p2p-loan-panel r5-panel" id="counter-loan-panel">
+              <div class="p2p-loan-header" onclick="document.getElementById('counter-loan-body').classList.toggle('hidden')">
+                <span class="p2p-loan-title">&#x1F4B0; Counter-Loan (R5)</span>
+                <span class="loan-toggle">&#x25BC;</span>
+              </div>
+              <div id="counter-loan-body" class="p2p-loan-body hidden">
+                <div id="counter-loan-section"></div>
+              </div>
+            </div>
 
-        <!-- R5+ Shark Black Market -->
-        <div class="p2p-loan-panel r5-panel" id="black-market-panel">
-          <div class="p2p-loan-header" onclick="document.getElementById('black-market-body').classList.toggle('hidden')">
-            <span class="p2p-loan-title">&#x1F574; Shark's Black Market (R5)</span>
-            <span class="loan-toggle">&#x25BC;</span>
+            <!-- R5+ Shark Negotiator -->
+            <div class="p2p-loan-panel r5-panel" id="negotiator-panel">
+              <div class="p2p-loan-header" onclick="document.getElementById('negotiator-body').classList.toggle('hidden')">
+                <span class="p2p-loan-title">&#x1F91D; Shark Negotiator (R5)</span>
+                <span class="loan-toggle">&#x25BC;</span>
+              </div>
+              <div id="negotiator-body" class="p2p-loan-body hidden">
+                <div id="negotiator-section"></div>
+              </div>
+            </div>
+
+            <!-- R5+ Shark Black Market -->
+            <div class="p2p-loan-panel r5-panel" id="black-market-panel">
+              <div class="p2p-loan-header" onclick="document.getElementById('black-market-body').classList.toggle('hidden')">
+                <span class="p2p-loan-title">&#x1F574; Shark's Black Market (R5)</span>
+                <span class="loan-toggle">&#x25BC;</span>
+              </div>
+              <div id="black-market-body" class="p2p-loan-body hidden">
+                <div id="black-market-section"></div>
+              </div>
+            </div>
           </div>
-          <div id="black-market-body" class="p2p-loan-body hidden">
-            <div id="black-market-section"></div>
+
+          <!-- Stats Tab -->
+          <div id="home-tab-stats" class="home-tab-panel hidden">
+            <div id="click-stats" style="display:flex;flex-direction:column;gap:8px;padding:4px 0">
+              <div class="stat"><span class="stat-label">$/click</span><span id="stat-vpc">$0.01</span></div>
+              <div class="stat"><span class="stat-label">$/sec</span><span id="stat-cps">$0</span></div>
+              <div class="stat"><span class="stat-label">Total Earned</span><span id="stat-earned">$0</span></div>
+              <div class="stat"><span class="stat-label">Total Clicks</span><span id="stat-clicks">0</span></div>
+            </div>
           </div>
+
         </div>
 
         <button class="nav-casino-btn" onclick="App.showScreen('casino')">Casino Games &rarr;</button>
@@ -167,84 +198,7 @@
 
       <!-- Casino Menu -->
       <section id="screen-casino" class="screen">
-        <div id="casino-grid">
-          <div class="casino-card" onclick="App.showScreen('coinflip')">
-            <div class="casino-icon">&#x1FA99;</div>
-            <div class="casino-name">Coin Flip</div>
-          </div>
-          <div class="casino-card" onclick="App.showScreen('slots')">
-            <div class="casino-icon">&#x1F3B0;</div>
-            <div class="casino-name">Slots</div>
-          </div>
-          <div class="casino-card" onclick="App.showScreen('crash')">
-            <div class="casino-icon">&#x1F680;</div>
-            <div class="casino-name">Crash</div>
-          </div>
-          <div class="casino-card" onclick="App.showScreen('blackjack')">
-            <div class="casino-icon">&#x1F0CF;</div>
-            <div class="casino-name">Blackjack</div>
-          </div>
-          <div class="casino-card" onclick="App.showScreen('plinko')">
-            <div class="casino-icon">&#x26AA;</div>
-            <div class="casino-name">Plinko</div>
-          </div>
-          <div class="casino-card" onclick="App.showScreen('roulette')">
-            <div class="casino-icon">&#x1F3AF;</div>
-            <div class="casino-name">Roulette</div>
-          </div>
-          <div class="casino-card" onclick="App.showScreen('horses')">
-            <div class="casino-icon">&#x1F3C7;</div>
-            <div class="casino-name">Horse Racing</div>
-          </div>
-          <div class="casino-card" onclick="App.showScreen('lottery')">
-            <div class="casino-icon">&#x1F3AB;</div>
-            <div class="casino-name">Lottery</div>
-          </div>
-          <div class="casino-card" onclick="App.showScreen('properties')">
-            <div class="casino-icon">&#x1F3E2;</div>
-            <div class="casino-name">Properties</div>
-          </div>
-          <div class="casino-card" onclick="App.showScreen('crime')">
-            <div class="casino-icon">&#x1F6A8;</div>
-            <div class="casino-name">Crime</div>
-          </div>
-          <div class="casino-card" onclick="App.showScreen('pets')">
-            <div class="casino-icon">&#x1F43E;</div>
-            <div class="casino-name">Pets</div>
-          </div>
-          <div class="casino-card" onclick="App.showScreen('stocks')">
-            <div class="casino-icon">&#x1F4C8;</div>
-            <div class="casino-name">Stocks</div>
-          </div>
-          <div class="casino-card" onclick="App.showScreen('crypto')">
-            <div class="casino-icon">&#x26CF;&#xFE0F;</div>
-            <div class="casino-name">Crypto</div>
-          </div>
-          <div class="casino-card" onclick="App.showScreen('leaderboard')">
-            <div class="casino-icon">&#x1F3C6;</div>
-            <div class="casino-name">Leaderboard</div>
-          </div>
-          <div class="casino-card" onclick="App.showScreen('companies')">
-            <div class="casino-icon">&#x1F3E2;</div>
-            <div class="casino-name">Companies</div>
-          </div>
-          <div class="casino-card" onclick="App.showScreen('houses')">
-            <div class="casino-icon">&#x1F3E0;</div>
-            <div class="casino-name">Houses</div>
-          </div>
-          <div class="casino-card" onclick="App.showScreen('inventory')">
-            <div class="casino-icon">&#x1F392;</div>
-            <div class="casino-name">Inventory</div>
-          </div>
-          <div class="casino-card" onclick="App.showScreen('cars')">
-            <div class="casino-icon">&#x1F697;</div>
-            <div class="casino-name">Cars</div>
-          </div>
-          <div class="casino-card" onclick="App.showScreen('settings')">
-            <div class="casino-icon">&#x2699;&#xFE0F;</div>
-            <div class="casino-name">Settings</div>
-          </div>
-        </div>
+        <div id="casino-grid"></div>
       </section>
 
       <!-- Coin Flip -->

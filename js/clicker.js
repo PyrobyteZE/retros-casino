@@ -349,6 +349,22 @@ const Clicker = {
     this.renderUpgrades();
     this.updateRebirthUI();
 
+    // Ripple effect on click button
+    if (event) {
+      const btn = document.getElementById('click-btn');
+      if (btn) {
+        const r = document.createElement('span');
+        r.className = 'ripple';
+        const rect = btn.getBoundingClientRect();
+        const x = (event.clientX || rect.left + rect.width/2) - rect.left - 40;
+        const y = (event.clientY || rect.top + rect.height/2) - rect.top - 40;
+        r.style.left = x + 'px';
+        r.style.top = y + 'px';
+        btn.appendChild(r);
+        setTimeout(() => r.remove(), 600);
+      }
+    }
+
     // Float text with color based on type
     if (event) {
       const el = document.createElement('div');

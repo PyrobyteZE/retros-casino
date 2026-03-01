@@ -288,9 +288,13 @@ input, textarea, select {
 
 /* Casino Grid */
 #casino-grid {
+  display: block;
+}
+.casino-grid-section {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 10px;
+  margin-bottom: 4px;
 }
 
 .casino-card {
@@ -2684,9 +2688,12 @@ html[data-platform="desktop"] #balance-display {
 }
 
 /* Casino grid: 4 columns on desktop */
-html[data-platform="desktop"] #casino-grid {
+html[data-platform="desktop"] .casino-grid-section {
   grid-template-columns: 1fr 1fr 1fr 1fr;
   gap: 16px;
+}
+html[data-platform="desktop"] .casino-favs-strip {
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
 }
 
 html[data-platform="desktop"] .casino-card {
@@ -8304,4 +8311,206 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   background: #2d0a0a !important;
   color: #f44336 !important;
   border-color: #f44336 !important;
+}
+
+/* ===== Sub-Stock Transfer Modal ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.hidden { display: none; }
+.modal-box {
+  background: var(--bg2);
+  border: 1px solid var(--bg3);
+  border-radius: var(--radius);
+  padding: 20px 18px;
+  max-width: 320px;
+  width: 90%;
+}
+.modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.transfer-dest-btn {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--bg3);
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .15s;
+}
+.transfer-dest-btn:hover { border-color: #bb86fc; color: #bb86fc; }
+
+/* ===== Side Drawer ===== */
+.side-drawer {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 260px;
+  background: var(--bg2);
+  transform: translateX(-100%);
+  transition: transform .25s cubic-bezier(.4,0,.2,1);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--bg3);
+  overflow-y: auto;
+}
+.side-drawer.open { transform: translateX(0); }
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.5);
+  z-index: 199;
+  display: none;
+}
+.drawer-overlay.open { display: block; }
+.drawer-player-info {
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid var(--bg3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.drawer-avatar { font-size: 40px; }
+.drawer-name { font-size: 15px; font-weight: 700; color: var(--text); }
+.drawer-balance { font-size: 13px; color: var(--green); font-weight: 600; }
+.drawer-nav { display: flex; flex-direction: column; padding: 8px 0; flex: 1; }
+.drawer-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  font-size: 14px;
+  color: var(--text);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  border-left: 3px solid transparent;
+  transition: background .12s, border-color .12s;
+}
+.drawer-nav-link:hover { background: var(--bg3); }
+.drawer-nav-link.active { border-left-color: var(--green); color: var(--green); background: rgba(0,230,118,.07); }
+.drawer-nav-section {
+  padding: 8px 16px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.hamburger-btn {
+  background: none;
+  border: none;
+  color: var(--green);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* ===== Home Tab Bar ===== */
+.home-tabs-bar {
+  display: flex;
+  gap: 0;
+  background: var(--bg2);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  overflow: hidden;
+  border: 1px solid var(--bg3);
+}
+.home-tab {
+  flex: 1;
+  padding: 9px 6px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.home-tab.active {
+  background: var(--bg3);
+  color: var(--green);
+}
+.home-tab-panel { display: block; }
+.home-tab-panel.hidden { display: none; }
+
+/* ===== Click Button Pulse ===== */
+@keyframes pulse-glow {
+  from { box-shadow: 0 0 15px var(--gold); }
+  to   { box-shadow: 0 0 50px var(--gold), 0 0 80px rgba(255,215,64,.3); }
+}
+#click-btn {
+  width: 210px;
+  height: 210px;
+  border-radius: 50%;
+  font-size: 36px;
+  font-weight: 800;
+  box-shadow: 0 0 30px var(--gold);
+  animation: pulse-glow 1.5s ease-in-out infinite alternate;
+  position: relative;
+  overflow: hidden;
+}
+@keyframes ripple-out {
+  from { transform: scale(0); opacity: .5; }
+  to   { transform: scale(3); opacity: 0; }
+}
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  width: 80px;
+  height: 80px;
+  background: rgba(255,215,64,.45);
+  pointer-events: none;
+  transform: scale(0);
+  animation: ripple-out .55s ease-out forwards;
+}
+
+/* ===== Casino Category Labels ===== */
+.casino-category-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding: 10px 4px 4px;
+  font-weight: 700;
+}
+.casino-card {
+  position: relative;
+}
+.fav-pin-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: none;
+  border: none;
+  color: var(--gold);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px;
+  z-index: 2;
+  line-height: 1;
+}
+.casino-favs-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 8px;
+  margin-bottom: 4px;
 }
