@@ -81,7 +81,6 @@ const Cars = {
   },
 
   // === STATE ===
-  _company: null,     // { id, name, slogan, foundedAt, manufacturingLevel, totalSold, reputation, ownerUid, ownerName }
   _models: [],        // [ car model design templates ]
   _garage: [],        // [ manufactured car instances ]
   _carListings: {},   // { listingId: { sellerUid, sellerName, car, price, listedAt } }
@@ -126,42 +125,22 @@ const Cars = {
     return total;
   },
 
-  // === COMPANY ===
-  foundCompany(name, slogan) {
-    if (!name || !name.trim()) { Toast.show('Enter a brand name', '#f44336', 2000); return; }
-    const isGod = typeof Admin !== 'undefined' && Admin.godMode;
-    const cost = 5_000_000;
-    if (!isGod && App.balance < cost) { Toast.show('Need ' + App.formatMoney(cost) + ' to found a car company', '#f44336', 2500); return; }
-    if (!isGod) App.addBalance(-cost);
-    this._company = {
-      id: 'brand_' + Date.now().toString(36),
-      name: name.trim(),
-      slogan: (slogan || '').trim(),
-      foundedAt: Date.now(),
-      manufacturingLevel: 1,
-      totalSold: 0,
-      reputation: 0,
-      ownerUid: typeof Firebase !== 'undefined' ? Firebase.uid : 'local',
-      ownerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'You',
-    };
-    App.save();
-    Toast.show('🏭 ' + this._company.name + ' founded!', '#4caf50', 3000);
-    this._triggerRender();
+  // === AUTOMOTIVE COMPANY HELPERS ===
+  getAutomotiveCompany() {
+    if (typeof Companies === 'undefined') return null;
+    return Companies._companies.find(c => c.industry === 'automotive') || null;
   },
 
-  upgradeManufacturing() {
-    if (!this._company) return;
-    const lvl = this._company.manufacturingLevel;
-    if (lvl >= 5) { Toast.show('Max level!', '#f44336', 2000); return; }
-    const costs = [0, 5_000_000, 20_000_000, 75_000_000, 250_000_000];
-    const cost = costs[lvl];
-    const isGod = typeof Admin !== 'undefined' && Admin.godMode;
-    if (!isGod && App.balance < cost) { Toast.show('Need ' + App.formatMoney(cost), '#f44336', 2500); return; }
-    if (!isGod) App.addBalance(-cost);
-    this._company.manufacturingLevel++;
-    App.save();
-    Toast.show('Manufacturing upgraded to level ' + this._company.manufacturingLevel, '#4caf50', 2500);
-    this._triggerRender();
+  getManufacturingLevel() {
+    const co = this.getAutomotiveCompany();
+    if (!co) return 1;
+    const props = co.properties || [];
+    return 1 + ['auto_1','auto_2','auto_3','auto_4'].filter(k => props.includes(k)).length;
+  },
+
+  hasShowroom() {
+    const co = this.getAutomotiveCompany();
+    return !!(co && (co.properties || []).includes('auto_1'));
   },
 
   // === DESIGN + MANUFACTURE ===
@@ -174,7 +153,7 @@ const Cars = {
     const existing = document.getElementById('car-design-modal');
     if (existing) existing.remove();
     const draft = this._designDraft;
-    const mlvl = this._company ? this._company.manufacturingLevel : 1;
+    const mlvl = this.getManufacturingLevel();
 
     const engineOptions = Object.entries(this.ENGINES)
       .filter(([,e]) => e.req <= mlvl)
@@ -368,8 +347,8 @@ const Cars = {
       id: 'car_' + Date.now().toString(36) + '_' + Math.floor(rng() * 9999).toString(36),
       modelId: model.id,
       modelName: model.name,
-      brandId: this._company ? this._company.id : null,
-      brandName: this._company ? this._company.name : 'Independent',
+      brandId: null,
+      brandName: this.getAutomotiveCompany()?.name || 'Independent',
       category,
       icon: this.CATEGORY_ICONS[category] || '🚗',
       stats,
@@ -385,9 +364,6 @@ const Cars = {
     };
 
     this._garage.push(car);
-    if (this._company) {
-      this._company.totalSold = (this._company.totalSold || 0);
-    }
     App.save();
 
     const flawMsg = flaws.length > 0 ? ` (${flaws.length} flaw${flaws.length>1?'s':''} found!)` : ' (flawless!)';
@@ -503,11 +479,56 @@ const Cars = {
     this._triggerRender();
   },
 
-  // === MARKETPLACE ===
-  getBrandDiscount() {
-    if (!this._company) return 0;
-    return 0.20; // 20% off their own brand
+  // === NPC SALE ===
+  sellToNpc(carId) {
+    const idx = this._garage.findIndex(c => c.id === carId);
+    if (idx < 0) return;
+    const car = this._garage[idx];
+    const npcPrice = Math.round(car.value * 0.65);
+    if (!confirm(`Sell ${car.modelName} to NPC for ${App.formatMoney(npcPrice)}? (65% of appraised value)`)) return;
+    this._garage.splice(idx, 1);
+    App.addBalance(npcPrice);
+    App.save();
+    Toast.show(car.icon + ' Sold to NPC for ' + App.formatMoney(npcPrice), '#4caf50', 2500);
+    this._triggerRender();
   },
+
+  // === BRAND CRAFT TAB (called from Crafting.renderCraftTab when company is automotive) ===
+  renderBrandCraftTab(cIdx) {
+    const co = typeof Companies !== 'undefined' ? Companies._companies[cIdx] : null;
+    if (!co) return '<div class="craft-empty">No company data</div>';
+    const lvl = this.getManufacturingLevel();
+    const brandName = co.name || 'Your Brand';
+
+    let html = `<div class="craft-tab-content">
+      <div class="brand-header" style="margin-bottom:12px">
+        <div class="brand-name">${co.name || 'Automotive Co.'}</div>
+        <div class="brand-meta">🏭 Manufacturing Level ${lvl} &nbsp;|&nbsp; ${this._models.length} model${this._models.length !== 1 ? 's' : ''} designed</div>
+      </div>
+      <button class="house-buy-btn" style="margin-bottom:14px;width:100%" onclick="Cars.openDesignModal()">🔨 Design New Model</button>`;
+
+    if (this._models.length === 0) {
+      html += `<div class="cars-empty" style="padding:12px">No models yet. Design one above.</div>`;
+    } else {
+      html += `<div class="model-list">`;
+      for (const model of this._models) {
+        const bodyDef = this.BODIES[model.bodyKey] || {};
+        html += `<div class="model-row">
+          <span class="model-icon">${this.CATEGORY_ICONS[model.category] || '🚗'}</span>
+          <div class="model-info">
+            <div class="model-name">${this._esc(model.name)}</div>
+            <div class="model-cat">${model.category} • ${this._esc(bodyDef.name || '')} • ${App.formatMoney(model.manufactureCost)}</div>
+          </div>
+          <button class="house-action-btn" onclick="Cars.manufactureModel('${model.id}')">🏭 Manufacture</button>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+    html += `</div>`;
+    return html;
+  },
+
+  // === MARKETPLACE ===
 
   listCar(carId, price) {
     const idx = this._garage.findIndex(c => c.id === carId);
@@ -532,14 +553,8 @@ const Cars = {
     if (!listing) { Toast.show('Not found', '#f44336', 2000); return; }
     const isGod = typeof Admin !== 'undefined' && Admin.godMode;
 
-    // Check if buyer owns the brand — apply discount
     let price = listing.price;
     const car = listing.car;
-    const isBrand = this._company && car.brandId === this._company.id;
-    if (isBrand) {
-      price = Math.floor(price * (1 - this.getBrandDiscount()));
-      Toast.show('🏷️ Brand owner discount applied!', '#4caf50', 2000);
-    }
 
     if (!isGod && App.balance < price) { Toast.show('Not enough money!', '#f44336', 2500); return; }
     if (!isGod) App.addBalance(-price);
@@ -637,17 +652,16 @@ const Cars = {
 
     const garageSlots = typeof Houses !== 'undefined' ? Houses.getTotalGarageSlots() : 0;
     const passiveIncome = this.getPassiveIncome();
+    const autoCo = this.getAutomotiveCompany();
 
     let html = `<div class="cars-stat-bar">
       🚗 Garage: ${this._garage.length}/${garageSlots} &nbsp;|&nbsp;
       💰 Passive: ${App.formatMoney(passiveIncome)}/s
-      ${this._company ? ` &nbsp;|&nbsp; 🏭 ${this._esc(this._company.name)} Lv${this._company.manufacturingLevel}` : ''}
+      ${autoCo ? ` &nbsp;|&nbsp; 🏭 ${this._esc(autoCo.name)} Lv${this.getManufacturingLevel()}` : ''}
     </div>`;
 
-    const tabs = this._company
-      ? ['garage','brand','market','race']
-      : ['garage','brand','market'];
-    const tabLabels = { garage:'🚗 Garage', brand:'🏭 My Brand', market:'🛒 Market', race:'🏎️ Race' };
+    const tabs = ['garage','market','race'];
+    const tabLabels = { garage:'🚗 Garage', market:'🛒 Market', race:'🏎️ Race' };
 
     html += `<div class="cars-tabs">`;
     tabs.forEach(t => {
@@ -656,7 +670,6 @@ const Cars = {
     html += `</div>`;
 
     if (this._activeTab === 'garage')  html += this._renderGarage(garageSlots);
-    else if (this._activeTab === 'brand')  html += this._renderBrand();
     else if (this._activeTab === 'market') html += this._renderMarket();
     else if (this._activeTab === 'race')   html += this._renderRace();
 
@@ -667,14 +680,20 @@ const Cars = {
     if (garageSlots === 0) {
       return `<div class="cars-empty">Your houses don't have a garage yet.<br>Buy a house that comes with one, or upgrade to a higher tier!</div>`;
     }
+    const autoCo = this.getAutomotiveCompany();
+    const brandBanner = autoCo
+      ? `<div class="brand-header" style="margin-bottom:10px"><div class="brand-meta">🏭 Brand: <strong>${this._esc(autoCo.name)}</strong> | Lv${this.getManufacturingLevel()} | ${this._models.length} models &nbsp;·&nbsp; <a style="color:var(--green);cursor:pointer" onclick="App.showScreen('companies')">Design in Companies →</a></div></div>`
+      : `<div style="background:var(--bg2);border:1px solid var(--accent);border-radius:8px;padding:10px;margin-bottom:10px;font-size:12px;color:var(--text-dim)">⚠️ Found an <strong style="color:var(--text)">Automotive</strong> company to unlock car manufacturing → <a style="color:var(--green);cursor:pointer" onclick="App.showScreen('companies')">Companies</a></div>`;
     if (this._garage.length === 0) {
-      return `<div class="cars-empty">Garage empty!<br>Manufacture cars from the <strong>My Brand</strong> tab, or buy from the <strong>Market</strong>.</div>`;
+      return brandBanner + `<div class="cars-empty">Garage empty!<br>Design models in your Automotive company and manufacture from its <strong>Craft</strong> tab, or buy from the <strong>Market</strong>.</div>`;
     }
 
-    let html = `<div class="car-grid">`;
+    let html = brandBanner + `<div class="car-grid">`;
+    const showNpc = this.hasShowroom();
     for (const car of this._garage) {
       const flawCount = (car.flaws || []).filter(f => f.currentPenalty > 0).length;
       const cdData = this.CATEGORY_DATA[car.category] || this.CATEGORY_DATA.sedan;
+      const npcPrice = Math.round(car.value * 0.65);
       html += `<div class="car-card">
         <div class="car-card-top">
           <span class="car-card-icon">${car.icon}</span>
@@ -703,7 +722,8 @@ const Cars = {
           ${flawCount > 0 ? `<button class="car-btn" onclick="Cars._showFlawsModal('${car.id}')">🔧 Flaws</button>` : ''}
           <button class="car-btn" onclick="Cars.repairCar('${car.id}')">🛠️ Repair (${car.condition < 100 ? App.formatMoney(Math.floor(car.value*0.02*(1-car.condition/100))) : 'OK'})</button>
           <button class="car-btn car-btn-race" onclick="Cars.setTab('race');Cars._activeRaceCar='${car.id}'">🏎️ Race</button>
-          <button class="car-btn car-btn-sell" onclick="Cars._showListCarModal('${car.id}')">💰 Sell</button>
+          ${showNpc ? `<button class="car-btn" onclick="Cars.sellToNpc('${car.id}')">💵 Sell NPC (${App.formatMoney(npcPrice)})</button>` : ''}
+          <button class="car-btn car-btn-sell" onclick="Cars._showListCarModal('${car.id}')">💰 Market</button>
           <button class="car-btn" onclick="Houses.depositCar('${car.id}')">🏦 Vault</button>
         </div>
       </div>`;
@@ -767,64 +787,6 @@ const Cars = {
     document.body.appendChild(modal);
   },
 
-  _renderBrand() {
-    if (!this._company) {
-      return `<div class="cars-empty">
-        <div class="brand-found-intro">
-          <div style="font-size:40px;margin-bottom:8px">🏭</div>
-          <div style="font-size:16px;font-weight:700;margin-bottom:6px">Start Your Car Brand</div>
-          <div style="font-size:12px;color:var(--text-dim);margin-bottom:16px">Found a car company, design models, manufacture cars, and sell to other players.</div>
-          <div style="font-size:13px;color:var(--green);margin-bottom:12px">Cost: ${App.formatMoney(5_000_000)}</div>
-        </div>
-        <input id="brand-name-inp" type="text" maxlength="24" placeholder="Brand Name (e.g. Retro Motors)" class="house-modal-input" style="margin-bottom:8px">
-        <input id="brand-slogan-inp" type="text" maxlength="40" placeholder="Slogan (optional)" class="house-modal-input" style="margin-bottom:12px">
-        <button class="house-buy-btn" onclick="Cars.foundCompany(document.getElementById('brand-name-inp').value,document.getElementById('brand-slogan-inp').value)">
-          🏭 Found Company
-        </button>
-      </div>`;
-    }
-
-    const co = this._company;
-    const upgCosts = [0, 5_000_000, 20_000_000, 75_000_000, 250_000_000];
-    const nextCost = co.manufacturingLevel < 5 ? upgCosts[co.manufacturingLevel] : null;
-    const canUpgrade = nextCost && (App.balance >= nextCost || (typeof Admin !== 'undefined' && Admin.godMode));
-
-    let html = `<div class="brand-header">
-      <div class="brand-name">${this._esc(co.name)}</div>
-      ${co.slogan ? `<div class="brand-slogan">"${this._esc(co.slogan)}"</div>` : ''}
-      <div class="brand-meta">
-        Lv ${co.manufacturingLevel} manufacturing &nbsp;|&nbsp;
-        ⭐ Reputation: ${co.reputation || 0} &nbsp;|&nbsp;
-        Cars sold: ${co.totalSold || 0}
-      </div>
-      ${nextCost ? `<button class="house-action-btn${canUpgrade?'':' unaffordable'}" onclick="Cars.upgradeManufacturing()">
-        ⬆️ Upgrade Manufacturing → Lv${co.manufacturingLevel+1} (${App.formatMoney(nextCost)})
-      </button>` : '<div class="brand-meta">✅ Max manufacturing level</div>'}
-    </div>`;
-
-    // Model designs
-    html += `<div class="brand-section-label">Your Model Designs</div>`;
-    if (this._models.length === 0) {
-      html += `<div class="cars-empty" style="padding:12px">No designs yet. Design your first model!</div>`;
-    } else {
-      html += `<div class="model-list">`;
-      for (const model of this._models) {
-        const bodyDef = this.BODIES[model.bodyKey] || {};
-        html += `<div class="model-row">
-          <span class="model-icon">${this.CATEGORY_ICONS[model.category] || '🚗'}</span>
-          <div class="model-info">
-            <div class="model-name">${this._esc(model.name)}</div>
-            <div class="model-cat">${model.category} • ${this._esc(bodyDef.name || '')}</div>
-          </div>
-          <button class="house-action-btn" onclick="Cars.manufactureModel('${model.id}')">🔨 Manufacture</button>
-        </div>`;
-      }
-      html += `</div>`;
-    }
-
-    html += `<button class="house-buy-btn" style="margin-top:12px" onclick="Cars.openDesignModal()">+ Design New Model</button>`;
-    return html;
-  },
 
   _renderMarket() {
     const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : 'local';
@@ -838,8 +800,7 @@ const Cars = {
       const car = listing.car;
       if (!car) continue;
       const isMine = listing.sellerUid === myUid;
-      const isBrand = this._company && car.brandId === this._company.id && !isMine;
-      const effectivePrice = isBrand ? Math.floor(listing.price * (1 - this.getBrandDiscount())) : listing.price;
+      const effectivePrice = listing.price;
       const canAfford = App.balance >= effectivePrice || (typeof Admin !== 'undefined' && Admin.godMode);
       const flawCount = (car.flaws || []).filter(f => f.currentPenalty > 0).length;
 
@@ -858,13 +819,12 @@ const Cars = {
           ${this._miniStatBar('🔩', car.stats.reliability)}
         </div>
         ${flawCount > 0 ? `<div class="car-flaw-badge">${flawCount} flaw${flawCount>1?'s':''}</div>` : '<div class="car-flaw-badge car-flaw-ok">No flaws</div>'}
-        ${isBrand ? `<div class="car-brand-discount-badge">🏷️ -20% (Your Brand)</div>` : ''}
         <div class="car-card-value">Score: ${car.overallScore}</div>
         <div class="car-card-actions">
           ${isMine
             ? `<button class="car-btn" onclick="Cars.delistCar('${lid}')">Delist</button>`
             : `<button class="house-buy-btn${canAfford?'':' unaffordable'}" onclick="Cars.buyListing('${lid}')">
-                Buy ${App.formatMoney(effectivePrice)}${isBrand ? ' ✓' : ''}
+                Buy ${App.formatMoney(effectivePrice)}
               </button>`}
         </div>
       </div>`;
@@ -974,16 +934,12 @@ const Cars = {
 
   // === SAVE / LOAD ===
   getSaveData() {
-    return {
-      company: this._company,
-      models: this._models,
-      garage: this._garage,
-    };
+    return { models: this._models, garage: this._garage };
   },
 
   loadSaveData(d) {
     if (!d) return;
-    this._company = d.company || null;
+    // d.company intentionally ignored — brand is now part of Companies system
     this._models = d.models || [];
     this._garage = d.garage || [];
   },
