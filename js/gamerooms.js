@@ -8,6 +8,8 @@ const MainRoom = {
   _myBets: {},       // { horses: { bet, pick }, roulette: { bet } }
   _payoutTrack: {},  // dedup: 'horses_startedAt' -> true
   _countdowns: {},   // setInterval ids
+  _autoSpinActive: {}, // { roulette: true } when player is on that screen
+  _autoSpinTimers: {}, // { roulette: timeoutId }
 
   _gameMap: {
     horses: 'screen-horses',
@@ -68,6 +70,60 @@ const MainRoom = {
     if (!Admin.isAdmin()) return;
     Firebase.setMainRoom(game, null);
     Toast.show('Room closed', '#ff5252', 2000);
+  },
+
+  // ─── Auto-Spin ─────────────────────────────────────────────────
+
+  onScreenEnter(game) {
+    this._autoSpinActive[game] = true;
+    this._scheduleAutoSpin(game, 4000);
+  },
+
+  onScreenLeave(game) {
+    this._autoSpinActive[game] = false;
+    if (this._autoSpinTimers[game]) {
+      clearTimeout(this._autoSpinTimers[game]);
+      delete this._autoSpinTimers[game];
+    }
+  },
+
+  _scheduleAutoSpin(game, delayMs) {
+    if (!this._autoSpinActive[game]) return;
+    if (this._autoSpinTimers[game]) clearTimeout(this._autoSpinTimers[game]);
+    this._autoSpinTimers[game] = setTimeout(() => {
+      delete this._autoSpinTimers[game];
+      this._tryAutoSpin(game);
+    }, delayMs || 5000);
+  },
+
+  _tryAutoSpin(game) {
+    if (!this._autoSpinActive[game]) return;
+    if (!Firebase.isOnline()) { this._scheduleAutoSpin(game, 10000); return; }
+    if (this._rooms[game]) return; // room already active
+    if ((Firebase.onlineCount || 0) < 2) {
+      // Not enough players yet — check again later
+      this._scheduleAutoSpin(game, 10000);
+      return;
+    }
+    // Small jitter so multiple players don't all write at once
+    const jitter = Math.random() * 2000;
+    setTimeout(() => {
+      if (!this._autoSpinActive[game] || this._rooms[game]) return;
+      const name = typeof Settings !== 'undefined' ? Settings.profile.name : 'Player';
+      Firebase.tryOpenAutoRoom(game, {
+        status: 'betting',
+        host: Firebase.uid,
+        hostSession: Firebase._sessionId,
+        hostName: name,
+        betWindowEnd: Date.now() + 30 * 1000,
+        startedAt: 0,
+        seed: 0,
+        result: null,
+        players: {},
+        autoRoom: true,
+      });
+      // _onUpdate will fire for everyone when the room is created
+    }, jitter);
   },
 
   // ─── State ─────────────────────────────────────────────────────
@@ -255,6 +311,11 @@ const MainRoom = {
       setTimeout(() => Firebase.setMainRoom(game, null), 8000);
     }
     setTimeout(() => this._removeOverlay(game), 8000);
+
+    // Auto-spin: schedule next round if player is still on this screen
+    if (this._autoSpinActive[game]) {
+      this._scheduleAutoSpin(game, 15000); // 15s break between rounds
+    }
   },
 
   // ─── Bet Placement ─────────────────────────────────────────────

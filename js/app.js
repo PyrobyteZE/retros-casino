@@ -207,6 +207,10 @@ const App = {
 
     if (this.currentScreen !== name) {
       this.screenHistory.push(this.currentScreen);
+      // Notify MainRoom when leaving a multiplayer screen
+      if (typeof MainRoom !== 'undefined' && ['roulette', 'crash', 'horses'].includes(this.currentScreen)) {
+        MainRoom.onScreenLeave(this.currentScreen);
+      }
     }
 
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -221,7 +225,10 @@ const App = {
     if (name === 'plinko') Plinko.initCanvas();
     if (name === 'roulette') Roulette.init();
     if (name === 'horses') Horses.init();
-    if (['roulette', 'crash', 'horses'].includes(name) && typeof MainRoom !== 'undefined') MainRoom.joinScreen(name);
+    if (['roulette', 'crash', 'horses'].includes(name) && typeof MainRoom !== 'undefined') {
+      MainRoom.joinScreen(name);
+      MainRoom.onScreenEnter(name);
+    }
     if (name === 'lottery') Lottery.init();
     if (name === 'properties') Properties.init();
     if (name === 'crime') Crime.init();

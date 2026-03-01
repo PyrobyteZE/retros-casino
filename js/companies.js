@@ -4,7 +4,10 @@ const Companies = {
   FOUND_COST:     1_000_000,
   STOCK2_COST:      500_000,
   STOCK3_COST:    1_000_000,
-  MAX_STOCKS: 3,
+  STOCK4_COST:    2_500_000,
+  STOCK5_COST:    5_000_000,
+  STOCK6_COST:   10_000_000,
+  MAX_STOCKS: 6, // 1 main + 5 sub-stocks
   MAX_COMPANIES_HARD: 10,
   SLOT_COSTS: [0, 5_000_000, 15_000_000], // cost to unlock slot 2 then 3
 
@@ -128,7 +131,7 @@ const Companies = {
     acquisitionLicense: {
       name: 'M&A Division',
       icon: '\u{1F91D}',
-      desc: 'Enables acquisition offers on rival sub-stocks. Buy a sub-stock from another company and absorb it into yours. 7-stock portfolio cap total.',
+      desc: 'Enables acquisition offers on rival sub-stocks. Buy a sub-stock from another company and absorb it into yours. Up to 5 sub-stocks per company.',
       maxLevel: 1,
       costs: [5_000_000],
     },
@@ -1172,8 +1175,9 @@ const Companies = {
     const c = this._companies[cIdx];
     if (!c) return;
     const count = c.stocks.length;
-    if (count >= this.MAX_STOCKS) { alert('Maximum 3 stocks per company.'); return; }
-    const cost = count === 1 ? this.STOCK2_COST : this.STOCK3_COST;
+    if (count >= this.MAX_STOCKS) { alert('Maximum 5 sub-stocks per company.'); return; }
+    const COSTS = [0, this.STOCK2_COST, this.STOCK3_COST, this.STOCK4_COST, this.STOCK5_COST, this.STOCK6_COST];
+    const cost = COSTS[count] || this.STOCK6_COST;
     if (App.balance < cost) { alert('Need ' + App.formatMoney(cost) + ' to add another stock.'); return; }
 
     const sym = prompt('New stock ticker (2-5 letters):')?.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 5);
@@ -2101,10 +2105,11 @@ const Companies = {
               </div>`;
             });
             if (c.stocks.length < this.MAX_STOCKS) {
-              const cost = c.stocks.length === 1 ? this.STOCK2_COST : this.STOCK3_COST;
+              const COSTS = [0, this.STOCK2_COST, this.STOCK3_COST, this.STOCK4_COST, this.STOCK5_COST, this.STOCK6_COST];
+              const cost = COSTS[c.stocks.length] || this.STOCK6_COST;
               html += `<button class="add-stock-btn" style="margin-top:8px" onclick="Companies.addStock(${cIdx})">+ Add Sub-Stock — ${App.formatMoney(cost)}</button>`;
             } else {
-              html += `<div style="text-align:center;color:var(--text-dim);font-size:12px;margin-top:8px">Maximum 3 stocks reached</div>`;
+              html += `<div style="text-align:center;color:var(--text-dim);font-size:12px;margin-top:8px">Maximum 5 sub-stocks reached</div>`;
             }
           }
         }
@@ -2748,8 +2753,8 @@ const Companies = {
     const recipientCompanyTicker = recipientSelect.value;
     const recipientComp = this._companies.find(c => c.ticker === recipientCompanyTicker);
     if (!recipientComp) { Toast.show('Company not found', '#ff5252'); return; }
-    if ((recipientComp.stocks || []).length >= this.MAX_STOCKS) { Toast.show('That company is at max stocks (3)', '#ff5252'); return; }
-    if (this._countTotalPlayerStocks() >= 7) { Toast.show('Portfolio cap reached (7 stocks max)', '#ff5252'); return; }
+    if ((recipientComp.stocks || []).length >= this.MAX_STOCKS) { Toast.show('That company is at max stocks (6)', '#ff5252'); return; }
+    if (this._countTotalPlayerStocks() >= 20) { Toast.show('Portfolio cap reached (20 stocks max)', '#ff5252'); return; }
 
     const myName = typeof Settings !== 'undefined' ? Settings.profile.name : 'Player';
     const offerData = {

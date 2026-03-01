@@ -2306,6 +2306,17 @@ const Firebase = {
       ? this.db.ref('mainRoom/' + game).remove()
       : this.db.ref('mainRoom/' + game).set(data);
   },
+
+  // Atomically create a room only if it doesn't exist (for auto-spin)
+  tryOpenAutoRoom(game, roomData) {
+    if (!this.isOnline()) return Promise.resolve(false);
+    return new Promise(resolve => {
+      this.db.ref('mainRoom/' + game).transaction(cur => {
+        if (cur !== null) return; // abort — room already exists
+        return roomData;
+      }, (err, committed) => resolve(!!committed));
+    });
+  },
   updateMainRoom(game, updates) {
     if (!this.isOnline()) return Promise.resolve();
     return this.db.ref('mainRoom/' + game).update(updates);
