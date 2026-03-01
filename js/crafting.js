@@ -347,13 +347,37 @@ const Crafting = {
 
   closePixelPainter() {
     const modal = document.getElementById('pixel-painter-modal');
-    if (modal) modal.classList.add('hidden');
+    if (modal) {
+      modal.classList.add('hidden');
+      const header = modal.querySelector('.pp-header');
+      if (header) header.textContent = '🎨 Paint Your Item';
+    }
     this._ppItemDraft = null;
     this._ppPixels = null;
   },
 
   savePixels() {
     if (!this._ppItemDraft || !this._ppPixels) { this.closePixelPainter(); return; }
+
+    // Auto-list path: itemId + ':list:' + price (entertainment content listings)
+    if (this._ppItemDraft.includes(':list:')) {
+      const sepIdx = this._ppItemDraft.indexOf(':list:');
+      const itemId = this._ppItemDraft.slice(0, sepIdx);
+      const price  = parseFloat(this._ppItemDraft.slice(sepIdx + 6)) || 0;
+      const item = this._inventory.find(i => i.id === itemId);
+      if (item) item.pixels = this._ppPixels;
+      // Restore default header text
+      const ppHeader = document.getElementById('pixel-painter-modal')?.querySelector('.pp-header');
+      if (ppHeader) ppHeader.textContent = '🎨 Paint Your Item';
+      App.save();
+      this.closePixelPainter();
+      this._triggerRender();
+      if (price > 0 && item) {
+        this.listItem(itemId, price);
+      }
+      return;
+    }
+
     // Template path
     if (this._ppItemDraft.startsWith('template:')) {
       const templateId = this._ppItemDraft.slice(9);
@@ -1000,8 +1024,7 @@ const Crafting = {
         ${hasProp ? `
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             <button class="house-action-btn${disabled?' unaffordable':''}" ${disabled?'disabled':''} onclick="Crafting.produceContent(${cIdx},'${type}')">🎬 Produce</button>
-            <input type="text" inputmode="decimal" id="ent-list-price-${cIdx}-${type}" class="sh-input" placeholder="List price…" style="width:100px;padding:5px 8px;font-size:12px;flex:1;min-width:80px">
-            <button class="house-action-btn${disabled?' unaffordable':''}" ${disabled?'disabled':''} onclick="Crafting.produceContentAndList(${cIdx},'${type}')">📦 List</button>
+            <button class="house-action-btn${disabled?' unaffordable':''}" ${disabled?'disabled':''} onclick="Crafting.showContentListingModal(${cIdx},'${type}')">📦 Create &amp; List</button>
           </div>` : `<button class="house-action-btn unaffordable" disabled>🔒 Need property tier</button>`}
       </div>`;
     }
@@ -1050,13 +1073,59 @@ const Crafting = {
     this._triggerRender();
   },
 
-  produceContentAndList(cIdx, type) {
+  showContentListingModal(cIdx, type) {
     const co = typeof Companies !== 'undefined' ? Companies._companies[cIdx] : null;
     if (!co) return;
+    const LABELS = { music: '🎵 Music Single', movie: '🎬 Movie', tv: '📺 TV Show' };
+    const ICONS  = { music: '🎵', movie: '🎬', tv: '📺' };
+    const PLACEHOLDERS = { music: 'e.g. Midnight Drive', movie: 'e.g. The Last Heist', tv: 'e.g. Empire Rising' };
+    const label = LABELS[type] || type;
+    const icon  = ICONS[type] || '🎭';
+    const ph = PLACEHOLDERS[type] || 'Title…';
+    document.getElementById('content-listing-modal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'content-listing-modal';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+      <div class="modal-box" style="max-width:340px;width:92%">
+        <div class="modal-title" style="margin-bottom:14px">${icon} Create ${label}</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div>
+            <div style="font-size:12px;color:var(--text-dim);margin-bottom:4px">Title</div>
+            <input type="text" id="cl-name" class="sh-input" maxlength="50"
+              placeholder="${ph}" style="width:100%;box-sizing:border-box">
+          </div>
+          <div>
+            <div style="font-size:12px;color:var(--text-dim);margin-bottom:4px">Listing Price</div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="color:var(--green);font-weight:700">$</span>
+              <input type="text" inputmode="decimal" id="cl-price" class="sh-input"
+                placeholder="e.g. 50000" style="flex:1">
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--text-dim)">
+            After confirming, you'll paint the cover art in the pixel editor.
+          </div>
+          <div style="display:flex;gap:8px;margin-top:2px">
+            <button class="company-found-btn" style="flex:1"
+              onclick="Crafting.confirmContentListing(${cIdx},'${type}')">🎨 Paint Cover →</button>
+            <button class="company-found-btn" style="background:var(--bg3);flex:0;padding:10px 14px"
+              onclick="document.getElementById('content-listing-modal').remove()">Cancel</button>
+          </div>
+        </div>
+      </div>`;
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    document.getElementById('app').appendChild(modal);
+    setTimeout(() => document.getElementById('cl-name')?.focus(), 50);
+  },
 
-    const priceEl = document.getElementById('ent-list-price-' + cIdx + '-' + type);
-    const price = typeof App !== 'undefined' ? App.parseAmount(priceEl ? priceEl.value : '0') : parseFloat(priceEl ? priceEl.value : '0');
-    if (!price || price <= 0) { this._toast('Enter a listing price first'); return; }
+  confirmContentListing(cIdx, type) {
+    const co = typeof Companies !== 'undefined' ? Companies._companies[cIdx] : null;
+    if (!co) return;
+    const name  = (document.getElementById('cl-name')?.value.trim()) || (co.name + ' — Content');
+    const price = App.parseAmount(document.getElementById('cl-price')?.value || '0');
+    if (!price || price <= 0) { this._toast('Enter a listing price'); return; }
+    document.getElementById('content-listing-modal')?.remove();
 
     const TYPES = {
       music: { prop:'ent_1', cost:50_000,   reward:150_000,   stockPct:0.01, cd:15*60_000,  itemIcon:'🎵', itemCategory:'Music Single', itemRarity:'uncommon'  },
@@ -1077,22 +1146,20 @@ const Crafting = {
       Companies._allPlayerStocks[sym].price *= (1 + cfg.stockPct);
       if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushTradeInfluence(sym, 1, cfg.stockPct);
     }
-
     App.addBalance(cfg.reward);
     if (!co.contentCooldowns) co.contentCooldowns = {};
     co.contentCooldowns[type] = Date.now();
-
     if ((type === 'movie' || type === 'tv') && typeof Firebase !== 'undefined' && Firebase.isOnline()) {
       const labels = { movie:'🎬 New movie release!', tv:'📺 Hit TV show premieres!' };
       Firebase.pushStockNews(labels[type] + ' ' + co.name + ' stock is climbing.', true);
     }
 
-    // Build content item and list it
+    // Roll stats for the item
     const seed = Date.now();
     const rng = this._seededRng(seed);
     const statPool = ['luckBoost', 'gamblingBonus', 'earningsMult'];
     const rarity = cfg.itemRarity;
-    const statCount = rarity === 'uncommon' ? 2 : rarity === 'rare' ? 3 : 3;
+    const statCount = rarity === 'uncommon' ? 2 : 3;
     const rebirths = typeof App !== 'undefined' ? (App.rebirth || 0) : 0;
     const rebirthBoost = 1 + Math.min(rebirths * 0.03, 2.0);
     const ranges = {
@@ -1108,10 +1175,11 @@ const Crafting = {
       const value = Math.round((minV + rng() * (maxV - minV)) * 100) / 100;
       stats.push({ statType, value, label: this.STAT_LABELS[statType] || statType });
     }
-    const hexSuffix = Math.floor(rng() * 0xffff).toString(16).toUpperCase().padStart(4, '0');
+
+    const itemId = 'item_' + seed.toString(36) + '_' + Math.floor(rng() * 9999).toString(36);
     const item = {
-      id: 'item_' + seed.toString(36) + '_' + Math.floor(rng() * 9999).toString(36),
-      name: co.name + ' \u2014 ' + cfg.itemCategory + ' #' + hexSuffix,
+      id: itemId,
+      name,
       category: cfg.itemCategory,
       icon: cfg.itemIcon,
       pixels: '0'.repeat(256),
@@ -1122,16 +1190,23 @@ const Crafting = {
       crafterName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'You',
       createdAt: seed,
     };
-
-    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
-      Firebase.listItem(item, price);
-    } else {
-      this._toast('Must be online to list items');
-    }
-
+    this._inventory.push(item);
     if (typeof Companies !== 'undefined') { Companies._saveLocal(); Companies._pushToFirebase(); }
     App.save();
-    this._toast(cfg.itemIcon + ' Produced & listed for ' + App.formatMoney(price) + '!');
+
+    // Open pixel painter — ':list:PRICE' suffix triggers auto-listing on save
+    this._ppItemDraft = itemId + ':list:' + price;
+    this._ppPixels = '0'.repeat(256);
+    this._ppColor = 1;
+    this._ppTool = 'brush';
+    const ppModal = document.getElementById('pixel-painter-modal');
+    if (ppModal) {
+      const header = ppModal.querySelector('.pp-header');
+      if (header) header.textContent = cfg.itemIcon + ' Paint Cover Art';
+      ppModal.classList.remove('hidden');
+      this._buildPpGrid();
+      this._buildPpPalette();
+    }
     this._triggerRender();
   },
 
