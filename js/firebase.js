@@ -191,6 +191,7 @@ const Firebase = {
     if (typeof Crypto !== 'undefined') this.listenPlayerCoins(data => Crypto.updatePlayerCoins(data));
     if (typeof Crypto !== 'undefined') this.listenPlayerCoinSlots(data => Crypto.updatePlayerCoinSlots(data));
     if (typeof Banking !== 'undefined') Banking.init();
+    if (typeof Crafting !== 'undefined') Crafting.init();
     // Coin transfers (P2P sends)
     this.listenCoinTransfers(this.uid, transfer => {
       if (typeof Crypto !== 'undefined') Crypto._receiveCoinTransfer(transfer);

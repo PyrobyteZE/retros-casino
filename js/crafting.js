@@ -77,9 +77,12 @@ const Crafting = {
   // Craft setup modal draft
   _craftSetupDraft: null, // { name, isTemplate, price, mintLimit, cIdx, industry }
 
+  _listenersInited: false,
+
   // === INIT ===
   init() {
-    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline() && !this._listenersInited) {
+      this._listenersInited = true;
       Firebase.listenItemListings(data => {
         this._itemListings = data || {};
         this._triggerRender();
