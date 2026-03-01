@@ -649,6 +649,14 @@
         LOSE: Rebirths reset, loans locked for 10 rebirths
       </div>
       <button class="game-btn" id="reckoning-flip-btn" onclick="Loans.reckoningFlip()" style="background:#ff5252;color:#fff;font-size:18px;padding:14px 28px">&#x1FA99; FLIP THE COIN</button>
+      <div id="reckoning-cf-section" style="margin-top:14px;border-top:1px solid rgba(255,255,255,0.1);padding-top:12px">
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;letter-spacing:1px">— OR USE THE COINFLIP GAME —</div>
+        <div style="font-size:11px;color:var(--gold);margin-bottom:8px" id="reckoning-cf-odds"></div>
+        <div style="display:flex;gap:10px;justify-content:center">
+          <button class="game-btn heads" id="reckoning-heads-btn" onclick="Loans.reckoningCoinFlip('heads')" style="font-size:15px;padding:10px 20px">Heads</button>
+          <button class="game-btn tails" id="reckoning-tails-btn" onclick="Loans.reckoningCoinFlip('tails')" style="font-size:15px;padding:10px 20px">Tails</button>
+        </div>
+      </div>
     </div>
 
     <!-- Shark Duel Overlay -->
