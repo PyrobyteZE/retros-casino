@@ -565,19 +565,19 @@ const Cars = {
       Toast.show('Garage full! Buy a bigger house.', '#f44336', 3000); return;
     }
 
-    const boughtCar = JSON.parse(JSON.stringify(car));
-    this._garage.push(boughtCar);
-
     if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
-      await Firebase.buyCarListing(listingId, listing.price, listing.sellerUid);
+      const result = await Firebase.buyCarListing(listingId, listing.price, listing.sellerUid);
+      if (!result || !result.ok) {
+        if (!isGod) App.addBalance(price); // refund
+        Toast.show('Purchase failed — listing already sold or changed.', '#ff5252', 3000);
+        return;
+      }
     } else {
       delete this._carListings[listingId];
     }
 
-    // Brand reputation
-    if (this._company && listing.sellerUid !== (typeof Firebase !== 'undefined' ? Firebase.uid : 'local')) {
-      this._company.reputation = (this._company.reputation || 0) + 1;
-    }
+    const boughtCar = JSON.parse(JSON.stringify(car));
+    this._garage.push(boughtCar);
 
     App.save();
     Toast.show(boughtCar.icon + ' ' + boughtCar.modelName + ' purchased!', '#4caf50', 2500);

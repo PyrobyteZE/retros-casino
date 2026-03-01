@@ -522,6 +522,89 @@ const Crafting = {
   // === RENDER ===
   _triggerRender() {
     if (App.currentScreen === 'inventory') this.render();
+    if (App.currentScreen === 'shop') this.renderShopScreen();
+  },
+
+  renderShopScreen() {
+    const container = document.getElementById('shop-content');
+    if (!container) return;
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    const listings = Object.entries(this._itemListings);
+    const templates = Object.entries(this._templates);
+    const total = listings.length + templates.length;
+
+    let html = `<div style="padding:4px 0 10px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:2px">🛒 Player Shop</div>
+      <div style="font-size:12px;color:var(--text-dim)">${total} item${total !== 1 ? 's' : ''} listed by players</div>
+    </div>`;
+
+    if (total === 0) {
+      html += `<div class="inv-empty">No items in the shop yet.<br>Craft &amp; list items from your Inventory!</div>`;
+      container.innerHTML = html;
+      return;
+    }
+
+    // Limited editions first
+    if (templates.length > 0) {
+      html += `<div style="font-weight:700;font-size:13px;margin:8px 0 6px">🏭 Limited Editions</div><div class="inv-item-grid">`;
+      for (const [tid, tpl] of templates) {
+        const item = tpl.baseItem;
+        if (!item) continue;
+        const rarityColor = this.RARITY_COLORS[item.rarity] || '#aaa';
+        const isMine = tpl.crafterUid === myUid;
+        const soldOut = tpl.mintCount >= tpl.mintLimit;
+        const canAfford = App.balance >= tpl.price || (typeof Admin !== 'undefined' && Admin.godMode);
+        html += `<div class="inv-item-card" style="border-color:${rarityColor}">
+          <div class="inv-item-top">
+            <div class="inv-item-art">${this.renderPixelArt(item.pixels, 48)}</div>
+            <div class="inv-item-info">
+              <div class="inv-item-name">${this._esc(item.name)}</div>
+              <div class="inv-item-rarity" style="color:${rarityColor}">${item.rarity} · ${item.category}</div>
+              <div class="inv-item-crafter">by ${this._esc(tpl.crafterName || '?')} · ${tpl.mintCount}/${tpl.mintLimit} minted</div>
+            </div>
+          </div>
+          <div class="inv-item-actions">
+            ${isMine
+              ? `<span style="color:var(--text-dim);font-size:11px">Your listing</span>
+                 <button class="inv-sell-btn" onclick="Firebase.delistItemTemplate('${tid}')">🗑 Delist</button>`
+              : soldOut
+                ? `<span style="color:var(--text-dim);font-size:12px">Sold Out</span>`
+                : `<button class="house-buy-btn${canAfford ? '' : ' unaffordable'}" onclick="Crafting.mintTemplate('${tid}')">${App.formatMoney(tpl.price)}</button>`}
+          </div>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+
+    // Single listings
+    if (listings.length > 0) {
+      html += `<div style="font-weight:700;font-size:13px;margin:8px 0 6px">🛍 For Sale</div><div class="inv-item-grid">`;
+      for (const [lid, listing] of listings) {
+        const item = listing.item;
+        if (!item) continue;
+        const rarityColor = this.RARITY_COLORS[item.rarity] || '#aaa';
+        const isMine = listing.sellerUid === myUid;
+        const canAfford = App.balance >= listing.price || (typeof Admin !== 'undefined' && Admin.godMode);
+        html += `<div class="inv-item-card" style="border-color:${rarityColor}">
+          <div class="inv-item-top">
+            <div class="inv-item-art">${this.renderPixelArt(item.pixels, 48)}</div>
+            <div class="inv-item-info">
+              <div class="inv-item-name">${this._esc(item.name)}</div>
+              <div class="inv-item-rarity" style="color:${rarityColor}">${item.rarity} · ${item.category}</div>
+              <div class="inv-item-crafter">by ${this._esc(listing.sellerName || '?')}</div>
+            </div>
+          </div>
+          <div class="inv-item-actions">
+            ${isMine
+              ? `<button class="inv-sell-btn" onclick="Firebase.delistItem('${lid}')">Delist</button>`
+              : `<button class="house-buy-btn${canAfford ? '' : ' unaffordable'}" onclick="Crafting.buyItem('${lid}')">${App.formatMoney(listing.price)}</button>`}
+          </div>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+
+    container.innerHTML = html;
   },
 
   render() {

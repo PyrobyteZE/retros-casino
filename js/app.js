@@ -202,7 +202,8 @@ const App = {
       houses: 'Houses',
       inventory: 'Inventory',
       cars: 'Car Garage',
-      settings: 'Settings'
+      settings: 'Settings',
+      shop: 'Player Shop',
     };
 
     if (this.currentScreen !== name) {
@@ -240,6 +241,7 @@ const App = {
     if (name === 'companies') { if (typeof Companies !== 'undefined') Companies.render(); }
     if (name === 'houses') { if (typeof Houses !== 'undefined') { Houses._refreshNpcMarket(); Houses.render(); } }
     if (name === 'inventory') { if (typeof Crafting !== 'undefined') Crafting.render(); }
+    if (name === 'shop') { if (typeof Crafting !== 'undefined') Crafting.renderShopScreen(); }
     if (name === 'cars') { if (typeof Cars !== 'undefined') Cars.render(); }
     if (name === 'settings') Settings.render();
     // Refresh drawer nav highlight if drawer is open
@@ -307,6 +309,7 @@ const App = {
       ]},
       { label: 'Other', links: [
         { id: 'inventory', icon: '🎒', label: 'Inventory' },
+        { id: 'shop', icon: '🛒', label: 'Player Shop' },
         { id: 'pets', icon: '🐾', label: 'Pets' },
         { id: 'leaderboard', icon: '🏆', label: 'Leaderboard' },
         { id: 'settings', icon: '⚙️', label: 'Settings' },
@@ -342,7 +345,7 @@ const App = {
     { label: '🐎 Sports & Luck', screens: ['horses','lottery'] },
     { label: '💼 Business',      screens: ['properties','crime','companies','houses','cars'] },
     { label: '📈 Markets',       screens: ['stocks','crypto'] },
-    { label: '🎒 Inventory',     screens: ['inventory'] },
+    { label: '🎒 Inventory',     screens: ['inventory', 'shop'] },
     { label: '🐾 Social',        screens: ['pets','leaderboard'] },
     { label: '⚙️ System',        screens: ['settings'] },
   ],
@@ -364,6 +367,7 @@ const App = {
     stocks:     { icon: '📈', label: 'Stocks' },
     crypto:     { icon: '⛏️', label: 'Crypto' },
     inventory:  { icon: '🎒', label: 'Inventory' },
+    shop:       { icon: '🛒', label: 'Player Shop' },
     pets:       { icon: '🐾', label: 'Pets' },
     leaderboard:{ icon: '🏆', label: 'Leaderboard' },
     settings:   { icon: '⚙️', label: 'Settings' },

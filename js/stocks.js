@@ -862,7 +862,11 @@ const Stocks = {
     let total = 0;
     for (const sym in this.holdings) {
       const idx = this.stocks.findIndex(s => s.symbol === sym);
-      if (idx >= 0) total += this.holdings[sym].shares * this.prices[idx];
+      if (idx >= 0) {
+        total += this.holdings[sym].shares * this.prices[idx];
+      } else if (typeof Companies !== 'undefined' && Companies._allPlayerStocks[sym]) {
+        total += this.holdings[sym].shares * (Companies._allPlayerStocks[sym].price || 0);
+      }
     }
     return total;
   },
@@ -940,7 +944,13 @@ const Stocks = {
   promptSell(symbol) {
     if (!this.holdings[symbol]) return;
     const idx = this.stocks.findIndex(s => s.symbol === symbol);
-    if (idx < 0) return;
+    // For player stocks routed through Stocks.holdings, delegate to Companies.promptSell
+    if (idx < 0) {
+      if (typeof Companies !== 'undefined' && Companies._allPlayerStocks[symbol]) {
+        Companies.promptSell(symbol);
+      }
+      return;
+    }
     const price = this.prices[idx];
     const owned = this.holdings[symbol].shares;
     const fmt = n => n % 1 === 0 ? n : parseFloat(n.toFixed(4));
@@ -1205,8 +1215,16 @@ const Stocks = {
     keys.forEach(sym => {
       const h = this.holdings[sym];
       const idx = this.stocks.findIndex(s => s.symbol === sym);
-      if (idx < 0) return;
-      const price = this.prices[idx];
+      let price;
+      let isPlayerStock = false;
+      if (idx >= 0) {
+        price = this.prices[idx];
+      } else if (typeof Companies !== 'undefined' && Companies._allPlayerStocks[sym]) {
+        price = Companies._allPlayerStocks[sym].price || 0;
+        isPlayerStock = true;
+      } else {
+        return; // unknown stock, skip
+      }
       const value = h.shares * price;
       const costBasis = h.shares * h.avgCost;
       const pl = value - costBasis;
@@ -1214,7 +1232,7 @@ const Stocks = {
 
       html += `<div class="portfolio-item">
         <div class="portfolio-item-header">
-          <span class="portfolio-symbol">${sym}</span>
+          <span class="portfolio-symbol">${sym}${isPlayerStock ? ' <span style="font-size:10px;color:var(--text-dim)">[P]</span>' : ''}</span>
           <span class="portfolio-value">${App.formatMoney(value)}</span>
         </div>
         <div class="portfolio-details">
@@ -1222,7 +1240,7 @@ const Stocks = {
           <span class="${pl >= 0 ? 'stock-up' : 'stock-down'}">${pl >= 0 ? '+' : ''}${App.formatMoney(pl)} (${plPct >= 0 ? '+' : ''}${plPct.toFixed(1)}%)</span>
         </div>
         <div class="stock-actions">
-          <button class="stock-buy-btn" onclick="Stocks.promptBuy('${sym}')">Buy More</button>
+          ${isPlayerStock ? '' : `<button class="stock-buy-btn" onclick="Stocks.promptBuy('${sym}')">Buy More</button>`}
           <button class="stock-sell-btn" onclick="Stocks.promptSell('${sym}')">Sell</button>
         </div>
       </div>`;

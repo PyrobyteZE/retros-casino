@@ -65,9 +65,13 @@ input, textarea, select {
 
 #page-title {
   flex: 1;
+  min-width: 0;
   font-size: 18px;
   font-weight: 700;
   color: var(--green);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #admin-indicator {
@@ -89,6 +93,8 @@ input, textarea, select {
   font-weight: 700;
   color: var(--green);
   font-size: 16px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 #balance-display.godmode {
@@ -2666,6 +2672,105 @@ html.fast-animations @keyframes rebirthPulse { 0%, 100% { box-shadow: none; } }
   #click-value { font-size: 18px; }
   .casino-icon { font-size: 36px; }
   .game-btn { padding: 12px 24px; font-size: 16px; }
+}
+
+/* ====== MOBILE COMPACT TOP BAR (≤ 430px) ====== */
+@media (max-width: 430px) {
+  #top-bar {
+    padding: 7px 8px;
+    gap: 5px;
+  }
+
+  #page-title {
+    font-size: 13px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #admin-indicator {
+    font-size: 9px;
+    padding: 2px 4px;
+    flex-shrink: 0;
+  }
+
+  .profile-display {
+    gap: 3px;
+    font-size: 11px;
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  .profile-avatar {
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .profile-name {
+    max-width: 50px;
+    font-size: 11px;
+  }
+
+  #vip-level {
+    font-size: 9px;
+    padding: 2px 5px;
+    flex-shrink: 0;
+  }
+
+  #debt-badge {
+    font-size: 9px;
+    padding: 2px 4px;
+    flex-shrink: 0;
+  }
+
+  /* Hide hunger percentage text on mobile — keep icon + bar only */
+  #hunger-pct {
+    display: none;
+  }
+
+  .hunger-hud {
+    padding: 2px 3px;
+    gap: 2px;
+    min-width: unset;
+    flex-shrink: 0;
+  }
+
+  .hunger-bar-wrap {
+    width: 26px;
+  }
+
+  #balance-display {
+    font-size: 13px;
+    padding: 4px 8px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  #online-badge.online-badge {
+    font-size: 10px;
+    padding: 1px 5px;
+    flex-shrink: 0;
+  }
+
+  .chat-toggle-btn-bar {
+    width: 26px;
+    height: 26px;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  #settings-btn {
+    font-size: 16px;
+    padding: 2px;
+    flex-shrink: 0;
+  }
+
+  .hamburger-btn {
+    font-size: 18px;
+    padding: 4px 6px;
+    flex-shrink: 0;
+  }
 }
 
 /* ====== DESKTOP / PC LAYOUT ====== */

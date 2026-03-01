@@ -166,6 +166,7 @@ const Companies = {
   _scandals: {},           // { [symbol]: { text, ownerUid, firedAt, suppressed } }
   _scandalCooldowns: {},   // { [symbol]: timestamp } — prevent spam
   _sabotageCooldowns: {},  // { [theirUid]: lastSabotageTimestamp }
+  _votesCooldowns: {},     // { [ownerUid_postId]: lastVoteTimestamp }
   _competitors: {},        // { [theirUid]: { name, ticker, setAt } }
   _allies: {},             // { [theirUid]: { name, ticker, setAt } }
   _shareOffers: {},        // { [offerId]: offer } — incoming private share offers
@@ -2585,6 +2586,10 @@ const Companies = {
 
   voteNews(ownerUid, postId, dir) {
     if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
+    const cdKey = ownerUid + '_' + postId;
+    const lastVote = this._votesCooldowns[cdKey] || 0;
+    if (Date.now() - lastVote < 5000) return; // 5s cooldown
+    this._votesCooldowns[cdKey] = Date.now();
     Firebase.voteNewsPost(ownerUid, postId, dir);
     // Optimistic UI update
     if (!this._newsPosts[ownerUid]) this._newsPosts[ownerUid] = {};
@@ -2778,6 +2783,13 @@ const Companies = {
     if (!data || !data.stock) return;
     const stock = data.stock;
     const recipientTicker = data.recipientCompanyTicker;
+
+    // Guard: if we already own this symbol, silently drop (prevents dupe on replay/refresh)
+    const alreadyOwned = this._companies.some(c => (c.stocks || []).some(s => s.symbol === stock.symbol));
+    if (alreadyOwned) {
+      Firebase.removeAcquisitionTransfer(Firebase.uid, transferId).catch(() => {});
+      return;
+    }
 
     // Find recipient company — prefer the requested one, fallback to any with space
     let targetComp = this._companies.find(c => c.ticker === recipientTicker && (c.stocks || []).length < this.MAX_STOCKS);
