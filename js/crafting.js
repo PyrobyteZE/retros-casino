@@ -63,6 +63,7 @@ const Crafting = {
   // === STATE ===
   _inventory: [],       // [ itemObj ]
   _equipped: { slot0: null, slot1: null, slot2: null },
+  _activeBuffs: [],     // [ { id, itemName, icon, stats, expiresAt } ] — consumed food buffs
   _itemListings: {},    // { listingId: { sellerUid, sellerName, item, price, listedAt } }
   _templates: {},       // { [templateId]: templateObj } — limited edition listings from Firebase
   _activeTab: 'bag',    // 'bag' | 'market'
@@ -92,6 +93,13 @@ const Crafting = {
         this._triggerRender();
       });
     }
+    // Refresh buff countdowns every 15s while inventory screen is open
+    setInterval(() => {
+      const before = this._activeBuffs.length;
+      this._activeBuffs = this._activeBuffs.filter(b => Date.now() < b.expiresAt);
+      if (this._activeBuffs.length !== before) App.save();
+      this._triggerRender();
+    }, 15000);
   },
 
   // === BOOST CALCULATION ===
@@ -101,12 +109,8 @@ const Crafting = {
       stocksBonus: 0, passiveIncome: 0, raidReductionMult: 0,
       crimeBonus: 0, hackingBonus: 0, spaceBonus: 0,
     };
-    for (const slotKey of ['slot0','slot1','slot2']) {
-      const itemId = this._equipped[slotKey];
-      if (!itemId) continue;
-      const item = this._inventory.find(i => i.id === itemId);
-      if (!item) continue;
-      for (const stat of (item.stats || [])) {
+    const applyStats = stats => {
+      for (const stat of (stats || [])) {
         switch (stat.statType) {
           case 'earningsMult':  out.earningsMult  += stat.value; break;
           case 'slotsBonus':    out.slotsBonus    += stat.value; break;
@@ -120,8 +124,53 @@ const Crafting = {
           case 'spaceBonus':    out.spaceBonus    += stat.value; break;
         }
       }
+    };
+    // Equipped items
+    for (const slotKey of ['slot0','slot1','slot2']) {
+      const itemId = this._equipped[slotKey];
+      if (!itemId) continue;
+      const item = this._inventory.find(i => i.id === itemId);
+      if (item) applyStats(item.stats);
+    }
+    // Active food buffs (not expired)
+    const now = Date.now();
+    for (const buff of this._activeBuffs) {
+      if (now < buff.expiresAt) applyStats(buff.stats);
     }
     return out;
+  },
+
+  // === FOOD / EAT ===
+  BUFF_DURATIONS: { common: 3 * 60_000, uncommon: 7 * 60_000, rare: 15 * 60_000, legendary: 30 * 60_000 },
+
+  eatItem(itemId) {
+    const idx = this._inventory.findIndex(i => i.id === itemId);
+    if (idx < 0) return;
+    const item = this._inventory[idx];
+    if (item.industry !== 'food') return;
+    const dur = this.BUFF_DURATIONS[item.rarity] || this.BUFF_DURATIONS.common;
+    const mins = dur / 60_000;
+    this._activeBuffs.push({
+      id: itemId,
+      itemName: item.name,
+      icon: item.icon || '🍱',
+      stats: item.stats,
+      expiresAt: Date.now() + dur,
+    });
+    this._inventory.splice(idx, 1);
+    // Unequip if it was equipped
+    for (const slotKey of ['slot0','slot1','slot2']) {
+      if (this._equipped[slotKey] === itemId) this._equipped[slotKey] = null;
+    }
+    App.save();
+    this._triggerRender();
+    const statSummary = (item.stats || []).map(s => {
+      const sign = s.value >= 0 ? '+' : '';
+      return s.statType === 'passiveIncome'
+        ? sign + App.formatMoney(s.value) + '/s'
+        : sign + Math.round(s.value * 100) + '% ' + (this.STAT_LABELS[s.statType] || s.statType);
+    }).join(', ');
+    Toast.show(`🍽️ Ate ${item.name}! ${statSummary} for ${mins}m`, '#4caf50', 5000);
   },
 
   // === CRAFTING ===
@@ -661,13 +710,28 @@ const Crafting = {
       <span class="inv-cap-label">🎒 ${this._inventory.length}/${MAX_INVENTORY} slots</span>
       ${this._inventory.length >= MAX_INVENTORY ? '<span class="inv-cap-full">FULL</span>' : ''}
     </div>`;
-    if (this._inventory.length === 0) {
-      return capHtml + `<div class="inv-empty">Your bag is empty.<br>Craft items from your company's Craft tab!</div>`;
+
+    // Active food buffs banner
+    const now = Date.now();
+    const liveBuffs = this._activeBuffs.filter(b => now < b.expiresAt);
+    let buffHtml = '';
+    if (liveBuffs.length > 0) {
+      buffHtml = `<div class="active-buffs-bar">`;
+      for (const buff of liveBuffs) {
+        const remaining = Math.ceil((buff.expiresAt - now) / 60000);
+        buffHtml += `<span class="active-buff-chip" title="${this._esc(buff.itemName)}">${buff.icon} ${this._esc(buff.itemName)} <span class="buff-timer">${remaining}m</span></span>`;
+      }
+      buffHtml += `</div>`;
     }
-    let html = capHtml + `<div class="inv-item-grid">`;
+
+    if (this._inventory.length === 0) {
+      return capHtml + buffHtml + `<div class="inv-empty">Your bag is empty.<br>Craft items from your company's Craft tab!</div>`;
+    }
+    let html = capHtml + buffHtml + `<div class="inv-item-grid">`;
     for (const item of this._inventory) {
       const rarityColor = this.RARITY_COLORS[item.rarity] || '#aaa';
       const isEquipped = Object.values(this._equipped).includes(item.id);
+      const isFood = item.industry === 'food';
       html += `<div class="inv-item-card${isEquipped?' inv-item-equipped':''}" style="border-color:${rarityColor}">
         <div class="inv-item-top">
           <div class="inv-item-art">${this.renderPixelArt(item.pixels, 48)}</div>
@@ -686,16 +750,22 @@ const Crafting = {
           : sign + Math.round(stat.value * 100) + '% ' + (this.STAT_LABELS[stat.statType] || stat.statType);
         html += `<span class="inv-stat-tag${isCurse ? ' inv-stat-curse' : ''}">${pct}</span>`;
       }
+      if (isFood) {
+        const durMins = (this.BUFF_DURATIONS[item.rarity] || this.BUFF_DURATIONS.common) / 60_000;
+        html += `<span class="inv-stat-tag" style="color:#4caf50;border-color:#4caf5055">⏱ ${durMins}m buff</span>`;
+      }
       html += `</div>
         <div class="inv-item-actions">
-          ${isEquipped
-            ? `<span class="inv-equipped-badge">Equipped</span>`
-            : `<select class="inv-equip-select" onchange="Crafting.equipItem('${item.id}',this.value);this.value=''">
-                <option value="">Equip to...</option>
-                <option value="slot0">Slot 1</option>
-                <option value="slot1">Slot 2</option>
-                <option value="slot2">Slot 3</option>
-              </select>`}
+          ${isFood
+            ? `<button class="inv-eat-btn" onclick="Crafting.eatItem('${item.id}')">🍽️ Eat</button>`
+            : isEquipped
+              ? `<span class="inv-equipped-badge">Equipped</span>`
+              : `<select class="inv-equip-select" onchange="Crafting.equipItem('${item.id}',this.value);this.value=''">
+                  <option value="">Equip to...</option>
+                  <option value="slot0">Slot 1</option>
+                  <option value="slot1">Slot 2</option>
+                  <option value="slot2">Slot 3</option>
+                </select>`}
           ${item.crafterUid === ((typeof Firebase !== 'undefined' ? Firebase.uid : null) || 'local') ? `<button class="inv-edit-art-btn" onclick="Crafting.renameItem('${item.id}')">✏️</button>` : ''}
           <button class="inv-edit-art-btn" onclick="Crafting.openPixelPainter('${item.id}')">🎨 Edit Art</button>
           <button class="inv-sell-btn" onclick="Crafting._showListItemModal('${item.id}')">💰 Sell</button>
@@ -1301,6 +1371,7 @@ const Crafting = {
     return {
       inventory: this._inventory,
       equipped: this._equipped,
+      activeBuffs: this._activeBuffs.filter(b => Date.now() < b.expiresAt),
     };
   },
 
@@ -1308,6 +1379,7 @@ const Crafting = {
     if (!d) return;
     this._inventory = d.inventory || [];
     this._equipped = d.equipped || { slot0: null, slot1: null, slot2: null };
+    this._activeBuffs = (d.activeBuffs || []).filter(b => Date.now() < b.expiresAt);
   },
 
   // === HELPERS ===
