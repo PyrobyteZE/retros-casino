@@ -10,6 +10,9 @@ const Companies = {
   MAX_STOCKS: 6, // 1 main + 5 sub-stocks
   MAX_COMPANIES_HARD: 10,
   SLOT_COSTS: [0, 5_000_000, 15_000_000], // cost to unlock slot 2 then 3
+  TICKER_RENAME_COST: 500_000,
+  // Old NPC tickers that were retired — no longer reserved, players can claim them
+  FREED_TICKERS: new Set(['RETRO', 'JOY', 'JOIL', 'ROIL']),
 
   // Base price cap per Bull Propaganda level (0–5)
   BULL_PROP_BASE_CAPS: [100, 500, 1200, 2500, 5000, 10000],
@@ -1132,8 +1135,8 @@ const Companies = {
 
     const allTickers = new Set([
       ...(typeof Stocks !== 'undefined' ? Stocks.stocks.map(s => s.symbol) : []),
-      ...Object.keys(this._allPlayerStocks),
-      ...Object.keys(this._bankruptCompanies), // reserved until bankruptcy expires
+      ...Object.keys(this._allPlayerStocks).filter(t => !this.FREED_TICKERS.has(t)),
+      ...Object.keys(this._bankruptCompanies).filter(t => !this.FREED_TICKERS.has(t)),
     ]);
     if (allTickers.has(ticker)) { alert('Ticker "' + ticker + '" is already taken.'); return; }
     // Prevent duplicate company names (case-insensitive)
@@ -1186,8 +1189,8 @@ const Companies = {
 
     const allTickers = new Set([
       ...(typeof Stocks !== 'undefined' ? Stocks.stocks.map(s => s.symbol) : []),
-      ...Object.keys(this._allPlayerStocks),
-      ...Object.keys(this._bankruptCompanies),
+      ...Object.keys(this._allPlayerStocks).filter(t => !this.FREED_TICKERS.has(t)),
+      ...Object.keys(this._bankruptCompanies).filter(t => !this.FREED_TICKERS.has(t)),
       ...this._companies.flatMap(co => co.stocks ? co.stocks.map(s => s.symbol) : []),
     ]);
     if (allTickers.has(sym)) { alert('Ticker "' + sym + '" is already taken.'); return; }
@@ -1323,6 +1326,49 @@ const Companies = {
     App.save();
     this._triggerRender();
     Toast.show('\u{1F3E2} Renamed to "' + newName + '"!', 'var(--green-dark)', 3000);
+  },
+
+  renameTicker(cIdx) {
+    const c = this._companies[cIdx];
+    if (!c) return;
+    const el = document.getElementById('co-reticker-' + cIdx);
+    const newTicker = (el ? el.value : '').trim().toUpperCase().replace(/[^A-Z]/g, '').slice(0, 5);
+    if (!newTicker || newTicker.length < 2) { Toast.show('Enter a valid ticker (2-5 letters).', '#ff5252'); return; }
+    if (newTicker === c.ticker) { Toast.show('That is already your ticker.', '#ff9100'); return; }
+    if (App.balance < this.TICKER_RENAME_COST) { alert('Need ' + App.formatMoney(this.TICKER_RENAME_COST) + ' to change ticker.'); return; }
+
+    // Build uniqueness set excluding own current ticker
+    const allTickers = new Set([
+      ...(typeof Stocks !== 'undefined' ? Stocks.stocks.map(s => s.symbol) : []),
+      ...Object.keys(this._allPlayerStocks).filter(t => !this.FREED_TICKERS.has(t) && t !== c.ticker),
+      ...Object.keys(this._bankruptCompanies).filter(t => !this.FREED_TICKERS.has(t)),
+      ...this._companies.filter((co, i) => i !== cIdx).flatMap(co => co.stocks ? co.stocks.map(s => s.symbol) : []),
+    ]);
+    if (allTickers.has(newTicker)) { alert('Ticker "' + newTicker + '" is already taken.'); return; }
+    if (!confirm('Change ticker from ' + c.ticker + ' to ' + newTicker + ' for ' + App.formatMoney(this.TICKER_RENAME_COST) + '?')) return;
+
+    const oldTicker = c.ticker;
+    App.addBalance(-this.TICKER_RENAME_COST);
+    // Update company ticker
+    c.ticker = newTicker;
+    // Update main stock symbol if it matched the old ticker
+    if (c.stocks && c.stocks[0] && c.stocks[0].symbol === oldTicker) c.stocks[0].symbol = newTicker;
+    // Update main company ticker reference
+    if (this._mainCompanyTicker === oldTicker) this._mainCompanyTicker = newTicker;
+    // Update own holdings
+    if (this._holdings[oldTicker]) {
+      this._holdings[newTicker] = this._holdings[oldTicker];
+      delete this._holdings[oldTicker];
+    }
+    this._saveLocal();
+    this._pushToFirebase();
+    // Remove stale price entry for old ticker from Firebase
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.db.ref('playerStockPrices/' + oldTicker).remove().catch(() => {});
+    }
+    App.save();
+    Toast.show('🔤 Ticker changed: ' + oldTicker + ' → ' + newTicker, '#82b1ff', 4000);
+    this._triggerRender();
   },
 
   // === SELL COMPANY ===
@@ -2210,6 +2256,12 @@ const Companies = {
             <input id="co-rename-${cIdx}" type="text" maxlength="24" placeholder="Rename…" value="${this._esc(c.name)}"
               style="flex:1;font-size:13px;padding:5px 8px;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text)">
             <button class="csr-toggle-btn" style="font-size:11px;white-space:nowrap" onclick="Companies.renameCompany(${cIdx})">Rename — ${App.formatMoney(100000)}</button>
+          </div>`;
+          // Change Ticker
+          html += `<div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+            <input id="co-reticker-${cIdx}" type="text" maxlength="5" placeholder="New ticker…"
+              style="flex:1;font-size:13px;padding:5px 8px;text-transform:uppercase;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text)">
+            <button class="csr-toggle-btn" style="font-size:11px;white-space:nowrap;color:#82b1ff;border-color:#82b1ff" onclick="Companies.renameTicker(${cIdx})">🔤 Change Ticker — ${App.formatMoney(this.TICKER_RENAME_COST)}</button>
           </div>`;
           // Insider intel
           const insLv = (c.upgrades && c.upgrades.insiderAccess) || 0;

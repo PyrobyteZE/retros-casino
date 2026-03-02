@@ -58,7 +58,9 @@ const Stores = {
     const safe = ticker.replace(/[^a-zA-Z0-9]/g, '_');
     const storeName = (document.getElementById('store-name-' + safe)?.value || '').trim() || (ticker + ' Store');
     const description = (document.getElementById('store-desc-' + safe)?.value || '').trim();
-    const storeId = 'store_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    const myPlayerId = (typeof Firebase !== 'undefined' && Firebase._playerId !== null) ? Firebase._playerId : Date.now().toString(36);
+    const myStoreCount = Object.values(this._stores).filter(s => s.ownerUid === myUid).length;
+    const storeId = myPlayerId + '-' + (myStoreCount + 1);
     App.addBalance(-this.OPEN_COST);
     Firebase.createStore(storeId, {
       storeId, ownerUid: myUid,
@@ -466,7 +468,9 @@ const Stores = {
     const isGod = typeof Admin !== 'undefined' && Admin.godMode;
     if (!isGod && App.balance < fee) { alert('Need ' + App.formatMoney(fee)); return; }
     if (!isGod) App.addBalance(-fee);
-    const storeId = 'store_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    const myPlayerId2 = (typeof Firebase !== 'undefined' && Firebase._playerId !== null) ? Firebase._playerId : Date.now().toString(36);
+    const myStoreCount2 = Object.values(this._stores).filter(s => s.ownerUid === Firebase.uid).length;
+    const storeId = myPlayerId2 + '-' + (myStoreCount2 + 1);
     if (fee > 0) Firebase.updateStore(parentStoreId, { cashRegister: (parent.cashRegister || 0) + fee });
     Firebase.createStore(storeId, {
       storeId, ownerUid: Firebase.uid,
