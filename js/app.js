@@ -143,10 +143,11 @@ const App = {
   addBalance(amount) {
     // God mode: block all negative balance changes
     if (amount < 0 && typeof Admin !== 'undefined' && Admin.godMode) return;
-    // Apply earningsMult from boosts on income
+    // Apply earningsMult from boosts + world events on income
     if (amount > 0) {
       const boosts = this.getAllBoosts();
-      amount = amount * (1 + (boosts.earningsMult || 0));
+      const eventMult = typeof Events !== 'undefined' ? Events.getIncomeMultiplier() : 1;
+      amount = amount * (1 + (boosts.earningsMult || 0)) * eventMult;
     }
     this.balance = this.safeAdd(this.balance, amount);
     if (amount > 0) this.totalEarned = this.safeAdd(this.totalEarned, amount);
@@ -454,7 +455,8 @@ const App = {
       crafting: typeof Crafting !== 'undefined' ? Crafting.getSaveData() : null,
       cars: typeof Cars !== 'undefined' ? Cars.getSaveData() : null,
       favorites: this.favorites,
-      version: 7
+      version: 7,
+      savedAt: Date.now(),
     };
     localStorage.setItem('retros_casino_save', JSON.stringify(data));
     if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {

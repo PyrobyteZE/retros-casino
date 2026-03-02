@@ -66,6 +66,7 @@ const Properties = {
     this.startTick();
     this.startEvents();
     this.startRival();
+    this._startButlerCollect();
     // Listen for other players' energy companies for gas station supplier
     if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
       Firebase.listenAllCompaniesForProperties(data => {
@@ -248,8 +249,31 @@ const Properties = {
     this.render();
   },
 
-  // Butler: unlocked at 70 rebirths — auto-defends rival, filters bad events
+  // Butler: unlocked at 70 rebirths — auto-defends rival, filters bad events, auto-collects stores
   _hasButler() { return (App.rebirth || 0) >= 70; },
+  _butlerCollectTimer: null,
+
+  _startButlerCollect() {
+    if (this._butlerCollectTimer) clearInterval(this._butlerCollectTimer);
+    this._butlerCollectTimer = setInterval(() => {
+      if (!this._hasButler()) return;
+      if (typeof Stores === 'undefined' || typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
+      const myUid = Firebase.uid;
+      let totalCollected = 0;
+      for (const [storeId, store] of Object.entries(Stores._stores)) {
+        if (store.ownerUid !== myUid) continue;
+        const cash = store.cashRegister || 0;
+        if (cash < 100) continue;
+        App.addBalance(cash);
+        totalCollected += cash;
+        Firebase.updateStore(storeId, { cashRegister: 0 });
+      }
+      if (totalCollected > 0) {
+        App.save();
+        Toast.show('🛎️ Butler auto-collected ' + App.formatMoney(totalCollected) + ' from your stores!', '#00e676', 3000);
+      }
+    }, 60 * 1000); // every 60 seconds
+  },
 
   getTotalIncome() {
     let total = 0;

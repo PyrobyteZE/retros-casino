@@ -1,9 +1,9 @@
 // Finance Company Banking System
 const Banking = {
-  _banks: {},        // { [ticker]: bankMeta }  — keyed by company ticker (one per Finance stock)
-  _myVaults: {},     // { [ticker]: vaultData } — my deposits, keyed by bank ticker
-  _bankVaults: {},   // { [ticker]: { [depositorUid]: vaultData } } — if I own the bank
-  _bankVaultListeners: null, // Set<ticker> of tickers already subscribed
+  _banks: {},        // { [bankId]: bankMeta }
+  _myVaults: {},     // { [bankId]: vaultData } — my deposits, keyed by bankId
+  _bankVaults: {},   // { [bankId]: { [depositorUid]: vaultData } } — if I own the bank
+  _bankVaultListeners: null, // Set<bankId> of bankIds already subscribed
   _loansOwed: {},    // { [lenderUid]: { principal, loanRate, borrowedAt, lastInterestAt, totalOwed } }
   _myLoans: {},      // { [borrowerUid]: loanRecord } — visible to bank owner
   _tickTimer: null,
@@ -25,40 +25,43 @@ const Banking = {
   MIN_REBIRTH: 5,
 
   init() {
-    if (!this._initialized) {
-      this._initialized = true;
-      this._bankVaultListeners = new Set();
-    }
-    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
-      Firebase.listenBanks(data => {
-        this._banks = data || {};
-        this._renderBankCards();
-        // Set up vault listeners for banks I own (once per ticker)
-        const myUid = Firebase.uid;
-        for (const [ticker, bank] of Object.entries(this._banks)) {
-          if (bank.ownerUid === myUid && !this._bankVaultListeners.has(ticker)) {
-            this._bankVaultListeners.add(ticker);
-            Firebase.listenBankVaults(ticker, vaultData => {
-              this._bankVaults[ticker] = vaultData || {};
-            });
-          }
+    if (this._initialized) return; // prevent double listener registration
+    this._initialized = true;
+    this._bankVaultListeners = new Set();
+
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
+
+    Firebase.listenBanks(data => {
+      this._banks = data || {};
+      this._renderBankCards();
+      // Set up vault listeners for banks I own (once per bankId)
+      const myUid = Firebase.uid;
+      for (const [bankId, bank] of Object.entries(this._banks)) {
+        if (bank.ownerUid === myUid && !this._bankVaultListeners.has(bankId)) {
+          this._bankVaultListeners.add(bankId);
+          Firebase.listenBankVaults(bankId, vaultData => {
+            this._bankVaults[bankId] = vaultData || {};
+          });
         }
-      });
-      Firebase.listenMyVaults(Firebase.uid, data => {
-        this._myVaults = data || {};
-        this._renderBankCards();
-      });
-      // Loan listeners
-      Firebase.listenMyLoansOwed(Firebase.uid, data => {
-        this._loansOwed = data || {};
-        this._renderBankCards();
-      });
-      Firebase.listenBankLoans(Firebase.uid, data => {
-        this._myLoans = data || {};
-      });
-      if (!this._tickTimer) {
-        this._tickTimer = setInterval(() => this._tick(), 5 * 60 * 1000); // every 5 min
       }
+    });
+
+    Firebase.listenMyVaults(Firebase.uid, data => {
+      this._myVaults = data || {};
+      this._renderBankCards();
+    });
+
+    Firebase.listenMyLoansOwed(Firebase.uid, data => {
+      this._loansOwed = data || {};
+      this._renderBankCards();
+    });
+
+    Firebase.listenBankLoans(Firebase.uid, data => {
+      this._myLoans = data || {};
+    });
+
+    if (!this._tickTimer) {
+      this._tickTimer = setInterval(() => this._tick(), 5 * 60 * 1000); // every 5 min
     }
   },
 
@@ -73,47 +76,49 @@ const Banking = {
     const c = typeof Companies !== 'undefined' ? Companies._companies[companyIdx] : null;
     if (!c) { alert('Company not found.'); return; }
     if ((c.industry || 'tech') !== 'finance') { alert('Only Finance industry companies can enable banking.'); return; }
-    // One bank per company ticker
-    if (this._banks[c.ticker]) { alert('This company already has a bank.'); return; }
 
+    // Unique bankId — no longer limited to one per company
+    const bankId = 'bank_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    const bankName = (document.getElementById('bank-name-' + companyIdx)?.value || '').trim() || (c.name + ' Bank');
+    const rawRate = parseFloat(document.getElementById('bank-rate-' + companyIdx)?.value) || 3;
+    const interestRate = Math.max(0.01, Math.min(0.15, rawRate / 100));
+    const loanRate = Math.max(1, Math.min(20, parseFloat(document.getElementById('bank-loanrate-' + companyIdx)?.value) || 5));
     const maxDeposit = parseInt(document.getElementById('bank-maxdeposit-' + companyIdx)?.value) || 0;
-    const loanRateEl = document.getElementById('bank-loanrate-' + companyIdx);
-    const loanRate = Math.max(1, Math.min(20, parseFloat(loanRateEl?.value) || 5));
+
     App.addBalance(-this.ENABLE_COST);
 
     const bankData = {
+      bankId,
       enabled: true,
       ownerUid: myUid,
       companyTicker: c.ticker,
       ownerName: (typeof Settings !== 'undefined') ? Settings.profile.name : 'Player',
-      interestRate: 0.02,
+      bankName,
+      interestRate,
       loanRate,
-      maxDeposit: maxDeposit,
+      maxDeposit,
       totalDeposited: 0,
       depositorCount: 0,
       stressLevel: 0,
       upgrades: { vaultCap: 0, fraudProtect: 0, rateBoost: 0, stressCushion: 0 },
     };
-    // Bank is keyed by ticker so each Finance company can have its own bank
-    Firebase.createBank(c.ticker, bankData).then(() => {
-      Toast.show('🏦 Bank enabled!', '#27ae60', 3000);
+
+    Firebase.createBank(bankId, bankData).then(() => {
+      Toast.show('🏦 Bank opened!', '#27ae60', 3000);
       if (typeof Companies !== 'undefined') Companies._triggerRender();
     }).catch(err => { App.addBalance(this.ENABLE_COST); alert('Error: ' + err); });
   },
 
-  closeBank(companyIdx) {
+  closeBank(bankId) {
     if (!Firebase || !Firebase.isOnline()) return;
-    const c = typeof Companies !== 'undefined' ? Companies._companies[companyIdx] : null;
-    if (!c) return;
-    const ticker = c.ticker;
-    if (!this._banks[ticker]) return;
-    if (!confirm('Close your bank? All depositors will lose their deposits!')) return;
-    this.bankruptBank(ticker, 'Owner closed bank');
+    if (!this._banks[bankId]) return;
+    if (!confirm('Close this bank? All depositors will lose their deposits!')) return;
+    this.bankruptBank(bankId, 'Owner closed bank');
   },
 
-  buyUpgrade(upgradeKey, ticker) {
+  buyUpgrade(upgradeKey, bankId) {
     if (!Firebase || !Firebase.isOnline()) return;
-    const bank = this._banks[ticker];
+    const bank = this._banks[bankId];
     if (!bank) return;
     const def = this.UPGRADES[upgradeKey];
     if (!def) return;
@@ -122,19 +127,31 @@ const Banking = {
     const cost = def.costs[lvl];
     if (App.balance < cost) { alert('Need ' + App.formatMoney(cost)); return; }
     App.addBalance(-cost);
-    Firebase.updateBank(ticker, { ['upgrades/' + upgradeKey]: lvl + 1 }).then(() => {
+    Firebase.updateBank(bankId, { ['upgrades/' + upgradeKey]: lvl + 1 }).then(() => {
       Toast.show('✅ Upgrade purchased!', '#27ae60', 2000);
       if (typeof Companies !== 'undefined') Companies._triggerRender();
     }).catch(err => { App.addBalance(cost); alert('Error: ' + err); });
   },
 
-  setMaxDeposit(companyIdx) {
+  setMaxDeposit(bankId) {
     if (!Firebase || !Firebase.isOnline()) return;
-    const c = typeof Companies !== 'undefined' ? Companies._companies[companyIdx] : null;
-    if (!c) return;
-    const val = parseInt(document.getElementById('bank-maxdeposit-' + companyIdx)?.value) || 0;
-    Firebase.updateBank(c.ticker, { maxDeposit: val }).then(() => {
+    if (!this._banks[bankId]) return;
+    const val = parseInt(document.getElementById('bank-maxdeposit-set-' + bankId)?.value) || 0;
+    Firebase.updateBank(bankId, { maxDeposit: val }).then(() => {
       Toast.show('Max deposit updated', '#27ae60', 2000);
+      if (typeof Companies !== 'undefined') Companies._triggerRender();
+    });
+  },
+
+  setInterestRate(bankId) {
+    if (!Firebase || !Firebase.isOnline()) return;
+    const bank = this._banks[bankId];
+    if (!bank) return;
+    const raw = parseFloat(document.getElementById('bank-rate-set-' + bankId)?.value) || 0;
+    const clamped = Math.max(0.01, Math.min(0.15, raw / 100));
+    Firebase.updateBank(bankId, { interestRate: clamped }).then(() => {
+      Toast.show('Interest rate updated', '#27ae60', 2000);
+      if (typeof Companies !== 'undefined') Companies._triggerRender();
     });
   },
 
@@ -143,7 +160,6 @@ const Banking = {
   openDepositModal(bankKey) {
     const bank = this._banks[bankKey];
     if (!bank) return;
-    const ownerUid = bank.ownerUid || bankKey; // bankKey = ticker
     const myHoldings = typeof Companies !== 'undefined' ? Companies._holdings : {};
     const myCoinHoldings = typeof Crypto !== 'undefined' ? Crypto._playerCoinHoldings : {};
 
@@ -168,7 +184,7 @@ const Banking = {
     const currentDeposit = myVault ? (myVault.money || 0) : 0;
 
     const html = `<div style="padding:12px;max-width:340px">
-      <h3 style="margin:0 0 8px;color:var(--green)">🏦 Deposit to ${this._esc(bank.ownerName)}'s Bank</h3>
+      <h3 style="margin:0 0 8px;color:var(--green)">🏦 Deposit to ${this._esc(bank.bankName || bank.ownerName + "'s Bank")}</h3>
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">Rate: ${(bank.interestRate * 100).toFixed(1)}%/hr &bull; Your deposit: ${App.formatMoney(currentDeposit)}${vaultCap !== Infinity ? ' &bull; Cap: ' + App.formatMoney(vaultCap) : ''}</div>
       <div class="admin-row" style="margin-bottom:8px">
         <label style="min-width:80px">Cash ($):</label>
@@ -180,22 +196,23 @@ const Banking = {
       <button class="game-btn" style="width:100%;margin-top:8px" onclick="Banking.deposit('${bankKey}')">Deposit</button>
     </div>`;
 
-    const modal = document.getElementById('modal-overlay') || document.createElement('div');
-    modal.id = 'modal-overlay';
+    let modal = document.getElementById('modal-overlay');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'modal-overlay';
+      document.body.appendChild(modal);
+    }
     modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
     modal.innerHTML = `<div style="background:var(--bg2);border-radius:12px;max-height:90vh;overflow-y:auto;min-width:280px">${html}
       <button onclick="document.getElementById('modal-overlay').remove()" style="width:100%;padding:10px;background:var(--bg3);border:none;color:var(--text);font-size:14px;border-radius:0 0 12px 12px;cursor:pointer">Cancel</button>
     </div>`;
-    if (!document.getElementById('modal-overlay')) document.body.appendChild(modal);
-    else document.body.replaceChild(modal, document.getElementById('modal-overlay') || modal);
-    document.body.appendChild(modal);
   },
 
   deposit(bankKey) {
     const bank = this._banks[bankKey];
     if (!bank) return;
     const myUid = Firebase.uid;
-    const ownerUid = bank.ownerUid || bankKey;
+    const ownerUid = bank.ownerUid;
 
     const cash = parseFloat(document.getElementById('dep-cash')?.value) || 0;
     if (cash < 0) { alert('Invalid amount.'); return; }
@@ -249,7 +266,6 @@ const Banking = {
     };
 
     Firebase.depositToVault(bankKey, myUid, vaultData).then(() => {
-      // Owner depositing into own bank: don't add to totalDeposited (no stress liability)
       if (myUid !== ownerUid) {
         Firebase.updateBank(bankKey, {
           totalDeposited: (bank.totalDeposited || 0) + cash,
@@ -261,7 +277,6 @@ const Banking = {
       Toast.show('🏦 Deposited!', '#27ae60', 3000);
       this._renderBankCards();
     }).catch(err => {
-      // Refund on error
       App.addBalance(cash);
       for (const sym in stocks) { if (typeof Companies !== 'undefined') Companies._holdings[sym].shares += stocks[sym]; }
       for (const sym in coins) { if (typeof Crypto !== 'undefined') Crypto._playerCoinHoldings[sym] += coins[sym]; }
@@ -274,10 +289,10 @@ const Banking = {
     const myVault = this._myVaults[bankKey];
     if (!myVault) return;
     const myUid = Firebase.uid;
-    const ownerUid = bank.ownerUid || bankKey;
+    const ownerUid = bank ? bank.ownerUid : bankKey;
 
-    // Track for bank run (skip if the bank owner is withdrawing their own deposit)
-    if (myUid !== ownerUid) {
+    // Track for bank run
+    if (myUid !== ownerUid && bank) {
       const now = Date.now();
       if (!bank._recentWithdrawals) bank._recentWithdrawals = [];
       bank._recentWithdrawals = bank._recentWithdrawals.filter(t => now - t < 2 * 60 * 1000);
@@ -289,7 +304,6 @@ const Banking = {
       }
     }
 
-    // Return assets to player
     const cash = myVault.money || 0;
     const stocks = myVault.stocks || {};
     const coins = myVault.coins || {};
@@ -308,8 +322,7 @@ const Banking = {
     }
 
     Firebase.removeVault(bankKey, myUid).then(() => {
-      // Owner's own deposit was never counted in totalDeposited, so don't decrement it
-      if (myUid !== ownerUid) {
+      if (myUid !== ownerUid && bank) {
         Firebase.updateBank(bankKey, {
           totalDeposited: Math.max(0, (bank.totalDeposited || 0) - cash),
         });
@@ -330,8 +343,8 @@ const Banking = {
     const bank = this._banks[bankKey];
     if (!bank || !bank.enabled) { alert('Bank not available.'); return; }
     if (!bank.loanRate) { alert('This bank has not enabled loans.'); return; }
-    const lenderUid = bank.ownerUid || bankKey;
-    if (this._loansOwed[lenderUid]) { alert('You already have a loan from this bank. Repay it first.'); return; }
+    const lenderUid = bank.ownerUid;
+    if (this._loansOwed[lenderUid]) { alert('You already have a loan from this bank owner. Repay it first.'); return; }
     const maxBorrow = Math.min(500_000, (App.balance + App.totalEarned) * 0.25);
     if (amount <= 0 || amount > maxBorrow) { alert(`Loan amount must be between $1 and ${App.formatMoney(maxBorrow)}.`); return; }
     const myUid = Firebase.uid;
@@ -361,8 +374,8 @@ const Banking = {
     if (!isGod) App.addBalance(-totalOwed);
     const myUid = Firebase.uid;
     Firebase.repayBankLoan(lenderUid, myUid);
-    // Find the bank by ownerUid to update it
-    const bankEntry = Object.entries(this._banks).find(([, b]) => (b.ownerUid || '') === lenderUid);
+    // Find any bank owned by this lender to credit them
+    const bankEntry = Object.entries(this._banks).find(([, b]) => b.ownerUid === lenderUid);
     if (bankEntry) {
       const [bankKey, bank] = bankEntry;
       const interestEarned = totalOwed - loan.principal;
@@ -379,26 +392,22 @@ const Banking = {
     const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
     if (!myUid) return;
 
-    // Process all banks I own (one per Finance company now)
-    for (const [ticker, myBank] of Object.entries(this._banks)) {
+    for (const [bankId, myBank] of Object.entries(this._banks)) {
       if ((myBank.ownerUid || '') !== myUid) continue;
       if (!myBank.enabled) continue;
 
-      // Recalculate interest rate from company stock
-      const rate = this._calcInterestRate(ticker, myBank);
+      // Owner-set interest rate boosted by upgrade
       const rateBoostLvl = (myBank.upgrades && myBank.upgrades.rateBoost) || 0;
       const boostMult = this.UPGRADES.rateBoost.mult[rateBoostLvl];
-      const effectiveRate = Math.min(0.15, rate * boostMult);
+      const effectiveRate = Math.min(0.15, (myBank.interestRate || 0.02) * boostMult);
 
-      // Interest payment per 5-min slice (hourly rate / 12)
+      // Interest per 5-min slice (hourly rate / 12)
       const totalDeposited = myBank.totalDeposited || 0;
       const interest = totalDeposited * effectiveRate / 12;
 
       if (interest > 0 && App.balance >= interest) {
-        // Can pay
         App.addBalance(-interest);
-        // Distribute to depositors
-        const vaults = this._bankVaults[ticker] || {};
+        const vaults = this._bankVaults[bankId] || {};
         const total = Object.values(vaults).reduce((s, v) => s + (v.money || 0), 0);
         if (total > 0) {
           for (const depUid in vaults) {
@@ -406,24 +415,20 @@ const Banking = {
             const share = (v.money || 0) / total;
             const earned = interest * share;
             if (earned > 0.01) {
-              Firebase.updateVault(ticker, depUid, { money: (v.money || 0) + earned, lastInterestPaid: Date.now() });
+              Firebase.updateVault(bankId, depUid, { money: (v.money || 0) + earned, lastInterestPaid: Date.now() });
             }
           }
         }
-        Firebase.updateBank(ticker, { interestRate: effectiveRate, stressLevel: Math.max(0, (myBank.stressLevel || 0) - 5) });
+        Firebase.updateBank(bankId, { stressLevel: Math.max(0, (myBank.stressLevel || 0) - 5) });
       } else if (interest > 0) {
-        // Missed payment — stress
         const cushionLvl = (myBank.upgrades && myBank.upgrades.stressCushion) || 0;
         const stressGain = this.UPGRADES.stressCushion.missedGain[cushionLvl];
         const newStress = (myBank.stressLevel || 0) + stressGain;
-        Firebase.updateBank(ticker, { stressLevel: newStress, interestRate: effectiveRate });
-        if (newStress >= 100) this.bankruptBank(ticker, 'Missed interest payments');
+        Firebase.updateBank(bankId, { stressLevel: newStress });
+        if (newStress >= 100) this.bankruptBank(bankId, 'Missed interest payments');
       }
 
-      // Random audit (0.5% chance)
-      if (Math.random() < 0.005) {
-        this.bankruptBank(ticker, 'Regulatory audit');
-      }
+      if (Math.random() < 0.005) this.bankruptBank(bankId, 'Regulatory audit');
     }
 
     // Accrue interest on player bank loans I owe
@@ -445,17 +450,6 @@ const Banking = {
     }
   },
 
-  _calcInterestRate(ownerUid, bank) {
-    if (!bank.companyTicker || typeof Companies === 'undefined') return 0.01;
-    const sym = bank.companyTicker;
-    const stock = Companies._allPlayerStocks && Companies._allPlayerStocks[sym];
-    if (!stock) return 0.01;
-    const basePrice = stock.basePrice || 100;
-    const currentPrice = stock.price || basePrice;
-    const growthPct = (currentPrice - basePrice) / basePrice;
-    return Math.max(0, Math.min(0.15, growthPct * 0.5));
-  },
-
   _getVaultCap(bankKey) {
     const bank = this._banks[bankKey];
     if (!bank) return 50_000;
@@ -465,15 +459,13 @@ const Banking = {
 
   // === BANKRUPTCY ===
 
-  bankruptBank(ticker, reason) {
+  bankruptBank(bankId, reason) {
     if (!Firebase || !Firebase.isOnline()) return;
-    const bank = this._banks[ticker];
-    Toast.show('🏦 BANK COLLAPSED: ' + ((bank && bank.ownerName) || 'Unknown') + (reason ? ' — ' + reason : ''), '#c0392b', 6000);
-    // Wipe all vaults
-    Firebase.removeAllVaults(ticker).then(() => {
-      Firebase.removeBank(ticker);
+    const bank = this._banks[bankId];
+    Toast.show('🏦 BANK COLLAPSED: ' + ((bank && (bank.bankName || bank.ownerName)) || 'Unknown') + (reason ? ' — ' + reason : ''), '#c0392b', 6000);
+    Firebase.removeAllVaults(bankId).then(() => {
+      Firebase.removeBank(bankId);
     });
-    // Trigger company bankruptcy if the company stock still exists
     if (bank && bank.companyTicker && typeof Companies !== 'undefined') {
       const sym = bank.companyTicker;
       if (Companies._allPlayerStocks && Companies._allPlayerStocks[sym]) {
@@ -500,39 +492,39 @@ const Banking = {
       return;
     }
 
-    // Fast path: if every card already exists, just animate stress in-place (preserves CSS transition)
+    // Fast path: only update stress bars if bank set hasn't changed
     const existingKeys = new Set([...container.querySelectorAll('[data-bank-uid]')].map(el => el.dataset.bankUid));
     const newKeys = new Set(banks.map(([k]) => k));
     const sameSet = existingKeys.size === newKeys.size && [...newKeys].every(k => existingKeys.has(k));
 
     if (sameSet && existingKeys.size > 0) {
-      for (const [ticker, bank] of banks) {
+      for (const [bankId, bank] of banks) {
         const stress = bank.stressLevel || 0;
         const color = this._stressColor(stress);
-        const fill = container.querySelector(`[data-bank-uid="${ticker}"] .bank-stress-fill`);
-        const label = container.querySelector(`[data-bank-uid="${ticker}"] .bank-stress-label`);
+        const fill = container.querySelector(`[data-bank-uid="${bankId}"] .bank-stress-fill`);
+        const label = container.querySelector(`[data-bank-uid="${bankId}"] .bank-stress-label`);
         if (fill) { fill.style.width = stress + '%'; fill.style.background = color; }
         if (label) { label.style.color = color; label.textContent = stress + '%'; }
       }
       return;
     }
 
-    // Full rebuild (new bank added or removed)
     let html = '';
-    for (const [ticker, bank] of banks) {
-      const ownerUid = bank.ownerUid || ticker;
-      const myVault = this._myVaults[ticker];
+    for (const [bankId, bank] of banks) {
+      const ownerUid = bank.ownerUid;
+      const myVault = this._myVaults[bankId];
       const myDeposit = myVault ? (myVault.money || 0) : 0;
       const stress = bank.stressLevel || 0;
       const stressColor = this._stressColor(stress);
-      const vaultCap = this._getVaultCap(ticker);
+      const vaultCap = this._getVaultCap(bankId);
       const capStr = vaultCap === Infinity ? 'Unlimited' : App.formatMoney(vaultCap) + ' cap';
       const loanOwed = this._loansOwed[ownerUid];
-      html += `<div class="bank-card" data-bank-uid="${ticker}">
+      const displayName = bank.bankName || (bank.ownerName + "'s Bank");
+      html += `<div class="bank-card" data-bank-uid="${bankId}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div>
-            <div class="bank-name">🏦 ${this._esc(bank.ownerName)}'s Bank</div>
-            <div style="font-size:11px;color:var(--text-dim)">Stock: ${this._esc(bank.companyTicker)} &bull; ${capStr}</div>
+            <div class="bank-name">🏦 ${this._esc(displayName)}</div>
+            <div style="font-size:11px;color:var(--text-dim)">${this._esc(bank.ownerName)} &bull; ${this._esc(bank.companyTicker || '')} &bull; ${capStr}</div>
           </div>
           <div style="text-align:right">
             <div style="font-size:13px;font-weight:700;color:var(--green)">${(bank.interestRate * 100).toFixed(1)}%/hr</div>
@@ -543,7 +535,7 @@ const Banking = {
         <div style="display:flex;align-items:center;gap:6px;margin:4px 0">
           <div style="font-size:11px;color:var(--text-dim);flex-shrink:0">Stress:</div>
           <div class="bank-stress-bar">
-            <div class="bank-stress-fill" style="--stress-w:${stress}%;background:${stressColor}"></div>
+            <div class="bank-stress-fill" style="width:${stress}%;background:${stressColor}"></div>
           </div>
           <span class="bank-stress-label" style="font-size:11px;color:${stressColor};flex-shrink:0">${stress}%</span>
         </div>
@@ -551,9 +543,9 @@ const Banking = {
         ${bank.loanRate ? `<div style="font-size:11px;color:var(--text-dim);margin:2px 0">💸 Loan rate: <strong>${bank.loanRate}%/hr</strong></div>` : ''}
         ${loanOwed ? `<div style="font-size:11px;color:var(--red);margin:2px 0">⚠️ Loan owed: ${App.formatMoney(loanOwed.totalOwed || loanOwed.principal)}</div>` : ''}
         <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
-          <button class="company-buy-btn" style="flex:1" onclick="Banking.openDepositModal('${ticker}')">Deposit</button>
-          ${myDeposit > 0 ? `<button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red)" onclick="Banking.withdraw('${ticker}', 'all')">Withdraw</button>` : ''}
-          ${bank.loanRate && !loanOwed && ownerUid !== myUid ? `<button class="csr-toggle-btn" onclick="(function(){const a=prompt('Borrow how much? (max ${App.formatMoney(Math.min(500_000,(App.balance+App.totalEarned)*0.25))})');if(a){Banking.requestLoan('${ticker}',App.parseAmount(a))}})()">💸 Borrow</button>` : ''}
+          <button class="company-buy-btn" style="flex:1" onclick="Banking.openDepositModal('${bankId}')">Deposit</button>
+          ${myDeposit > 0 ? `<button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red)" onclick="Banking.withdraw('${bankId}', 'all')">Withdraw</button>` : ''}
+          ${bank.loanRate && !loanOwed && ownerUid !== myUid ? `<button class="csr-toggle-btn" onclick="(function(){const a=prompt('Borrow how much? (max ${App.formatMoney(Math.min(500_000,(App.balance+App.totalEarned)*0.25))})');if(a){Banking.requestLoan('${bankId}',App.parseAmount(a))}})()">💸 Borrow</button>` : ''}
           ${loanOwed ? `<button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red)" onclick="Banking.repayLoan('${ownerUid}')">Repay Loan</button>` : ''}
         </div>
       </div>`;
@@ -561,37 +553,60 @@ const Banking = {
     container.innerHTML = html;
   },
 
+  // Called from companies.js for Finance company management panel
   renderBankSetup(companyIdx, forceShow = false) {
     const c = typeof Companies !== 'undefined' ? Companies._companies[companyIdx] : null;
     if (!c || (!forceShow && (c.industry || 'tech') !== 'finance')) return '';
     const rebirth = typeof App !== 'undefined' ? (App.rebirth || 0) : 0;
-    // Banks are now keyed by ticker — one per Finance company
-    const bank = this._banks[c.ticker] || null;
 
     if (rebirth < this.MIN_REBIRTH) {
       return `<div class="bank-setup-section">
-        <h3>🏦 Banking Vault</h3>
+        <h3>🏦 Banking</h3>
         <div style="font-size:12px;color:var(--text-dim)">🔒 Requires Rebirth ${this.MIN_REBIRTH} to enable banking.</div>
       </div>`;
     }
 
-    if (!bank) {
-      return `<div class="bank-setup-section">
-        <h3>🏦 Banking Vault</h3>
-        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Enable your Finance company as a player bank. Players can deposit cash, stocks, and coins to earn interest tied to your stock performance.</div>
-        <div class="admin-row" style="margin-bottom:8px">
-          <label style="min-width:120px;font-size:12px">Max deposit/player:</label>
-          <input type="number" id="bank-maxdeposit-${companyIdx}" placeholder="0 = unlimited" style="flex:1;font-size:13px;padding:5px">
-        </div>
-        <div class="admin-row" style="margin-bottom:8px">
-          <label style="min-width:120px;font-size:12px">Loan rate (%/hr):</label>
-          <input type="number" id="bank-loanrate-${companyIdx}" min="1" max="20" value="5" style="flex:1;font-size:13px;padding:5px">
-        </div>
-        <button class="company-buy-btn" style="width:100%" onclick="Banking.enableBank(${companyIdx})">Enable Banking — ${App.formatMoney(this.ENABLE_COST)}</button>
-      </div>`;
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    // All banks linked to this company
+    const myBanks = Object.entries(this._banks)
+      .filter(([, b]) => b.ownerUid === myUid && b.companyTicker === c.ticker);
+
+    let html = '<div class="bank-setup-section"><h3>🏦 Banking</h3>';
+
+    // Render each existing bank management card
+    for (const [bankId, bank] of myBanks) {
+      html += this._renderBankManagementUI(bankId, bank, companyIdx);
     }
 
-    // Bank exists — show management UI
+    // "Open New Bank" form — always shown (no limit per company)
+    html += `<div style="border:1px solid var(--bg3);border-radius:8px;padding:10px;margin-top:${myBanks.length > 0 ? '10px' : '0'}">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">➕ Open New Bank — ${App.formatMoney(this.ENABLE_COST)}</div>
+      <div class="admin-row" style="margin-bottom:6px">
+        <label style="min-width:100px;font-size:12px">Bank name:</label>
+        <input id="bank-name-${companyIdx}" placeholder="${this._esc(c.name)} Bank" style="flex:1;font-size:13px;padding:5px">
+      </div>
+      <div class="admin-row" style="margin-bottom:6px">
+        <label style="min-width:100px;font-size:12px">Interest rate:</label>
+        <input type="number" id="bank-rate-${companyIdx}" min="1" max="15" value="3" style="flex:1;font-size:13px;padding:5px">
+        <span style="font-size:12px;color:var(--text-dim);margin-left:4px">%/hr</span>
+      </div>
+      <div class="admin-row" style="margin-bottom:6px">
+        <label style="min-width:100px;font-size:12px">Loan rate:</label>
+        <input type="number" id="bank-loanrate-${companyIdx}" min="1" max="20" value="5" style="flex:1;font-size:13px;padding:5px">
+        <span style="font-size:12px;color:var(--text-dim);margin-left:4px">%/hr</span>
+      </div>
+      <div class="admin-row" style="margin-bottom:8px">
+        <label style="min-width:100px;font-size:12px">Max deposit/player:</label>
+        <input type="number" id="bank-maxdeposit-${companyIdx}" placeholder="0 = unlimited" style="flex:1;font-size:13px;padding:5px">
+      </div>
+      <button class="company-buy-btn" style="width:100%" onclick="Banking.enableBank(${companyIdx})">Open Bank</button>
+    </div>`;
+
+    html += '</div>';
+    return html;
+  },
+
+  _renderBankManagementUI(bankId, bank, companyIdx) {
     const upgHtml = Object.entries(this.UPGRADES).map(([key, def]) => {
       const lvl = (bank.upgrades && bank.upgrades[key]) || 0;
       const maxed = lvl >= def.maxLevel;
@@ -601,25 +616,26 @@ const Banking = {
           <div style="font-size:13px;font-weight:700">${def.name} <span class="upgrade-level-badge ${maxed ? 'upgrade-maxed' : ''}">Lv${lvl}/${def.maxLevel}</span></div>
         </div>
         <div style="flex-shrink:0;margin-left:8px">
-          ${maxed ? '<span style="font-size:11px;color:var(--gold);font-weight:700">MAX</span>' : `<button class="csr-toggle-btn" style="font-size:11px" onclick="Banking.buyUpgrade('${key}', '${c.ticker}')">${App.formatMoney(nextCost)}</button>`}
+          ${maxed ? '<span style="font-size:11px;color:var(--gold);font-weight:700">MAX</span>' : `<button class="csr-toggle-btn" style="font-size:11px" onclick="Banking.buyUpgrade('${key}', '${bankId}')">${App.formatMoney(nextCost)}</button>`}
         </div>
       </div>`;
     }).join('');
 
     const stressColor = bank.stressLevel >= 70 ? 'var(--red)' : bank.stressLevel >= 40 ? '#f39c12' : 'var(--green)';
-    const vaultCap = this._getVaultCap(c.ticker);
+    const vaultCap = this._getVaultCap(bankId);
+    const safeId = bankId.replace(/[^a-zA-Z0-9_]/g, '_');
 
-    return `<div class="bank-setup-section">
-      <h3>🏦 Banking Vault</h3>
-      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-        <span style="font-size:13px">Rate: <strong style="color:var(--green)">${(bank.interestRate * 100).toFixed(1)}%/hr</strong></span>
-        <span style="font-size:13px">Depositors: <strong>${bank.depositorCount || 0}</strong></span>
-        <span style="font-size:13px">Total: <strong>${App.formatMoney(bank.totalDeposited || 0)}</strong></span>
+    return `<div style="border:1px solid var(--bg3);border-radius:8px;padding:10px;margin-bottom:8px">
+      <div style="font-weight:700;font-size:14px;margin-bottom:6px">🏦 ${this._esc(bank.bankName || bank.ownerName + "'s Bank")}</div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:12px">
+        <span>Rate: <strong style="color:var(--green)">${(bank.interestRate * 100).toFixed(1)}%/hr</strong></span>
+        <span>Depositors: <strong>${bank.depositorCount || 0}</strong></span>
+        <span>Total: <strong>${App.formatMoney(bank.totalDeposited || 0)}</strong></span>
       </div>
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:4px">Vault Cap: ${vaultCap === Infinity ? 'Unlimited' : App.formatMoney(vaultCap) + '/player'}</div>
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
         <span style="font-size:12px;color:var(--text-dim)">Stress:</span>
-        <div class="bank-stress-bar" style="flex:1"><div class="bank-stress-fill" style="--stress-w:${bank.stressLevel || 0}%;background:${stressColor}"></div></div>
+        <div class="bank-stress-bar" style="flex:1"><div class="bank-stress-fill" style="width:${bank.stressLevel || 0}%;background:${stressColor}"></div></div>
         <span style="font-size:12px;color:${stressColor};font-weight:700">${bank.stressLevel || 0}%</span>
       </div>
       <div style="margin-bottom:8px">
@@ -627,11 +643,17 @@ const Banking = {
         ${upgHtml}
       </div>
       <div class="admin-row" style="margin-bottom:6px">
-        <label style="min-width:120px;font-size:12px">Max deposit/player:</label>
-        <input type="number" id="bank-maxdeposit-${companyIdx}" value="${bank.maxDeposit || 0}" style="flex:1;font-size:13px;padding:5px">
-        <button class="csr-toggle-btn" style="font-size:11px" onclick="Banking.setMaxDeposit(${companyIdx})">Set</button>
+        <label style="min-width:100px;font-size:12px">Interest rate:</label>
+        <input type="number" id="bank-rate-set-${safeId}" min="1" max="15" value="${((bank.interestRate || 0.03) * 100).toFixed(1)}" style="flex:1;font-size:13px;padding:5px">
+        <span style="font-size:12px;color:var(--text-dim);margin:0 4px">%/hr</span>
+        <button class="csr-toggle-btn" style="font-size:11px" onclick="Banking.setInterestRate('${bankId}')">Set</button>
       </div>
-      <button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);width:100%;margin-top:4px" onclick="Banking.closeBank(${companyIdx})">⚠️ Close Bank</button>
+      <div class="admin-row" style="margin-bottom:8px">
+        <label style="min-width:100px;font-size:12px">Max deposit/player:</label>
+        <input type="number" id="bank-maxdeposit-set-${safeId}" value="${bank.maxDeposit || 0}" style="flex:1;font-size:13px;padding:5px">
+        <button class="csr-toggle-btn" style="font-size:11px" onclick="Banking.setMaxDeposit('${bankId}')">Set</button>
+      </div>
+      <button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);width:100%;margin-top:4px" onclick="Banking.closeBank('${bankId}')">⚠️ Close Bank</button>
     </div>`;
   },
 
@@ -645,12 +667,13 @@ const Banking = {
     const deposits = Object.entries(this._myVaults);
     if (deposits.length === 0) return '<div style="font-size:12px;color:var(--text-dim);padding:8px 0">No active deposits.</div>';
     let html = '';
-    for (const [ownerUid, vault] of deposits) {
-      const bank = this._banks[ownerUid];
+    for (const [bankId, vault] of deposits) {
+      const bank = this._banks[bankId];
       if (!bank) continue;
       const stressColor = bank.stressLevel >= 70 ? 'var(--red)' : bank.stressLevel >= 40 ? '#f39c12' : 'var(--green)';
+      const displayName = bank.bankName || (bank.ownerName + "'s Bank");
       html += `<div class="bank-card" style="border-color:var(--gold)">
-        <div style="font-weight:700">🏦 ${this._esc(bank.ownerName)}'s Bank</div>
+        <div style="font-weight:700">🏦 ${this._esc(displayName)}</div>
         <div style="font-size:12px;margin:4px 0">Cash: <strong style="color:var(--green)">${App.formatMoney(vault.money || 0)}</strong></div>
         ${Object.keys(vault.stocks || {}).length > 0 ? '<div style="font-size:11px;color:var(--text-dim)">Stocks: ' + Object.entries(vault.stocks).map(([s,q]) => s+' ×'+q).join(', ') + '</div>' : ''}
         ${Object.keys(vault.coins || {}).length > 0 ? '<div style="font-size:11px;color:var(--text-dim)">Coins: ' + Object.entries(vault.coins).map(([s,q]) => s+' '+Crypto.formatCoin(q)).join(', ') + '</div>' : ''}
@@ -659,7 +682,7 @@ const Banking = {
           <div class="bank-stress-bar" style="flex:1"><div class="bank-stress-fill" style="width:${bank.stressLevel||0}%;background:${stressColor}"></div></div>
           <span style="font-size:11px;color:${stressColor}">${bank.stressLevel||0}%</span>
         </div>
-        <button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);width:100%;margin-top:6px" onclick="Banking.withdraw('${ownerUid}', 'all')">Withdraw All</button>
+        <button class="csr-toggle-btn" style="color:var(--red);border-color:var(--red);width:100%;margin-top:6px" onclick="Banking.withdraw('${bankId}', 'all')">Withdraw All</button>
       </div>`;
     }
     return html;

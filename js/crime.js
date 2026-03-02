@@ -154,7 +154,9 @@ const Crime = {
     const crimeMult = 1 + (boosts.crimeBonus || 0);
     // Hacking path gets hackingBonus on top
     const hackMult = (this._path === 'hacking') ? 1 + (boosts.hackingBonus || 0) : 1;
-    return total * rebirthMult * petsMult * crimeMult * hackMult;
+    // World event crime multiplier
+    const eventMult = typeof Events !== 'undefined' ? Events.getCrimeMultiplier() : 1;
+    return total * rebirthMult * petsMult * crimeMult * hackMult * eventMult;
   },
 
   getSlotsBonus() {

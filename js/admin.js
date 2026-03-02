@@ -365,6 +365,43 @@ const Admin = {
           <input type="number" id="admin-start-bal" value="0.02" style="width:80px">
         </div>
       </div>
+      <div class="admin-section">
+        <h3>🏪 Store Testing</h3>
+        <div class="admin-row" style="margin-bottom:6px">
+          <label style="min-width:80px;font-size:12px">Store ID:</label>
+          <input id="admin-store-id" placeholder="store_..." style="flex:1;font-size:12px;padding:4px">
+        </div>
+        <div class="admin-row" style="margin-bottom:6px">
+          <label style="min-width:80px;font-size:12px">Reputation:</label>
+          <input type="number" id="admin-store-rep" min="0" max="100" value="50" style="flex:1;font-size:12px;padding:4px">
+          <button class="rig-btn win" onclick="Admin.setStoreReputation()" style="font-size:11px">Set</button>
+        </div>
+        <div class="admin-row" style="margin-bottom:6px">
+          <label style="min-width:80px;font-size:12px">Cash:</label>
+          <input type="number" id="admin-store-cash" min="0" placeholder="Amount" style="flex:1;font-size:12px;padding:4px">
+          <button class="rig-btn win" onclick="Admin.setStoreCash()" style="font-size:11px">Set</button>
+        </div>
+        <button class="admin-btn" style="width:100%;margin-top:4px;font-size:11px" onclick="Admin.listAllStores()">📋 List All Store IDs</button>
+      </div>
+      <div class="admin-section">
+        <h3>🌍 World Events</h3>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Pushes directly to Firebase — affects all online players instantly. No authority needed.</div>
+        <div class="admin-row" style="margin-bottom:6px">
+          <select id="admin-event-type" style="flex:1;font-size:12px;padding:4px">
+            ${typeof Events !== 'undefined' ? Events.EVENT_TYPES.map(t => `<option value="${t.id}">${t.label}</option>`).join('') : '<option>Events not loaded</option>'}
+          </select>
+        </div>
+        <div class="admin-row" style="margin-bottom:6px">
+          <label style="min-width:70px;font-size:12px">Duration:</label>
+          <input type="number" id="admin-event-duration" min="1" max="120" placeholder="Default" style="flex:1;font-size:12px;padding:4px">
+          <span style="font-size:11px;color:var(--text-dim);margin-left:4px">min</span>
+        </div>
+        <div class="admin-row" style="gap:6px">
+          <button class="rig-btn win" style="flex:1;font-size:11px" onclick="Admin.triggerWorldEvent()">🌍 Push Event to Firebase</button>
+          <button class="rig-btn lose" style="flex:1;font-size:11px" onclick="Admin.clearWorldEvent()">✖ Clear Event</button>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:var(--text-dim)">Active: <span id="admin-event-status" style="color:var(--green)">${typeof Events !== 'undefined' ? Events.getAdminStatus() : 'None'}</span></div>
+      </div>
       <div class="admin-section rig-section">
         <h3>Global Rig</h3>
         <div id="rig-status" class="rig-status">Disabled</div>
@@ -1112,6 +1149,58 @@ const Admin = {
     Clicker.updateRebirthUI();
     document.getElementById('admin-click-level').value = 50;
     document.getElementById('admin-auto-level').value = 50;
+  },
+
+  // === Store Testing ===
+  setStoreReputation() {
+    const storeId = (document.getElementById('admin-store-id')?.value || '').trim();
+    const rep = Math.max(0, Math.min(100, parseInt(document.getElementById('admin-store-rep')?.value) || 0));
+    if (!storeId) { alert('Enter a store ID.'); return; }
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) { alert('Must be online.'); return; }
+    Firebase.updateStore(storeId, { reputation: rep }).then(() => Toast.show('Store rep set to ' + rep, '#00e676', 2000));
+  },
+
+  setStoreCash() {
+    const storeId = (document.getElementById('admin-store-id')?.value || '').trim();
+    const cash = Math.max(0, parseInt(document.getElementById('admin-store-cash')?.value) || 0);
+    if (!storeId) { alert('Enter a store ID.'); return; }
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) { alert('Must be online.'); return; }
+    Firebase.updateStore(storeId, { cashRegister: cash }).then(() => Toast.show('Store cash set to ' + App.formatMoney(cash), '#00e676', 2000));
+  },
+
+  listAllStores() {
+    if (typeof Stores === 'undefined') { alert('Stores not loaded.'); return; }
+    const stores = Object.entries(Stores._stores);
+    if (!stores.length) { alert('No stores loaded.'); return; }
+    const info = stores.map(([id, s]) => `${id} — ${s.storeName} (${s.ownerName})`).join('\n');
+    alert('Stores:\n' + info);
+  },
+
+  // === World Events ===
+  triggerWorldEvent() {
+    if (typeof Events === 'undefined') { alert('Events not loaded.'); return; }
+    const typeId = document.getElementById('admin-event-type')?.value;
+    if (!typeId) return;
+    const durVal = parseInt(document.getElementById('admin-event-duration')?.value);
+    const durationMins = !isNaN(durVal) && durVal > 0 ? durVal : null;
+    Events.adminTriggerEvent(typeId, durationMins);
+    // Refresh status after a short delay to allow Firebase round-trip
+    setTimeout(() => {
+      const el = document.getElementById('admin-event-status');
+      if (el && typeof Events !== 'undefined') el.textContent = Events.getAdminStatus();
+    }, 1500);
+    const type = Events.EVENT_TYPES.find(t => t.id === typeId);
+    Toast.show('🌍 Event pushed: ' + (type ? type.label : typeId) + (durationMins ? ' (' + durationMins + 'm)' : ''), '#ffd740', 4000);
+  },
+
+  clearWorldEvent() {
+    if (typeof Events === 'undefined') { alert('Events not loaded.'); return; }
+    Events.adminClearEvent();
+    setTimeout(() => {
+      const el = document.getElementById('admin-event-status');
+      if (el) el.textContent = 'None';
+    }, 1000);
+    Toast.show('World event cleared.', '#aaa', 2000);
   },
 
   // === Custom Starting Balance ===

@@ -90,10 +90,13 @@ const Cars = {
   _designDraft: null, // { name, bodyKey, engineKey, interiorKey, drivetrainKey }
   _tickInterval: null,
 
+  _listenersInited: false,
+
   // === INIT ===
   init() {
     this._startTick();
-    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline() && !this._listenersInited) {
+      this._listenersInited = true;
       Firebase.listenCarListings(data => {
         this._carListings = data || {};
         this._triggerRender();

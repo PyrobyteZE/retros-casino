@@ -58,6 +58,12 @@ const Firebase = {
   // Private room invites
   _seenInviteIds: {},
 
+  // Player ID (sequential numeric ID)
+  _playerId: null,
+
+  // Pending gifts
+  _pendingGifts: {},
+
   // === INIT ===
   init() {
     this._updateChatStatus('Connecting...');
@@ -137,6 +143,8 @@ const Firebase = {
       // Refresh name registry every 5 min
       setInterval(() => this._fetchRegisteredNames(), 300000);
       this._fetchRegisteredNames();
+      // Assign sequential player ID
+      this._assignPlayerId();
       // Cloud save: restore if localStorage is empty, then push current save
       this._initCloudSave();
     }).catch(err => {
@@ -192,6 +200,20 @@ const Firebase = {
     if (typeof Crypto !== 'undefined') this.listenPlayerCoinSlots(data => Crypto.updatePlayerCoinSlots(data));
     if (typeof Banking !== 'undefined') Banking.init();
     if (typeof Crafting !== 'undefined') Crafting.init();
+    if (typeof Cars !== 'undefined') Cars.init();
+    if (typeof Stores !== 'undefined') Stores.init();
+    if (typeof Events !== 'undefined') Events.init();
+    // Incoming gifts
+    this.listenGifts(this.uid, (giftId, gift) => {
+      if (this._pendingGifts[giftId]) return;
+      this._pendingGifts[giftId] = true;
+      const name = this._escapeHtml(gift.fromName || 'Player');
+      const idStr = gift.fromId !== null && gift.fromId !== undefined ? ' (#' + gift.fromId + ')' : '';
+      const note = gift.note ? ' — "' + this._escapeHtml(gift.note) + '"' : '';
+      if (typeof App !== 'undefined') App.addBalance(gift.amount || 0);
+      Toast.show('🎁 Gift from ' + name + idStr + note + ': +' + (typeof App !== 'undefined' ? App.formatMoney(gift.amount) : '$' + gift.amount), '#00e676', 6000);
+      if (typeof App !== 'undefined') App.save();
+    });
     // Coin transfers (P2P sends)
     this.listenCoinTransfers(this.uid, transfer => {
       if (typeof Crypto !== 'undefined') Crypto._receiveCoinTransfer(transfer);
@@ -361,6 +383,7 @@ const Firebase = {
       gamesLost: App.stats ? App.stats.gamesLost : 0,
       totalDebtPaid: typeof Loans !== 'undefined' ? (Loans._totalPaid || 0) : 0,
       currentDebt: typeof Loans !== 'undefined' ? Loans.debt : 0,
+      playerId: this._playerId,
       timestamp: firebase.database.ServerValue.TIMESTAMP,
     };
     this.db.ref('leaderboard/' + this.uid).set(data).then(() => {
@@ -600,10 +623,12 @@ const Firebase = {
       const isMe = entry.uid === this.uid;
       const rank = i + 1;
       const medal = rank === 1 ? '\u{1F947}' : rank === 2 ? '\u{1F948}' : rank === 3 ? '\u{1F949}' : '#' + rank;
+      const idBadge = entry.playerId !== null && entry.playerId !== undefined
+        ? `<span class="lb-player-id">#${entry.playerId}</span>` : '';
       html += `<div class="lb-row ${isMe ? 'lb-me' : ''}" onclick="Firebase.showProfile('${entry.uid}')">
         <span class="lb-rank">${medal}</span>
         <span class="lb-avatar">${entry.avatar || ''}</span>
-        <span class="lb-name">${this._escapeHtml(entry.name || 'Player')}</span>
+        <span class="lb-name">${this._escapeHtml(entry.name || 'Player')}${idBadge}</span>
         <span class="lb-earned">${getStatVal(entry)}</span>
         <span class="lb-rebirths">R${entry.rebirths || 0}</span>
       </div>`;
@@ -627,19 +652,24 @@ const Firebase = {
     const isMe = uid === this.uid;
     const isFriend = !!this._friends[uid];
 
+    const playerIdStr = entry.playerId !== null && entry.playerId !== undefined
+      ? `<div class="profile-modal-id">#${entry.playerId}</div>` : '';
+
     let actionBtns = '';
     if (!isMe) {
       if (isFriend) {
-        actionBtns = `<button class="game-btn" onclick="Firebase.closeProfile();Firebase.openDM('${uid}')" style="background:var(--green-dark)">💬 Message</button>`;
+        actionBtns = `<button class="game-btn" onclick="Firebase.closeProfile();Firebase.openDM('${uid}')" style="background:var(--green-dark)">💬 Message</button>
+          <button class="game-btn" onclick="Firebase.promptGift('${uid}','${this._escapeHtml(entry.name||'Player')}')" style="background:#e67e22">🎁 Gift Cash</button>`;
       } else {
         actionBtns = `<button class="game-btn" onclick="Firebase.sendFriendRequest('${uid}')" style="margin-right:6px">+ Add Friend</button>
-          <button class="game-btn" onclick="Firebase.closeProfile();Firebase.openDM('${uid}')" style="background:var(--green-dark)">💬 Message</button>`;
+          <button class="game-btn" onclick="Firebase.closeProfile();Firebase.openDM('${uid}')" style="background:var(--green-dark)">💬 Message</button>
+          <button class="game-btn" onclick="Firebase.promptGift('${uid}','${this._escapeHtml(entry.name||'Player')}')" style="background:#e67e22">🎁 Gift Cash</button>`;
       }
     }
 
     modal.innerHTML = `<div class="profile-modal-content">
       <div class="profile-modal-avatar">${entry.avatar || '\u{1F3B2}'}</div>
-      <div class="profile-modal-name">${this._escapeHtml(entry.name || 'Player')}</div>
+      <div class="profile-modal-name">${this._escapeHtml(entry.name || 'Player')}${playerIdStr}</div>
       <div class="profile-modal-stats">
         <div class="profile-stat"><span class="stat-label">Balance</span><span>${App.formatMoney(entry.balance || 0)}</span></div>
         <div class="profile-stat"><span class="stat-label">Total Earned</span><span>${App.formatMoney(entry.totalEarned || 0)}</span></div>
@@ -655,6 +685,36 @@ const Firebase = {
   closeProfile() {
     const modal = document.getElementById('profile-modal');
     if (modal) modal.classList.add('hidden');
+  },
+
+  promptGift(toUid, toName) {
+    this.closeProfile();
+    const amtStr = prompt(`Send cash gift to ${toName}?\nAmount (e.g. 1000, 5k, 1m):`);
+    if (!amtStr) return;
+    const amount = typeof App !== 'undefined' ? App.parseAmount(amtStr) : parseFloat(amtStr);
+    if (!amount || isNaN(amount) || amount <= 0) { alert('Invalid amount.'); return; }
+    if (typeof App !== 'undefined' && App.balance < amount) { alert("Not enough balance."); return; }
+    const note = prompt(`Optional message to ${toName} (leave blank to skip):`) || '';
+    if (typeof App !== 'undefined') App.addBalance(-amount);
+    this.sendGift(toUid, amount, note).then(() => {
+      Toast.show('🎁 Gift sent to ' + toName + '!', '#00e676', 3000);
+      if (typeof App !== 'undefined') App.save();
+    }).catch(() => {
+      if (typeof App !== 'undefined') App.addBalance(amount); // refund on fail
+      Toast.show('Gift failed — try again.', '#f44336', 3000);
+    });
+  },
+
+  // Gift by player #ID
+  giftByPlayerId(numId) {
+    if (!numId) return;
+    this.lookupUidByPlayerId(numId, uid => {
+      if (!uid) { Toast.show('Player #' + numId + ' not found.', '#f44336', 3000); return; }
+      // Find name from leaderboard
+      const entry = this.leaderboardData.find(e => e.uid === uid);
+      const name = entry ? (entry.name || 'Player') : 'Player #' + numId;
+      this.promptGift(uid, name);
+    });
   },
 
   // === Chat Panel ===
@@ -1523,28 +1583,83 @@ const Firebase = {
 
   _initCloudSave() {
     if (!this.isOnline()) return;
-    const hasLocal = !!localStorage.getItem('retros_casino_save');
-    if (!hasLocal) {
-      // No local save — try to restore from cloud
-      this.db.ref('cloudSaves/' + this.uid).once('value', snap => {
-        const save = snap.val();
-        if (save && save.data) {
-          localStorage.setItem('retros_casino_save', save.data);
-          if (typeof App !== 'undefined') {
-            App.load();
-            App.updateBalance();
-            if (typeof Clicker !== 'undefined') { Clicker.startAutoClicker(); Clicker.updateStats(); Clicker.renderUpgrades(); }
-          }
-          Toast.show('\u2601\uFE0F Save restored from cloud!');
-          console.log('Firebase: cloud save restored');
+    this.db.ref('cloudSaves/' + this.uid).once('value', snap => {
+      const cloud = snap.val();
+      const localRaw = localStorage.getItem('retros_casino_save');
+
+      if (!localRaw && cloud && cloud.data) {
+        // No local save — restore from cloud immediately
+        localStorage.setItem('retros_casino_save', cloud.data);
+        if (typeof App !== 'undefined') {
+          App.load();
+          App.updateBalance();
+          if (typeof Clicker !== 'undefined') { Clicker.startAutoClicker(); Clicker.updateStats(); Clicker.renderUpgrades(); }
         }
-        // Push current state to cloud after load (or immediately if nothing was restored)
+        Toast.show('\u2601\uFE0F Save restored from cloud!');
+        console.log('Firebase: cloud save restored (no local existed)');
         setTimeout(() => this.pushCloudSave(), 2000);
-      }).catch(() => {});
-    } else {
-      // Has local save — push it to cloud within 5s of sign-in
-      setTimeout(() => this.pushCloudSave(), 5000);
+      } else if (localRaw && cloud && cloud.data) {
+        // Both exist — compare savedAt timestamps
+        let localSaved = 0;
+        try { localSaved = JSON.parse(localRaw).savedAt || 0; } catch (e) {}
+        const cloudSaved = cloud.savedAt || 0;
+        if (cloudSaved > localSaved + 5 * 60_000) {
+          // Cloud is meaningfully newer (5+ min) — offer restore
+          this._offerCloudRestore(cloud.data, cloudSaved, localSaved);
+        } else {
+          // Local is current — push it
+          setTimeout(() => this.pushCloudSave(), 5000);
+        }
+      } else {
+        // No cloud save — just push local
+        setTimeout(() => this.pushCloudSave(), 5000);
+      }
+    }).catch(() => { setTimeout(() => this.pushCloudSave(), 5000); });
+  },
+
+  _offerCloudRestore(cloudData, cloudTs, localTs) {
+    const fmtDate = ts => ts ? new Date(ts).toLocaleString() : 'unknown';
+    const appEl = document.getElementById('app');
+    if (!appEl) return;
+    const el = document.createElement('div');
+    el.className = 'cloud-restore-overlay';
+    el.innerHTML = `
+      <div class="cloud-restore-box">
+        <div class="cloud-restore-title">☁️ Newer Cloud Save Found</div>
+        <div class="cloud-restore-body">
+          <div>☁️ Cloud: <strong>${fmtDate(cloudTs)}</strong></div>
+          <div>💾 Local: <strong>${fmtDate(localTs)}</strong></div>
+          <div style="margin-top:8px;font-size:12px;opacity:.7">Your cloud save is newer. Restore it? (Local save will be replaced.)</div>
+        </div>
+        <div class="cloud-restore-btns">
+          <button class="cloud-restore-yes" onclick="Firebase._doCloudRestore(this)">☁️ Use Cloud Save</button>
+          <button class="cloud-restore-no" onclick="Firebase._keepLocalSave(this)">💾 Keep Local</button>
+        </div>
+      </div>`;
+    el._cloudData = cloudData;
+    appEl.appendChild(el);
+  },
+
+  _doCloudRestore(btn) {
+    const el = btn.closest('.cloud-restore-overlay');
+    if (!el) return;
+    const cloudData = el._cloudData;
+    el.remove();
+    if (!cloudData) return;
+    localStorage.setItem('retros_casino_save', cloudData);
+    if (typeof App !== 'undefined') {
+      App.load();
+      App.updateBalance();
+      if (typeof Clicker !== 'undefined') { Clicker.startAutoClicker(); Clicker.updateStats(); Clicker.renderUpgrades(); }
     }
+    Toast.show('☁️ Cloud save restored!', '#00e676', 4000);
+  },
+
+  _keepLocalSave(btn) {
+    const el = btn.closest('.cloud-restore-overlay');
+    if (el) el.remove();
+    setTimeout(() => this.pushCloudSave(), 1000);
+    Toast.show('💾 Keeping local save.', '#aaa', 2000);
   },
 
   pushCloudSave() {
@@ -1556,6 +1671,102 @@ const Firebase = {
     if (!data) return;
     this.db.ref('cloudSaves/' + this.uid).set({ data, savedAt: now })
       .catch(err => console.warn('Firebase cloudSave write error:', err.code));
+  },
+
+  // === PLAYER ID SYSTEM ===
+  // Owner "RetroByte" always gets ID #0; all others get sequential IDs 1+
+  OWNER_NAME: 'RetroByte',
+
+  _assignPlayerId() {
+    if (!this.isOnline()) return;
+    this.db.ref('playerIds/' + this.uid).once('value', snap => {
+      if (snap.val() !== null) {
+        // Already assigned
+        this._playerId = snap.val();
+        this._updatePlayerIdDisplay();
+        return;
+      }
+      const playerName = typeof Settings !== 'undefined' ? Settings.profile.name : 'Player';
+      // Owner always gets #0
+      if (playerName === this.OWNER_NAME) {
+        this.db.ref('playerIds/' + this.uid).set(0).catch(() => {});
+        this.db.ref('playerIdToUid/0').set(this.uid).catch(() => {});
+        this._playerId = 0;
+        this._updatePlayerIdDisplay();
+        return;
+      }
+      // Assign next sequential ID (1-999999) via transaction
+      this.db.ref('playerIdCounter').transaction(current => {
+        return Math.min((current || 0) + 1, 999999);
+      }).then(result => {
+        if (result.committed) {
+          const newId = result.snapshot.val();
+          this.db.ref('playerIds/' + this.uid).set(newId).catch(() => {});
+          this.db.ref('playerIdToUid/' + newId).set(this.uid).catch(() => {});
+          this._playerId = newId;
+          this._updatePlayerIdDisplay();
+        }
+      }).catch(() => {});
+    }).catch(() => {});
+  },
+
+  _updatePlayerIdDisplay() {
+    const el = document.getElementById('player-id-display');
+    if (el && this._playerId !== null) el.textContent = '#' + this._playerId;
+    const settingsEl = document.getElementById('settings-player-id');
+    if (settingsEl && this._playerId !== null) settingsEl.textContent = '#' + this._playerId;
+  },
+
+  getPlayerIdDisplay() {
+    return this._playerId !== null ? '#' + this._playerId : '#???';
+  },
+
+  // Look up UID by player ID (for gifting by #ID)
+  lookupUidByPlayerId(numId, cb) {
+    if (!this.isOnline()) { cb(null); return; }
+    this.db.ref('playerIdToUid/' + parseInt(numId)).once('value', snap => cb(snap.val()))
+      .catch(() => cb(null));
+  },
+
+  // === PLAYER GIFTS (P2P cash/item sends) ===
+  sendGift(toUid, amount, note) {
+    if (!this.isOnline() || !this.uid) return Promise.reject('offline');
+    const senderName = typeof Settings !== 'undefined' ? Settings.profile.name : 'Player';
+    return this.db.ref('playerGifts/' + toUid).push({
+      fromUid: this.uid,
+      fromName: senderName,
+      fromId: this._playerId,
+      amount,
+      note: note || '',
+      sentAt: Date.now(),
+    });
+  },
+
+  listenGifts(uid, cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('playerGifts/' + uid).on('child_added', snap => {
+      const gift = snap.val();
+      if (!gift) return;
+      cb(snap.key, gift);
+      // Auto-remove after receiving
+      snap.ref.remove().catch(() => {});
+    });
+  },
+
+  // === WORLD EVENTS ===
+  pushWorldEvent(event) {
+    if (!this.isOnline()) return;
+    this.db.ref('worldEvent').set({ ...event, updatedAt: Date.now() }).catch(() => {});
+  },
+
+  listenWorldEvent(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('worldEvent').on('value', snap => cb(snap.val()));
+  },
+
+  clearWorldEvent() {
+    if (!this.isOnline()) return;
+    this.db.ref('worldEvent').remove().catch(() => {});
   },
 
   // === ADMIN COMMANDS ===
@@ -2232,6 +2443,28 @@ const Firebase = {
     if (!this.isOnline()) return;
     this.db.ref('playerCoinSlots').on('value', snap => cb(snap.val() || {}),
       err => console.error('playerCoinSlots read error:', err.code));
+  },
+
+  // === PLAYER STORES ===
+  createStore(storeId, data) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('playerStores/' + storeId).set({ ...data, createdAt: Date.now() });
+  },
+
+  updateStore(storeId, updates) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('playerStores/' + storeId).update(updates);
+  },
+
+  removeStore(storeId) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('playerStores/' + storeId).remove();
+  },
+
+  listenStores(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('playerStores').on('value', snap => cb(snap.val() || {}),
+      err => console.error('playerStores read error:', err.code));
   },
 
   // === PLAYER BANKS ===

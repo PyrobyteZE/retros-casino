@@ -8619,3 +8619,117 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   gap: 8px;
   margin-bottom: 4px;
 }
+
+/* ===== World Event Banner ===== */
+.world-event-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-left: 3px solid var(--green);
+  background: rgba(0,230,118,.08);
+  font-size: 12px;
+  flex-wrap: wrap;
+  animation: event-slide-in .4s ease;
+}
+@keyframes event-slide-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.event-label {
+  font-weight: 700;
+  color: var(--green);
+  white-space: nowrap;
+}
+.event-desc {
+  color: var(--text-dim);
+  flex: 1;
+}
+.event-timer {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  opacity: .8;
+}
+
+/* ===== Cloud Restore Overlay ===== */
+.cloud-restore-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.cloud-restore-box {
+  background: var(--bg2);
+  border: 1px solid var(--green);
+  border-radius: 12px;
+  padding: 20px;
+  max-width: 320px;
+  width: 90%;
+  text-align: center;
+}
+.cloud-restore-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--green);
+  margin-bottom: 10px;
+}
+.cloud-restore-body {
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+.cloud-restore-btns {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.cloud-restore-yes, .cloud-restore-no {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+.cloud-restore-yes {
+  background: var(--green);
+  color: #000;
+}
+.cloud-restore-no {
+  background: var(--bg3);
+  color: var(--text-dim);
+}
+
+/* ===== Player ID Badge ===== */
+.lb-player-id {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-left: 4px;
+  opacity: .7;
+}
+.profile-modal-id {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.settings-player-id {
+  font-weight: 700;
+  color: var(--green);
+  font-size: 14px;
+}
+
+/* Event admin badge */
+.event-admin-badge {
+  background: #e91e63;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  letter-spacing: .05em;
+}

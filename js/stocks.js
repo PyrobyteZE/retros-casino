@@ -1,7 +1,6 @@
 // Stock Market Simulator
 const Stocks = {
   stocks: [
-    { symbol: 'RETRO', name: 'Retro Corp',      basePrice: 100,  volatility: 0.04, sector: 'Tech'      },
     { symbol: 'LUCKY', name: 'Lucky Gaming',    basePrice: 50,   volatility: 0.08, sector: 'Casino'    },
     { symbol: 'VAULT', name: 'Vault Bank',      basePrice: 200,  volatility: 0.02, sector: 'Finance'   },
     { symbol: 'NEON',  name: 'Neon Energy',     basePrice: 75,   volatility: 0.08, sector: 'Energy'    },
@@ -10,13 +9,7 @@ const Stocks = {
     { symbol: 'SHARK', name: 'Shark Loans Inc', basePrice: 150,  volatility: 0.015,sector: 'Finance'   },
     { symbol: 'GOOSE', name: 'Goose Foods',     basePrice: 40,   volatility: 0.02, sector: 'Consumer'  },
     { symbol: 'MOON',  name: 'MoonCoin Inc',    basePrice: 10,   volatility: 0.15, sector: 'Crypto'    },
-    { symbol: 'JOY',   name: 'JoyCorp Defense', basePrice: 500,  volatility: 0.03, sector: 'Defense'   },
-    // NEW: Luna Inc — chaotic long-swing stock, amplified when RETRO is down
     { symbol: 'LUNA',  name: 'Luna Inc',        basePrice: 5,    volatility: 0.20, sector: 'Volatile'  },
-    // NEW: JoyCorp Oil — JOY subsidiary, correlated with JOY, own oil events
-    { symbol: 'JOIL',  name: 'JoyCorp Oil',     basePrice: 80,   volatility: 0.06, sector: 'Energy'    },
-    // NEW: Retro Oil — RETRO subsidiary, correlated with RETRO, rival to JOIL
-    { symbol: 'ROIL',  name: 'Retro Oil',       basePrice: 65,   volatility: 0.06, sector: 'Energy'    },
   ],
 
   // Runtime state

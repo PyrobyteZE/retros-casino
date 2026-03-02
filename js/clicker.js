@@ -297,6 +297,9 @@ const Clicker = {
     // Apply pet boost
     if (typeof Pets !== 'undefined') base *= Pets.getBoosts().clickMult;
 
+    // World event click multiplier
+    if (typeof Events !== 'undefined') base *= Events.getClickMultiplier();
+
     return base;
   },
 

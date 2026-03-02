@@ -139,17 +139,17 @@ const Companies = {
 
   // === INDUSTRIES (each links to system stock symbols for cross-influence) ===
   INDUSTRIES: [
-    { id: 'energy',        label: '\u26FD Energy',        stocks: ['JOIL', 'ROIL'] },
-    { id: 'tech',          label: '\u{1F4BB} Technology',    stocks: ['RETRO'] },
-    { id: 'entertainment', label: '\u{1F3AE} Entertainment', stocks: ['JOY'] },
-    { id: 'finance',       label: '\u{1F988} Finance',       stocks: ['SHARK'] },
-    { id: 'space',         label: '\u{1F680} Space',          stocks: ['LUNA'] },
-    { id: 'food',          label: '\u{1F354} Food',          stocks: [] },
-    { id: 'military',      label: '\u{1FAA6} Military',      stocks: ['JOY'] },
+    { id: 'energy',        label: '\u26FD Energy',           stocks: ['NEON'] },
+    { id: 'tech',          label: '\u{1F4BB} Technology',    stocks: ['PIXEL'] },
+    { id: 'entertainment', label: '\u{1F3AE} Entertainment', stocks: ['LUCKY'] },
+    { id: 'finance',       label: '\u{1F988} Finance',       stocks: ['SHARK', 'VAULT'] },
+    { id: 'space',         label: '\u{1F680} Space',         stocks: ['LUNA'] },
+    { id: 'food',          label: '\u{1F354} Food',          stocks: ['GOOSE'] },
+    { id: 'military',      label: '\u{1FAA6} Military',      stocks: [] },
     { id: 'pharma',        label: '\u{1F48A} Pharma',        stocks: [] },
     { id: 'crime',         label: '\u{1F977} Crime',         stocks: [] },
-    { id: 'vibes',         label: '\u2728 Vibes-Based',     stocks: [] },
-    { id: 'automotive',   label: '\u{1F697} Automotive',   stocks: [] },
+    { id: 'vibes',         label: '\u2728 Vibes-Based',      stocks: [] },
+    { id: 'automotive',    label: '\u{1F697} Automotive',    stocks: [] },
   ],
 
   // === STATE ===
@@ -1807,6 +1807,14 @@ const Companies = {
       }
     }
 
+    // 🏪 Player Stores
+    if (typeof Stores !== 'undefined') {
+      html += `<div style="margin-top:16px">
+        <div class="player-stocks-market-header">🏪 Player Stores</div>
+        <div style="margin-top:6px">${Stores.renderBrowseStores()}</div>
+      </div>`;
+    }
+
     container.innerHTML = html;
 
     // Now render bank cards into the injected div
@@ -2073,6 +2081,10 @@ const Companies = {
             if (ind === 'finance' && typeof Banking !== 'undefined') {
               html += Banking.renderBankSetup(cIdx, true);
             }
+            // Store for sub-stock
+            if (typeof Stores !== 'undefined') {
+              html += Stores.renderStoreSetup(s.symbol, ind);
+            }
           } else {
             // ── STOCK LIST ───────────────────────────────────────────
             c.stocks.forEach((s, sIdx) => {
@@ -2238,6 +2250,10 @@ const Companies = {
           // Bank (finance main company)
           if ((c.industry||'tech') === 'finance' && typeof Banking !== 'undefined') {
             html += Banking.renderBankSetup(cIdx);
+          }
+          // Store (any industry)
+          if (typeof Stores !== 'undefined') {
+            html += Stores.renderStoreSetup(c.ticker, c.industry || 'tech');
           }
           // Sell
           html += `<div class="company-sale-section" style="margin-bottom:8px">

@@ -150,6 +150,10 @@ const Settings = {
     const container = document.getElementById('settings-content');
     if (!container) return;
 
+    const playerIdStr = typeof Firebase !== 'undefined' && Firebase._playerId !== null
+      ? '#' + Firebase._playerId : '#???';
+    const isOwner = typeof Firebase !== 'undefined' && Firebase._playerId === 0;
+
     container.innerHTML = `
       <!-- Profile -->
       <div class="settings-section">
@@ -157,6 +161,16 @@ const Settings = {
         <div class="settings-row">
           <label>Username:</label>
           <input type="text" id="settings-name" maxlength="16" value="${this.profile.name}" onchange="Settings.setName(this.value)" placeholder="Player">
+        </div>
+        <div class="settings-row">
+          <label>Player ID:</label>
+          <span id="settings-player-id" class="settings-player-id">${playerIdStr}${isOwner ? ' 👑 Owner' : ''}</span>
+        </div>
+        <div class="settings-hint">Share your Player ID so others can gift you or find you.</div>
+        <div class="settings-row" style="margin-top:6px">
+          <label>Gift by #ID:</label>
+          <input type="number" id="gift-player-id-input" placeholder="e.g. 42" min="0" max="999999" style="width:90px">
+          <button class="settings-btn" style="margin-left:6px;padding:4px 10px" onclick="Firebase.giftByPlayerId(document.getElementById('gift-player-id-input').value)">🎁 Gift</button>
         </div>
         <div class="avatar-grid">
           ${this.avatars.map((a, i) =>
