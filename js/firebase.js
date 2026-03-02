@@ -63,6 +63,8 @@ const Firebase = {
 
   // Pending gifts
   _pendingGifts: {},
+  _giftBuffer: [],
+  _giftFlushTimer: null,
 
   // === INIT ===
   init() {
@@ -203,16 +205,32 @@ const Firebase = {
     if (typeof Cars !== 'undefined') Cars.init();
     if (typeof Stores !== 'undefined') Stores.init();
     if (typeof Events !== 'undefined') Events.init();
-    // Incoming gifts
+    // Incoming gifts — persisted in Firebase until received, batched for offline catch-up
     this.listenGifts(this.uid, (giftId, gift) => {
       if (this._pendingGifts[giftId]) return;
       this._pendingGifts[giftId] = true;
-      const name = this._escapeHtml(gift.fromName || 'Player');
-      const idStr = gift.fromId !== null && gift.fromId !== undefined ? ' (#' + gift.fromId + ')' : '';
-      const note = gift.note ? ' — "' + this._escapeHtml(gift.note) + '"' : '';
+      // Credit balance immediately
       if (typeof App !== 'undefined') App.addBalance(gift.amount || 0);
-      Toast.show('🎁 Gift from ' + name + idStr + note + ': +' + (typeof App !== 'undefined' ? App.formatMoney(gift.amount) : '$' + gift.amount), '#00e676', 6000);
       if (typeof App !== 'undefined') App.save();
+      // Buffer so multiple offline gifts arrive as one grouped toast
+      this._giftBuffer.push(gift);
+      clearTimeout(this._giftFlushTimer);
+      this._giftFlushTimer = setTimeout(() => {
+        const buf = this._giftBuffer.splice(0);
+        if (!buf.length) return;
+        if (buf.length === 1) {
+          const g = buf[0];
+          const name = this._escapeHtml(g.fromName || 'Player');
+          const idStr = g.fromId != null ? ' (#' + g.fromId + ')' : '';
+          const note = g.note ? ' \u2014 \u201c' + this._escapeHtml(g.note) + '\u201d' : '';
+          Toast.show('\uD83C\uDF81 Gift from ' + name + idStr + note + ': +' + App.formatMoney(g.amount), '#00e676', 6000);
+        } else {
+          const total = buf.reduce((s, g) => s + (g.amount || 0), 0);
+          const names = [...new Set(buf.map(g => g.fromName || 'Player'))].slice(0, 2).join(', ');
+          const extra = buf.length > 2 ? ' & ' + (buf.length - 2) + ' more' : '';
+          Toast.show('\uD83C\uDF81 ' + buf.length + ' gifts received! +' + App.formatMoney(total) + ' — from ' + names + extra, '#00e676', 8000);
+        }
+      }, 800);
     });
     // Coin transfers (P2P sends)
     this.listenCoinTransfers(this.uid, transfer => {
