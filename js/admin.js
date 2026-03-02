@@ -166,9 +166,16 @@ const Admin = {
       if (this.adminMode && this.isAdmin()) {
         // Already logged in — open panel
         this.open();
-      } else {
+        return;
+      }
+      // Only reveal the login modal if this UID is already in the granted admins list
+      // Everyone else gets nothing — the admin panel is invisible to regular players
+      const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+      const isGranted = myUid && this._adminsList[myUid];
+      if (isGranted) {
         this.showLoginModal();
       }
+      // Non-admins: silently do nothing (no modal, no hint)
     }
   },
 
@@ -178,6 +185,8 @@ const Admin = {
     if (document.getElementById('admin-login-modal')) return;
     const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
     const isGranted = myUid && this._adminsList[myUid];
+    // Block non-granted players from seeing the modal at all
+    if (!isGranted && !this._consoleUnlocked) return;
 
     const modal = document.createElement('div');
     modal.id = 'admin-login-modal';
@@ -265,6 +274,7 @@ const Admin = {
   },
 
   open() {
+    if (!this.isAdmin()) return; // never open for non-admins
     document.getElementById('admin-badge-toggle').textContent = this.badgeHidden ? 'Show Badge' : 'Hide Badge';
     this.setTab(this.activeTab);
     document.getElementById('admin-overlay').classList.add('open');
