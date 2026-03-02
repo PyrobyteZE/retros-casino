@@ -67,7 +67,7 @@ const Banking = {
 
   // === OWNER ACTIONS ===
 
-  enableBank(companyIdx) {
+  enableBank(companyIdx, forceAllow = false) {
     if (!Firebase || !Firebase.isOnline()) { alert('Must be online.'); return; }
     if ((App.rebirth || 0) < this.MIN_REBIRTH) { alert('Requires Rebirth ' + this.MIN_REBIRTH + '.'); return; }
     const myUid = Firebase.uid;
@@ -75,7 +75,7 @@ const Banking = {
 
     const c = typeof Companies !== 'undefined' ? Companies._companies[companyIdx] : null;
     if (!c) { alert('Company not found.'); return; }
-    if ((c.industry || 'tech') !== 'finance') { alert('Only Finance industry companies can enable banking.'); return; }
+    if (!forceAllow && (c.industry || 'tech') !== 'finance') { alert('Only Finance industry companies can enable banking.'); return; }
 
     // Unique bankId — no longer limited to one per company
     const bankId = 'bank_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
@@ -599,7 +599,7 @@ const Banking = {
         <label style="min-width:100px;font-size:12px">Max deposit/player:</label>
         <input type="number" id="bank-maxdeposit-${companyIdx}" placeholder="0 = unlimited" style="flex:1;font-size:13px;padding:5px">
       </div>
-      <button class="company-buy-btn" style="width:100%" onclick="Banking.enableBank(${companyIdx})">Open Bank</button>
+      <button class="company-buy-btn" style="width:100%" onclick="Banking.enableBank(${companyIdx}, ${forceShow})">Open Bank</button>
     </div>`;
 
     html += '</div>';
