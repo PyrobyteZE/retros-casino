@@ -101,7 +101,14 @@ const Stocks = {
     const isFollower  = typeof Firebase !== 'undefined' && Firebase.isOnline() && !Firebase._isStockAuthority;
 
     if (isFollower && !this._hasActiveTargets()) {
-      this._showOutOfSyncBanner(false);
+      // If the authority has gone stale (no price update in 50s), try to take over
+      const msSinceUpdate = Date.now() - (this._lastServerUpdate || 0);
+      if (msSinceUpdate > 50000) {
+        if (typeof Firebase !== 'undefined') Firebase._tryClaimStockAuthority();
+        this._showOutOfSyncBanner(true);
+      } else {
+        this._showOutOfSyncBanner(false);
+      }
       return;
     }
     if (!isAuthority && typeof Firebase !== 'undefined' && Firebase._hasConfig()) {
@@ -562,6 +569,7 @@ const Stocks = {
 
   applyServerPrices(prices) {
     if (!prices || prices.length !== this.stocks.length) return;
+    this._lastServerUpdate = Date.now();
     this.prices = prices.slice();
     for (let i = 0; i < this.stocks.length; i++) {
       this.priceHistory[i].push(this.prices[i]);
@@ -578,13 +586,26 @@ const Stocks = {
         banner = document.createElement('div');
         banner.id = 'stock-sync-banner';
         banner.className = 'out-of-sync-banner';
-        banner.textContent = 'Stock market out of sync — prices are local only';
+        banner.innerHTML = '\u26A0\uFE0F Stock prices out of sync &nbsp;<button onclick="Stocks.forceResync()" style="background:var(--accent);color:#000;border:none;border-radius:12px;padding:3px 12px;font-size:12px;font-weight:700;cursor:pointer">\u21BA Resync</button>';
         const container = document.querySelector('#screen-stocks .game-container');
         if (container) container.insertBefore(banner, container.firstChild);
       }
     } else if (banner) {
       banner.remove();
     }
+  },
+
+  forceResync() {
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
+    Firebase.db.ref('stockPrices/data').once('value').then(snap => {
+      const data = snap.val();
+      if (data && data.prices) {
+        this.applyServerPrices(data.prices);
+        Toast.show('\u2705 Prices resynced from server', '#27ae60', 3000);
+      }
+      // Also try to reclaim authority so we can start pushing
+      Firebase._tryClaimStockAuthority();
+    }).catch(() => Toast.show('Resync failed — check connection', '#ff5252', 3000));
   },
 
   startEvents() {

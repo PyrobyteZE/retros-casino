@@ -1050,8 +1050,8 @@ const Firebase = {
     const ref = this.db.ref('stockPrices/authority');
     ref.transaction(current => {
       const now = Date.now();
-      // Admin tabs always claim authority; others only if existing authority is stale (45s)
-      if (!current || current.sessionId === sessionId || (now - (current.timestamp || 0) > 45000) || isAdminTab) {
+      // Admin tabs always claim authority; others only if existing authority is stale (25s)
+      if (!current || current.sessionId === sessionId || (now - (current.timestamp || 0) > 25000) || isAdminTab) {
         return { sessionId, uid: this.uid, timestamp: now };
       }
       return; // abort — someone else has fresh authority
@@ -1088,8 +1088,18 @@ const Firebase = {
     // Track authority changes
     this.db.ref('stockPrices/authority').on('value', snap => {
       const data = snap.val();
+      const wasAuthority = this._isStockAuthority;
       if (data && data.sessionId === this._sessionId) {
         this._isStockAuthority = true;
+        // Just claimed authority — sync to latest Firebase prices before pushing anything
+        if (!wasAuthority) {
+          this.db.ref('stockPrices/data').once('value').then(priceSnap => {
+            const pd = priceSnap.val();
+            if (pd && pd.prices && typeof Stocks !== 'undefined') {
+              Stocks.applyServerPrices(pd.prices);
+            }
+          }).catch(() => {});
+        }
       } else {
         this._isStockAuthority = false;
       }
@@ -2709,6 +2719,16 @@ const Firebase = {
     if (!this.isOnline()) return;
     this.db.ref('newsPosts').on('value', snap => cb(snap.val() || {}),
       err => console.warn('listenNewsPosts denied:', err.code));
+  },
+
+  postNewsComment(ownerUid, postId, commentData) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('newsPosts/' + ownerUid + '/' + postId + '/comments').push(commentData);
+  },
+
+  updateNewsOrgLogo(ownerUid, entityKey, logo) {
+    if (!this.isOnline()) return Promise.reject('offline');
+    return this.db.ref('newsOrgs/' + ownerUid + '/' + entityKey + '/logo').set(logo);
   },
 
   // === STOCK OFFERS (company-to-company transfers) ===

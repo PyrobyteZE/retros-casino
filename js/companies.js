@@ -180,6 +180,7 @@ const Companies = {
   _appliedTransferIds: null,  // Set of already-applied transfer IDs
   _newsOrgs: {},              // { [ownerUid]: { enabled, companyTicker, reputation } }
   _newsPosts: {},             // { [ownerUid]: { [postId]: post } }
+  _expandedComments: new Set(), // set of 'ownerUid:postId' for expanded comment sections
   activeTab: 'browse',
   _expandedCo: null,          // cIdx of currently-expanded company card (null = all collapsed)
   _coTab: {},                 // { [cIdx]: 'stocks'|'props'|'upgrades'|'more' }
@@ -2118,8 +2119,9 @@ const Companies = {
               } else {
                 const rep = subOrg.reputation || 50;
                 html += `<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">Reputation: <strong style="color:${rep>=50?'var(--green)':'var(--red)'}">${Math.round(rep)}/100</strong></div>
-                  <textarea id="news-post-input-sub-${cIdx}-${drillSIdx}" maxlength="120" placeholder="Write a headline…" style="width:100%;height:60px;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);padding:8px;font-size:13px;resize:none;box-sizing:border-box"></textarea>
-                  <button class="company-found-btn" style="margin-top:6px;padding:8px 20px" onclick="Companies.postSubStockNews(${cIdx},${drillSIdx})">📢 Publish</button>`;
+                  <input id="news-headline-sub-${cIdx}-${drillSIdx}" maxlength="100" placeholder="Headline (required)" style="width:100%;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);padding:8px;font-size:14px;font-weight:600;box-sizing:border-box;margin-bottom:6px">
+                  <textarea id="news-body-sub-${cIdx}-${drillSIdx}" maxlength="300" placeholder="Body text (optional)" style="width:100%;height:58px;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);padding:8px;font-size:13px;resize:none;box-sizing:border-box"></textarea>
+                  <button class="company-found-btn" style="margin-top:6px;padding:8px 20px" onclick="Companies.postSubStockNews(${cIdx},${drillSIdx})">\u{1F4E2} Publish</button>`;
               }
               html += `</div>`;
             }
@@ -2288,14 +2290,15 @@ const Companies = {
           if ((c.industry||'tech') === 'entertainment') {
             const myOrg = this._getMyOrg(c.ticker);
             const orgEnabled = myOrg && myOrg.enabled;
-            html += `<div class="company-manage-section news-org-section" style="margin-bottom:8px"><h3>📰 News Organization</h3>`;
+            html += `<div class="company-manage-section news-org-section" style="margin-bottom:8px"><h3>\u{1F4F0} News Organization</h3>`;
             if (!orgEnabled) {
-              html += `<button class="add-stock-btn" style="color:var(--accent);border-color:var(--accent)" onclick="Companies.enableNewsOrg(${cIdx})">Enable News Org — Free</button>`;
+              html += `<button class="add-stock-btn" style="color:var(--accent);border-color:var(--accent)" onclick="Companies.enableNewsOrg(${cIdx})">Enable News Org \u2014 Free</button>`;
             } else {
               const rep = myOrg.reputation || 50;
               html += `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Reputation: <strong style="color:${rep>=50?'var(--green)':'var(--red)'}">${Math.round(rep)}/100</strong></div>
-                <textarea id="news-post-input-${cIdx}" maxlength="120" placeholder="Write a headline…" style="width:100%;height:60px;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);padding:8px;font-size:13px;resize:none;box-sizing:border-box"></textarea>
-                <button class="company-found-btn" style="margin-top:6px;padding:8px 20px" onclick="Companies.postNews(${cIdx})">📢 Publish</button>`;
+                <input id="news-headline-${cIdx}" maxlength="100" placeholder="Headline (required)" style="width:100%;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);padding:8px;font-size:14px;font-weight:600;box-sizing:border-box;margin-bottom:6px">
+                <textarea id="news-body-${cIdx}" maxlength="300" placeholder="Body text (optional, 300 chars)" style="width:100%;height:58px;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);padding:8px;font-size:13px;resize:none;box-sizing:border-box"></textarea>
+                <button class="company-found-btn" style="margin-top:6px;padding:8px 20px" onclick="Companies.postNews(${cIdx})">\u{1F4E2} Publish</button>`;
             }
             html += `</div>`;
           }
@@ -2608,25 +2611,31 @@ const Companies = {
     });
   },
 
+  _doPostNews(myUid, entityKey, headlineInputId, bodyInputId) {
+    const headlineEl = document.getElementById(headlineInputId);
+    if (!headlineEl) return;
+    const headline = headlineEl.value.trim().slice(0, 100);
+    if (!headline) { Toast.show('Enter a headline', '#ff5252'); return; }
+    const bodyEl = document.getElementById(bodyInputId);
+    const body = bodyEl ? bodyEl.value.trim().slice(0, 300) : '';
+    Firebase.postNewsArticle(myUid, {
+      headline, body, ts: Date.now(), upvotes: 0, downvotes: 0,
+      authorName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Player',
+      entityKey,
+    }).then(() => {
+      headlineEl.value = '';
+      if (bodyEl) bodyEl.value = '';
+      Toast.show('\u{1F4F0} Published!', '#27ae60', 3000);
+    });
+  },
+
   postNews(cIdx) {
     const c = this._companies[cIdx];
     if (!c) return;
     if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
-    const myUid = Firebase.uid;
     const myOrg = this._getMyOrg(c.ticker);
     if (!myOrg || !myOrg.enabled) { Toast.show('Enable News Org first', '#ff5252'); return; }
-    const input = document.getElementById('news-post-input-' + cIdx);
-    if (!input) return;
-    const text = input.value.trim().slice(0, 120);
-    if (!text) { Toast.show('Enter a headline', '#ff5252'); return; }
-    Firebase.postNewsArticle(myUid, {
-      text, ts: Date.now(), upvotes: 0, downvotes: 0,
-      authorName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Player',
-      entityKey: c.ticker,
-    }).then(() => {
-      input.value = '';
-      Toast.show('\u{1F4F0} Published: ' + text.slice(0, 40), '#27ae60', 3000);
-    });
+    this._doPostNews(Firebase.uid, c.ticker, 'news-headline-' + cIdx, 'news-body-' + cIdx);
   },
 
   postSubStockNews(cIdx, sIdx) {
@@ -2635,21 +2644,41 @@ const Companies = {
     const s = c.stocks[sIdx];
     if (!s) return;
     if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
-    const myUid = Firebase.uid;
     const myOrg = this._getMyOrg(s.symbol);
     if (!myOrg || !myOrg.enabled) { Toast.show('Enable News Org first', '#ff5252'); return; }
-    const input = document.getElementById('news-post-input-sub-' + cIdx + '-' + sIdx);
-    if (!input) return;
-    const text = input.value.trim().slice(0, 120);
-    if (!text) { Toast.show('Enter a headline', '#ff5252'); return; }
-    Firebase.postNewsArticle(myUid, {
-      text, ts: Date.now(), upvotes: 0, downvotes: 0,
-      authorName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Player',
-      entityKey: s.symbol,
-    }).then(() => {
-      input.value = '';
-      Toast.show('\u{1F4F0} Published: ' + text.slice(0, 40), '#27ae60', 3000);
+    this._doPostNews(Firebase.uid, s.symbol, 'news-headline-sub-' + cIdx + '-' + sIdx, 'news-body-sub-' + cIdx + '-' + sIdx);
+  },
+
+  setNewsOrgLogo(entityKey, logo) {
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
+    const myUid = Firebase.uid;
+    Firebase.updateNewsOrgLogo(myUid, entityKey, logo).then(() => {
+      if (this._newsOrgs[myUid] && this._newsOrgs[myUid][entityKey]) {
+        this._newsOrgs[myUid][entityKey].logo = logo;
+      }
+      this._triggerRender();
     });
+  },
+
+  toggleComments(ownerUid, postId) {
+    const key = ownerUid + ':' + postId;
+    if (this._expandedComments.has(key)) this._expandedComments.delete(key);
+    else this._expandedComments.add(key);
+    const container = document.getElementById('companies-content');
+    if (container) this._renderNewsTab(container);
+  },
+
+  addComment(ownerUid, postId) {
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
+    const inputId = 'news-comment-input-' + postId;
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const text = input.value.trim().slice(0, 200);
+    if (!text) return;
+    Firebase.postNewsComment(ownerUid, postId, {
+      text, ts: Date.now(),
+      authorName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Player',
+    }).then(() => { input.value = ''; });
   },
 
   voteNews(ownerUid, postId, dir) {
@@ -2723,24 +2752,63 @@ const Companies = {
     const _repBadge = rep => {
       const r = rep || 50;
       const color = r >= 75 ? '#f4b41b' : r >= 50 ? '#27ae60' : r >= 25 ? '#2196f3' : '#9e9e9e';
-      return `<span style="background:${color}22;color:${color};border:1px solid ${color}44;border-radius:10px;font-size:10px;font-weight:700;padding:2px 7px">★ ${r}</span>`;
+      return `<span style="background:${color}22;color:${color};border:1px solid ${color}44;border-radius:10px;font-size:10px;font-weight:700;padding:2px 7px">\u2605 ${r}</span>`;
     };
 
     const _postCard = (uid, postId, post, org, entityKey, showSource) => {
+      if (!post || typeof post !== 'object') return '';
+      const headline = post.headline || post.text || '';
+      const body = post.body || '';
+      // Skip posts with no content (garbage data from old format)
+      if (!headline && !body) return '';
       const net = (post.upvotes || 0) - (post.downvotes || 0);
       const netColor = net > 0 ? '#27ae60' : net < 0 ? '#c0392b' : 'var(--text-dim)';
+      const logo = org.logo || '\u{1F4F0}';
+      const commentKey = uid + ':' + postId;
+      const commentsExpanded = this._expandedComments.has(commentKey);
+      const comments = post.comments && typeof post.comments === 'object'
+        ? Object.entries(post.comments).sort((a, b) => (a[1].ts || 0) - (b[1].ts || 0))
+        : [];
+      const commentCount = comments.length;
+
+      let commentsHtml = '';
+      if (commentsExpanded) {
+        const commentItems = comments.map(([, c]) =>
+          `<div class="news-comment">
+            <span class="news-comment-author">${this._esc(c.authorName || 'Player')}</span>
+            <span class="news-comment-text">${this._esc(c.text || '')}</span>
+            <span class="news-comment-age">${_ageStr(c.ts)}</span>
+          </div>`
+        ).join('');
+        commentsHtml = `<div class="news-comments-section">
+          ${commentItems || '<div style="color:var(--text-dim);font-size:12px;padding:4px 0">No comments yet.</div>'}
+          <div class="news-comment-form">
+            <input id="news-comment-input-${postId}" class="news-comment-input" placeholder="Add a comment…" maxlength="200">
+            <button class="news-comment-submit" onclick="Companies.addComment('${uid}','${postId}')">Post</button>
+          </div>
+        </div>`;
+      }
+
       return `<div class="news-post-card">
-        ${showSource ? `<div class="news-post-source">\u{1F4E1} ${this._esc(entityKey)}</div>` : ''}
-        <div class="news-post-text">${this._esc(post.text)}</div>
-        <div class="news-post-meta">
-          <span style="color:var(--text-dim)">${_ageStr(post.ts)}</span>
-          <span style="color:var(--text-dim)">by ${this._esc(post.authorName || entityKey)}</span>
-          <div style="display:flex;gap:6px;align-items:center;margin-left:auto">
+        <div class="news-post-masthead">
+          <span class="news-post-logo">${this._esc(logo)}</span>
+          ${showSource ? `<span class="news-post-orgname">${this._esc(entityKey)}</span>` : ''}
+          <span class="news-post-byline">by ${this._esc(post.authorName || 'Unknown')}</span>
+          <span class="news-post-age">${_ageStr(post.ts)}</span>
+        </div>
+        <div class="news-post-headline">${this._esc(headline)}</div>
+        ${body ? `<div class="news-post-body">${this._esc(body)}</div>` : ''}
+        <div class="news-post-footer">
+          <div class="news-vote-row">
             <button class="news-vote-btn news-vote-up" onclick="Companies.voteNews('${uid}','${postId}','up')">\u{1F44D} ${post.upvotes || 0}</button>
             <button class="news-vote-btn news-vote-down" onclick="Companies.voteNews('${uid}','${postId}','down')">\u{1F44E} ${post.downvotes || 0}</button>
-            <span style="font-size:11px;font-weight:700;color:${netColor};min-width:28px;text-align:right">${net > 0 ? '+' : ''}${net}</span>
+            <span style="font-size:11px;font-weight:700;color:${netColor}">${net > 0 ? '+' : ''}${net}</span>
           </div>
+          <button class="news-comments-btn" onclick="Companies.toggleComments('${uid}','${postId}')">
+            \u{1F4AC} ${commentCount > 0 ? commentCount : ''} Comments ${commentsExpanded ? '\u25B2' : '\u25BC'}
+          </button>
         </div>
+        ${commentsHtml}
       </div>`;
     };
 
@@ -2752,11 +2820,14 @@ const Companies = {
       </button>`;
     activeOrgs.forEach(({ uid, entityKey, org }) => {
       const key = uid + ':' + entityKey;
-      const postCount = Object.keys(this._newsPosts[uid] || {}).length;
+      const orgPosts = this._newsPosts[uid] || {};
+      const postCount = Object.values(orgPosts).filter(p => !p.entityKey || p.entityKey === entityKey).length;
       const rep = org.reputation || 50;
+      const logo = org.logo || '\u{1F4F0}';
       channelBar += `<button class="news-channel-btn${activeKey === key ? ' active' : ''}" onclick="Companies.setNewsOrg('${key}')">
+        <span>${this._esc(logo)}</span>
         <span style="font-weight:700">${this._esc(entityKey)}</span>
-        <span class="news-channel-rep">★ ${rep}</span>
+        <span class="news-channel-rep">\u2605 ${rep}</span>
         ${postCount > 0 ? `<span class="news-channel-count">${postCount}</span>` : ''}
       </button>`;
     });
@@ -2765,24 +2836,21 @@ const Companies = {
     let feedHtml = '';
 
     if (activeKey === 'all') {
-      // Merged feed — all posts newest first
       const allPosts = [];
       activeOrgs.forEach(({ uid, entityKey, org }) => {
         const posts = this._newsPosts[uid] || {};
         Object.entries(posts)
-          .filter(([, p]) => !p.entityKey || p.entityKey === entityKey)
+          .filter(([, p]) => p && typeof p === 'object' && (!p.entityKey || p.entityKey === entityKey))
           .forEach(([postId, post]) => allPosts.push({ uid, entityKey, org, postId, post }));
       });
       allPosts.sort((a, b) => (b.post.ts || 0) - (a.post.ts || 0));
-      if (allPosts.length === 0) {
-        feedHtml = `<div style="text-align:center;color:var(--text-dim);padding:32px 16px">No posts yet.</div>`;
-      } else {
-        feedHtml = allPosts.map(({ uid, entityKey, org, postId, post }) =>
-          _postCard(uid, postId, post, org, entityKey, true)
-        ).join('');
-      }
+      const cards = allPosts.map(({ uid, entityKey, org, postId, post }) =>
+        _postCard(uid, postId, post, org, entityKey, true)
+      ).filter(Boolean);
+      feedHtml = cards.length > 0
+        ? cards.join('')
+        : `<div style="text-align:center;color:var(--text-dim);padding:32px 16px">No posts yet.</div>`;
     } else {
-      // Single org channel
       const [orgUid, orgKey] = activeKey.split(':');
       const match = activeOrgs.find(o => o.uid === orgUid && o.entityKey === orgKey);
       if (!match) {
@@ -2791,14 +2859,24 @@ const Companies = {
         const { uid, entityKey, org } = match;
         const rep = org.reputation || 50;
         const repColor = rep >= 75 ? '#f4b41b' : rep >= 50 ? '#27ae60' : rep >= 25 ? '#2196f3' : '#9e9e9e';
+        const logo = org.logo || '\u{1F4F0}';
         const posts = this._newsPosts[uid] || {};
         const postList = Object.entries(posts)
-          .filter(([, p]) => !p.entityKey || p.entityKey === entityKey)
+          .filter(([, p]) => p && typeof p === 'object' && (!p.entityKey || p.entityKey === entityKey))
           .sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+
+        const LOGO_EMOJIS = ['\u{1F4F0}','\u{1F5DE}','\u{1F4E1}','\u{1F3A4}','\u{1F4FA}','\u{1F4FB}','\u{1F3A5}','\u{1F4A1}','\u{1F525}','\u2B50','\u{1F680}','\u{1F4B8}'];
+        const isMyOrg = typeof Firebase !== 'undefined' && Firebase.uid === uid;
+        const logoPickerHtml = isMyOrg
+          ? `<div class="news-logo-picker">
+              <span style="font-size:11px;color:var(--text-dim)">Logo:</span>
+              ${LOGO_EMOJIS.map(e => `<button class="news-logo-opt${e===logo?' selected':''}" onclick="Companies.setNewsOrgLogo('${entityKey}','${e}')">${e}</button>`).join('')}
+            </div>`
+          : '';
 
         feedHtml += `<div class="news-org-header" style="border-color:${repColor}">
           <div style="display:flex;align-items:center;gap:12px">
-            <div style="font-size:36px">\u{1F4E1}</div>
+            <div style="font-size:40px;line-height:1">${this._esc(logo)}</div>
             <div>
               <div style="font-size:20px;font-weight:700;color:${repColor}">${this._esc(entityKey)}</div>
               <div style="font-size:12px;color:var(--text-dim)">by ${this._esc(org.ownerName || 'Unknown')}</div>
@@ -2808,15 +2886,13 @@ const Companies = {
               <div style="font-size:11px;color:var(--text-dim);margin-top:4px">${postList.length} post${postList.length !== 1 ? 's' : ''}</div>
             </div>
           </div>
+          ${logoPickerHtml}
         </div>`;
 
-        if (postList.length === 0) {
-          feedHtml += `<div style="text-align:center;color:var(--text-dim);padding:24px">No posts from this org yet.</div>`;
-        } else {
-          feedHtml += postList.map(([postId, post]) =>
-            _postCard(uid, postId, post, org, entityKey, false)
-          ).join('');
-        }
+        const cards = postList.map(([postId, post]) => _postCard(uid, postId, post, org, entityKey, false)).filter(Boolean);
+        feedHtml += cards.length > 0
+          ? cards.join('')
+          : `<div style="text-align:center;color:var(--text-dim);padding:24px">No posts from this org yet.</div>`;
       }
     }
 
