@@ -1416,14 +1416,13 @@ const Crafting = {
     const cds = co.contentCooldowns || {};
     const now = Date.now();
 
-    const TYPES = {
-      music: { prop:'ent_1', label:'🎵 Music Single', cost:50_000,   reward:150_000,   stockPct:0.01, cd:15*60_000,   cdLabel:'15m', itemIcon:'🎵', itemCategory:'Music Single', itemRarity:'uncommon' },
-      movie: { prop:'ent_2', label:'🎬 Movie',        cost:250_000,  reward:750_000,   stockPct:0.03, cd:60*60_000,   cdLabel:'1h',  itemIcon:'🎬', itemCategory:'Movie',        itemRarity:'rare' },
-      tv:    { prop:'ent_3', label:'📺 TV Show',       cost:600_000,  reward:2_000_000, stockPct:0.05, cd:120*60_000,  cdLabel:'2h',  itemIcon:'📺', itemCategory:'TV Show',      itemRarity:'legendary' },
-    };
+    const LABELS = { music:'🎵 Music Single', movie:'🎬 Movie', tv:'📺 TV Show' };
 
-    let html = `<div class="craft-tab-content"><div class="craft-tab-header"><div class="craft-tab-title">🎭 Produce Content</div></div>`;
-    for (const [type, cfg] of Object.entries(TYPES)) {
+    let html = `<div class="craft-tab-content"><div class="craft-tab-header"><div class="craft-tab-title">🎭 Produce Content</div>
+      <div style="font-size:11px;color:var(--text-dim)">Producing always adds the item to your bag — paint cover art &amp; sell from inventory!</div>
+    </div>`;
+    for (const [type, cfg] of Object.entries(this._CONTENT_TYPES)) {
+      cfg.label = LABELS[type] || type;
       const hasProp = props.includes(cfg.prop);
       const lastProd = cds[type] || 0;
       const cdLeft = Math.max(0, cfg.cd - (now - lastProd));
@@ -1446,44 +1445,79 @@ const Crafting = {
     return html;
   },
 
-  produceContent(cIdx, type) {
-    const co = typeof Companies !== 'undefined' ? Companies._companies[cIdx] : null;
-    if (!co) return;
-    const TYPES = {
-      music: { prop:'ent_1', cost:50_000,   reward:150_000,   stockPct:0.01, cd:15*60_000 },
-      movie: { prop:'ent_2', cost:250_000,  reward:750_000,   stockPct:0.03, cd:60*60_000 },
-      tv:    { prop:'ent_3', cost:600_000,  reward:2_000_000, stockPct:0.05, cd:120*60_000 },
-    };
-    const cfg = TYPES[type]; if (!cfg) return;
-    if (!(co.properties || []).includes(cfg.prop)) return;
-    const cds = co.contentCooldowns || {};
-    if (Date.now() - (cds[type] || 0) < cfg.cd) return;
-    const isGod = typeof Admin !== 'undefined' && Admin.godMode;
-    if (!isGod && App.balance < cfg.cost) { this._toast('Not enough funds'); return; }
-    if (!isGod) App.addBalance(-cfg.cost);
+  _CONTENT_TYPES: {
+    music: { prop:'ent_1', cost:50_000,   reward:150_000,   stockPct:0.01, cd:15*60_000,   cdLabel:'15m', itemIcon:'🎵', itemCategory:'Music Single', itemRarity:'uncommon'  },
+    movie: { prop:'ent_2', cost:250_000,  reward:750_000,   stockPct:0.03, cd:60*60_000,   cdLabel:'1h',  itemIcon:'🎬', itemCategory:'Movie',        itemRarity:'rare'       },
+    tv:    { prop:'ent_3', cost:600_000,  reward:2_000_000, stockPct:0.05, cd:120*60_000,  cdLabel:'2h',  itemIcon:'📺', itemCategory:'TV Show',       itemRarity:'legendary'  },
+  },
 
-    // Bump own stock
+  _buildContentItem(co, type, title) {
+    const cfg = this._CONTENT_TYPES[type]; if (!cfg) return null;
+    const seed = Date.now();
+    const rng = this._seededRng(seed);
+    const statPool = ['luckBoost', 'gamblingBonus', 'earningsMult'];
+    const rarity = cfg.itemRarity;
+    const statCount = rarity === 'uncommon' ? 2 : 3;
+    const rebirths = typeof App !== 'undefined' ? (App.rebirth || 0) : 0;
+    const rebirthBoost = 1 + Math.min(rebirths * 0.03, 2.0);
+    const ranges = { uncommon:[0.03,0.10*rebirthBoost], rare:[0.05,0.15*rebirthBoost], legendary:[0.10,0.25*rebirthBoost] };
+    const [minV, maxV] = ranges[rarity] || [0.03, 0.10];
+    const pool = [...statPool];
+    const stats = [];
+    for (let i = 0; i < statCount && pool.length > 0; i++) {
+      const statType = pool.splice(Math.floor(rng() * pool.length), 1)[0];
+      const value = Math.round((minV + rng() * (maxV - minV)) * 100) / 100;
+      stats.push({ statType, value, label: this.STAT_LABELS[statType] || statType });
+    }
+    return {
+      id: 'item_' + seed.toString(36) + '_' + Math.floor(rng() * 9999).toString(36),
+      name: title || (co.name + ' — ' + cfg.itemCategory),
+      category: cfg.itemCategory, icon: cfg.itemIcon,
+      pixels: '0'.repeat(256), industry: 'entertainment', rarity, stats,
+      crafterUid: typeof Firebase !== 'undefined' ? (Firebase.uid || 'local') : 'local',
+      crafterName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'You',
+      createdAt: seed,
+    };
+  },
+
+  _applyContentEffects(co, cfg, type) {
     const sym = co.stocks && co.stocks[co.mainIdx || 0] ? co.stocks[co.mainIdx || 0].symbol : null;
     if (sym && typeof Companies !== 'undefined' && Companies._allPlayerStocks[sym]) {
       Companies._allPlayerStocks[sym].price *= (1 + cfg.stockPct);
-      if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
-        Firebase.pushTradeInfluence(sym, 1, cfg.stockPct);
-      }
+      if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushTradeInfluence(sym, 1, cfg.stockPct);
     }
-
     App.addBalance(cfg.reward);
-
     if (!co.contentCooldowns) co.contentCooldowns = {};
     co.contentCooldowns[type] = Date.now();
-
     if ((type === 'movie' || type === 'tv') && typeof Firebase !== 'undefined' && Firebase.isOnline()) {
       const labels = { movie:'🎬 New movie release!', tv:'📺 Hit TV show premieres!' };
       Firebase.pushStockNews(labels[type] + ' ' + co.name + ' stock is climbing.', true);
     }
-
     if (typeof Companies !== 'undefined') { Companies._saveLocal(); Companies._pushToFirebase(); }
+  },
+
+  produceContent(cIdx, type) {
+    const co = typeof Companies !== 'undefined' ? Companies._companies[cIdx] : null;
+    if (!co) return;
+    const cfg = this._CONTENT_TYPES[type]; if (!cfg) return;
+    if (!(co.properties || []).includes(cfg.prop)) return;
+    if (Date.now() - ((co.contentCooldowns || {})[type] || 0) < cfg.cd) return;
+    const isGod = typeof Admin !== 'undefined' && Admin.godMode;
+    if (!isGod && App.balance < cfg.cost) { this._toast('Not enough funds'); return; }
+    if (!isGod) App.addBalance(-cfg.cost);
+
+    this._applyContentEffects(co, cfg, type);
+
+    // Always create an item — player can paint cover art and sell it from bag
+    const item = this._buildContentItem(co, type, null);
+    if (item) {
+      this._inventory.push(item);
+      this._toast('✅ +' + App.formatMoney(cfg.reward) + ' · ' + cfg.itemIcon + ' ' + item.name + ' added to bag — paint & sell from inventory!');
+    } else {
+      this._toast('✅ Content produced! +' + App.formatMoney(cfg.reward));
+    }
+
     App.save();
-    this._toast('✅ Content produced! +' + App.formatMoney(cfg.reward));
     this._triggerRender();
   },
 
@@ -1541,69 +1575,17 @@ const Crafting = {
     if (!price || price <= 0) { this._toast('Enter a listing price'); return; }
     document.getElementById('content-listing-modal')?.remove();
 
-    const TYPES = {
-      music: { prop:'ent_1', cost:50_000,   reward:150_000,   stockPct:0.01, cd:15*60_000,  itemIcon:'🎵', itemCategory:'Music Single', itemRarity:'uncommon'  },
-      movie: { prop:'ent_2', cost:250_000,  reward:750_000,   stockPct:0.03, cd:60*60_000,  itemIcon:'🎬', itemCategory:'Movie',        itemRarity:'rare'       },
-      tv:    { prop:'ent_3', cost:600_000,  reward:2_000_000, stockPct:0.05, cd:120*60_000, itemIcon:'📺', itemCategory:'TV Show',       itemRarity:'legendary'  },
-    };
-    const cfg = TYPES[type]; if (!cfg) return;
+    const cfg = this._CONTENT_TYPES[type]; if (!cfg) return;
     if (!(co.properties || []).includes(cfg.prop)) return;
-    const cds = co.contentCooldowns || {};
-    if (Date.now() - (cds[type] || 0) < cfg.cd) return;
+    if (Date.now() - ((co.contentCooldowns || {})[type] || 0) < cfg.cd) return;
     const isGod = typeof Admin !== 'undefined' && Admin.godMode;
     if (!isGod && App.balance < cfg.cost) { this._toast('Not enough funds'); return; }
     if (!isGod) App.addBalance(-cfg.cost);
 
-    // Bump stock
-    const sym = co.stocks && co.stocks[co.mainIdx || 0] ? co.stocks[co.mainIdx || 0].symbol : null;
-    if (sym && typeof Companies !== 'undefined' && Companies._allPlayerStocks[sym]) {
-      Companies._allPlayerStocks[sym].price *= (1 + cfg.stockPct);
-      if (typeof Firebase !== 'undefined' && Firebase.isOnline()) Firebase.pushTradeInfluence(sym, 1, cfg.stockPct);
-    }
-    App.addBalance(cfg.reward);
-    if (!co.contentCooldowns) co.contentCooldowns = {};
-    co.contentCooldowns[type] = Date.now();
-    if ((type === 'movie' || type === 'tv') && typeof Firebase !== 'undefined' && Firebase.isOnline()) {
-      const labels = { movie:'🎬 New movie release!', tv:'📺 Hit TV show premieres!' };
-      Firebase.pushStockNews(labels[type] + ' ' + co.name + ' stock is climbing.', true);
-    }
+    this._applyContentEffects(co, cfg, type);
 
-    // Roll stats for the item
-    const seed = Date.now();
-    const rng = this._seededRng(seed);
-    const statPool = ['luckBoost', 'gamblingBonus', 'earningsMult'];
-    const rarity = cfg.itemRarity;
-    const statCount = rarity === 'uncommon' ? 2 : 3;
-    const rebirths = typeof App !== 'undefined' ? (App.rebirth || 0) : 0;
-    const rebirthBoost = 1 + Math.min(rebirths * 0.03, 2.0);
-    const ranges = {
-      uncommon:  [0.03, 0.10 * rebirthBoost],
-      rare:      [0.05, 0.15 * rebirthBoost],
-      legendary: [0.10, 0.25 * rebirthBoost],
-    };
-    const [minV, maxV] = ranges[rarity] || [0.03, 0.10];
-    const pool = [...statPool];
-    const stats = [];
-    for (let i = 0; i < statCount && pool.length > 0; i++) {
-      const statType = pool.splice(Math.floor(rng() * pool.length), 1)[0];
-      const value = Math.round((minV + rng() * (maxV - minV)) * 100) / 100;
-      stats.push({ statType, value, label: this.STAT_LABELS[statType] || statType });
-    }
-
-    const itemId = 'item_' + seed.toString(36) + '_' + Math.floor(rng() * 9999).toString(36);
-    const item = {
-      id: itemId,
-      name,
-      category: cfg.itemCategory,
-      icon: cfg.itemIcon,
-      pixels: '0'.repeat(256),
-      industry: 'entertainment',
-      rarity,
-      stats,
-      crafterUid: typeof Firebase !== 'undefined' ? (Firebase.uid || 'local') : 'local',
-      crafterName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'You',
-      createdAt: seed,
-    };
+    const item = this._buildContentItem(co, type, name);
+    if (!item) return;
     this._inventory.push(item);
     if (typeof Companies !== 'undefined') { Companies._saveLocal(); Companies._pushToFirebase(); }
     App.save();
