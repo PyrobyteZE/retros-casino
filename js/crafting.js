@@ -429,6 +429,7 @@ const Crafting = {
     const ppHeader = modal.querySelector('.pp-header');
     if (ppHeader) ppHeader.textContent = '🐾 Paint Your ' + rarity[0].toUpperCase() + rarity.slice(1) + ' Pet';
     this._buildPpGrid();
+    this._buildPpPalette();
   },
 
   savePixels() {
