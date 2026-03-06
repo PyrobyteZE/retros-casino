@@ -75,6 +75,7 @@ const Crafting = {
   _ppTool: 'brush',     // 'brush' | 'fill'
   _ppPainting: false,
   _ppItemDraft: null,   // item being crafted (waiting for paint), or 'template:[id]'
+  _ppCustomPalette: null, // mutable copy of PALETTE for pet painting (null = use default)
 
   // Craft setup modal draft
   _craftSetupDraft: null, // { name, isTemplate, price, mintLimit, cIdx, industry }
@@ -394,6 +395,7 @@ const Crafting = {
     this._ppPixels = item.pixels || '0'.repeat(256);
     this._ppColor = 1;
     this._ppTool = 'brush';
+    this._ppCustomPalette = null;
 
     const modal = document.getElementById('pixel-painter-modal');
     if (!modal) return;
@@ -411,6 +413,7 @@ const Crafting = {
     }
     this._ppItemDraft = null;
     this._ppPixels = null;
+    this._ppCustomPalette = null;
   },
 
   openPixelPainterForPet(rarity) {
@@ -418,6 +421,7 @@ const Crafting = {
     this._ppPixels = '0'.repeat(256);
     this._ppColor = 1;
     this._ppTool = 'brush';
+    this._ppCustomPalette = [...this.PALETTE]; // mutable copy for custom pet colors
     const modal = document.getElementById('pixel-painter-modal');
     if (!modal) return;
     modal.classList.remove('hidden');
@@ -433,10 +437,11 @@ const Crafting = {
     // Pet creation path
     if (this._ppItemDraft === 'pet_draft') {
       const pixels = this._ppPixels;
+      const customPalette = this._ppCustomPalette ? [...this._ppCustomPalette] : null;
       this.closePixelPainter();
       const ppHeader = document.getElementById('pixel-painter-modal')?.querySelector('.pp-header');
       if (ppHeader) ppHeader.textContent = '🎨 Paint Your Item';
-      if (typeof Pets !== 'undefined') Pets._showNamePetModal(pixels);
+      if (typeof Pets !== 'undefined') Pets._showNamePetModal(pixels, customPalette);
       return;
     }
 
@@ -496,14 +501,15 @@ const Crafting = {
   _buildPpGrid() {
     const grid = document.getElementById('pp-grid');
     if (!grid) return;
+    const activePalette = this._ppCustomPalette || this.PALETTE;
     grid.innerHTML = '';
     for (let i = 0; i < 256; i++) {
       const cell = document.createElement('div');
       cell.className = 'pp-cell';
       cell.dataset.idx = i;
       const colorIdx = this._ppCharToInt(this._ppPixels[i] || '0');
-      cell.style.background = this.PALETTE[colorIdx] || 'transparent';
-      if (!this.PALETTE[colorIdx]) cell.classList.add('pp-cell-transparent');
+      cell.style.background = activePalette[colorIdx] || 'transparent';
+      if (!activePalette[colorIdx]) cell.classList.add('pp-cell-transparent');
 
       cell.addEventListener('mousedown', e => { e.preventDefault(); this._ppPainting = true; this._ppPaintCell(i); });
       cell.addEventListener('mouseover', e => { if (this._ppPainting) this._ppPaintCell(i); });
@@ -529,10 +535,11 @@ const Crafting = {
     const chars = this._ppPixels.split('');
     chars[idx] = this.PALETTE_CHARS[this._ppColor];
     this._ppPixels = chars.join('');
+    const activePalette = this._ppCustomPalette || this.PALETTE;
     const cell = document.querySelector(`#pp-grid .pp-cell[data-idx="${idx}"]`);
     if (cell) {
-      cell.style.background = this.PALETTE[this._ppColor] || 'transparent';
-      cell.classList.toggle('pp-cell-transparent', !this.PALETTE[this._ppColor]);
+      cell.style.background = activePalette[this._ppColor] || 'transparent';
+      cell.classList.toggle('pp-cell-transparent', !activePalette[this._ppColor]);
     }
   },
 
@@ -561,7 +568,8 @@ const Crafting = {
     const palette = document.getElementById('pp-palette');
     if (!palette) return;
     palette.innerHTML = '';
-    this.PALETTE.forEach((color, i) => {
+    const activePalette = this._ppCustomPalette || this.PALETTE;
+    activePalette.forEach((color, i) => {
       const swatch = document.createElement('div');
       swatch.className = 'pp-swatch' + (i === this._ppColor ? ' pp-swatch-active' : '');
       swatch.style.background = color || 'transparent';
@@ -570,9 +578,35 @@ const Crafting = {
       swatch.addEventListener('click', () => {
         this._ppColor = i;
         palette.querySelectorAll('.pp-swatch').forEach((s, j) => s.classList.toggle('pp-swatch-active', j === i));
+        // Sync color picker to selected swatch
+        const picker = document.getElementById('pp-custom-color');
+        if (picker && color) picker.value = color;
       });
       palette.appendChild(swatch);
     });
+    // Wire up color picker — only active when painting pets (custom palette)
+    const picker = document.getElementById('pp-custom-color');
+    const pickerRow = picker?.closest('.pp-color-picker-row');
+    if (picker) {
+      if (pickerRow) pickerRow.style.display = this._ppCustomPalette ? 'flex' : 'none';
+      picker.value = activePalette[this._ppColor] || '#ffffff';
+      picker.oninput = (e) => {
+        if (!this._ppCustomPalette) return;
+        const newColor = e.target.value;
+        this._ppCustomPalette[this._ppColor] = newColor;
+        // Update active swatch visual
+        const swatches = palette.querySelectorAll('.pp-swatch');
+        if (swatches[this._ppColor]) {
+          swatches[this._ppColor].style.background = newColor;
+          swatches[this._ppColor].title = newColor;
+        }
+        // Update all grid cells using this palette index
+        document.querySelectorAll('#pp-grid .pp-cell').forEach(cell => {
+          const cidx = this._ppCharToInt(this._ppPixels[parseInt(cell.dataset.idx)] || '0');
+          if (cidx === this._ppColor) cell.style.background = newColor;
+        });
+      };
+    }
   },
 
   _ppCharToInt(c) {
@@ -581,13 +615,14 @@ const Crafting = {
   },
 
   // Render a 16×16 pixel art as a small canvas-like element
-  renderPixelArt(pixels, size = 32) {
+  renderPixelArt(pixels, size = 32, customPalette = null) {
     if (!pixels || pixels.length < 256) pixels = '0'.repeat(256);
+    const activePalette = customPalette || this.PALETTE;
     const cellSize = Math.max(1, Math.floor(size / 16));
     let html = `<div class="pixel-art-preview" style="width:${cellSize*16}px;height:${cellSize*16}px;display:grid;grid-template-columns:repeat(16,${cellSize}px);grid-template-rows:repeat(16,${cellSize}px);image-rendering:pixelated;gap:0">`;
     for (let i = 0; i < 256; i++) {
       const colorIdx = this._ppCharToInt(pixels[i] || '0');
-      const color = this.PALETTE[colorIdx] || 'transparent';
+      const color = activePalette[colorIdx] || 'transparent';
       html += `<div style="width:${cellSize}px;height:${cellSize}px;background:${color}"></div>`;
     }
     html += `</div>`;

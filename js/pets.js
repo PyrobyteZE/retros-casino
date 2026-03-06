@@ -930,7 +930,7 @@ const Pets = {
   CUSTOM_PET_RARITY_COLORS: { common: '#9badb7', uncommon: '#99e550', rare: '#639bff', legendary: '#f4b41b' },
 
   initCustomPets() {
-    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+    if (typeof Firebase !== 'undefined') {
       Firebase.listenPetListings(data => {
         this._petListings = data || {};
         if (this.activeTab === 'custom') this.render();
@@ -999,8 +999,11 @@ const Pets = {
     if (typeof Crafting !== 'undefined') Crafting.openPixelPainterForPet(rarity);
   },
 
-  _showNamePetModal(pixels) {
+  _showNamePetModal(pixels, customPalette) {
     if (!this._petDraft) return;
+    // Store pixels + customPalette in draft so _finalizePet can read them
+    this._petDraft.pixels = pixels;
+    this._petDraft.customPalette = customPalette || null;
     const { rarity } = this._petDraft;
     const rc = this.CUSTOM_PET_RARITY_COLORS[rarity] || '#aaa';
     const existing = document.getElementById('pet-name-modal');
@@ -1011,7 +1014,7 @@ const Pets = {
     modal.innerHTML = `
       <div class="house-modal-box" style="max-width:300px;text-align:center">
         <div class="house-modal-title" style="color:${rc}">🐾 Name Your ${rarity[0].toUpperCase() + rarity.slice(1)} Pet</div>
-        <div style="margin:10px auto;display:inline-block">${typeof Crafting !== 'undefined' ? Crafting.renderPixelArt(pixels, 64) : ''}</div>
+        <div style="margin:10px auto;display:inline-block">${typeof Crafting !== 'undefined' ? Crafting.renderPixelArt(pixels, 64, customPalette) : ''}</div>
         <div class="inv-item-stats" style="justify-content:center;margin:8px 0">
           ${this._petDraft.stats.map(s => {
             const sign = s.value >= 0 ? '+' : '';
@@ -1023,7 +1026,7 @@ const Pets = {
         </div>
         <input id="pet-name-input" type="text" maxlength="20" placeholder="Enter a name..." class="sh-input house-modal-input">
         <div class="house-modal-actions">
-          <button class="house-modal-btn" onclick="Pets._finalizePet('${pixels.replace(/'/g, '')}')">Create</button>
+          <button class="house-modal-btn" onclick="Pets._finalizePet()">Create</button>
           <button class="house-modal-btn house-modal-cancel" onclick="document.getElementById('pet-name-modal').remove();Pets._petDraft=null">Cancel</button>
         </div>
       </div>`;
@@ -1031,7 +1034,7 @@ const Pets = {
     setTimeout(() => document.getElementById('pet-name-input')?.focus(), 50);
   },
 
-  _finalizePet(pixels) {
+  _finalizePet() {
     if (!this._petDraft) return;
     const nameEl = document.getElementById('pet-name-input');
     const name = (nameEl ? nameEl.value.trim() : '') || ('Custom ' + this._petDraft.rarity);
@@ -1039,12 +1042,13 @@ const Pets = {
     const pet = {
       id: 'cpet_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
       name,
-      pixels,
+      pixels: this._petDraft.pixels || '0'.repeat(256),
+      customPalette: this._petDraft.customPalette || null,
       rarity: this._petDraft.rarity,
       stats: this._petDraft.stats,
       level: 1,
       crafterUid: typeof Firebase !== 'undefined' ? Firebase.uid : 'local',
-      crafterName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'You',
+      crafterName: typeof Settings !== 'undefined' ? Settings.profile.name : 'You',
       createdAt: Date.now(),
     };
     this._customPets.push(pet);
@@ -1127,7 +1131,7 @@ const Pets = {
       const ep = equippedId ? this._customPets.find(p => p.id === equippedId) : null;
       if (ep) {
         html += `<div class="custom-pet-slot custom-pet-slot-filled" style="border-color:${rc[ep.rarity]}">
-          ${typeof Crafting !== 'undefined' ? Crafting.renderPixelArt(ep.pixels, 40) : ''}
+          ${typeof Crafting !== 'undefined' ? Crafting.renderPixelArt(ep.pixels, 40, ep.customPalette) : ''}
           <span class="cps-name" style="color:${rc[ep.rarity]}">${this._esc(ep.name)}</span>
           <button class="inv-sell-btn" style="font-size:10px" onclick="Pets.unequipCustomSlot('${slotKey}')">✕</button>
         </div>`;
@@ -1156,7 +1160,7 @@ const Pets = {
         const lvlCost = lvlCostBase * Math.pow(2, (pet.level || 1) - 1);
         html += `<div class="inv-item-card${isEquipped ? ' inv-item-equipped' : ''}" style="border-color:${rc[pet.rarity]}">
           <div class="inv-item-top">
-            <div class="inv-item-art">${typeof Crafting !== 'undefined' ? Crafting.renderPixelArt(pet.pixels, 48) : ''}</div>
+            <div class="inv-item-art">${typeof Crafting !== 'undefined' ? Crafting.renderPixelArt(pet.pixels, 48, pet.customPalette) : ''}</div>
             <div class="inv-item-info">
               <div class="inv-item-name">${this._esc(pet.name)}</div>
               <div class="inv-item-rarity" style="color:${rc[pet.rarity]}">${pet.rarity} pet · Lv ${pet.level || 1}</div>
@@ -1207,7 +1211,7 @@ const Pets = {
         const canAfford = App.balance >= listing.price || (typeof Admin !== 'undefined' && Admin.godMode);
         html += `<div class="inv-item-card" style="border-color:${rc[pet.rarity] || '#aaa'}">
           <div class="inv-item-top">
-            <div class="inv-item-art">${typeof Crafting !== 'undefined' ? Crafting.renderPixelArt(pet.pixels, 48) : ''}</div>
+            <div class="inv-item-art">${typeof Crafting !== 'undefined' ? Crafting.renderPixelArt(pet.pixels, 48, pet.customPalette) : ''}</div>
             <div class="inv-item-info">
               <div class="inv-item-name">${this._esc(pet.name)}</div>
               <div class="inv-item-rarity" style="color:${rc[pet.rarity] || '#aaa'}">${pet.rarity} pet · Lv ${pet.level || 1}</div>

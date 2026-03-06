@@ -291,7 +291,7 @@ const App = {
         { id: 'slots', icon: '🎰', label: 'Slots' },
         { id: 'crash', icon: '🚀', label: 'Crash' },
         { id: 'blackjack', icon: '🃏', label: 'Blackjack' },
-        { id: 'plinko', icon: '⚪', label: 'Plinko' },
+        { id: 'plinko', icon: '🎱', label: 'Plinko' },
         { id: 'roulette', icon: '🎯', label: 'Roulette' },
       ]},
       { label: 'Sports & Luck', links: [
@@ -357,7 +357,7 @@ const App = {
     slots:      { icon: '🎰', label: 'Slots' },
     crash:      { icon: '🚀', label: 'Crash' },
     blackjack:  { icon: '🃏', label: 'Blackjack' },
-    plinko:     { icon: '⚪', label: 'Plinko' },
+    plinko:     { icon: '🎱', label: 'Plinko' },
     roulette:   { icon: '🎯', label: 'Roulette' },
     horses:     { icon: '🏇', label: 'Horse Racing' },
     lottery:    { icon: '🎟', label: 'Lottery' },

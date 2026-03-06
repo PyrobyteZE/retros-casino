@@ -312,6 +312,17 @@ const Firebase = {
       setTimeout(() => this.pushCloudSave(), 1000);
       snap.ref.remove();
     });
+    // Sale receipts — credit seller when a buyer purchases their listing
+    this.db.ref('saleReceipts/' + this.uid).on('child_added', snap => {
+      const r = snap.val();
+      if (!r || !r.amount) return;
+      App.addBalance(r.amount);
+      const label = r.type === 'custom_pet' ? '🐾 Pet sold' : r.type === 'car' ? '🚗 Car sold' : '💰 Item sold';
+      Toast.show(label + '! +' + App.formatMoney(r.amount), '#4caf50', 4000);
+      App.save();
+      snap.ref.remove().catch(() => {});
+    });
+
     // Admin force-save broadcast
     this.db.ref('adminCommands/forceSave').on('value', snap => {
       const val = snap.val();
@@ -2822,7 +2833,7 @@ const Firebase = {
     const listing = Object.assign({}, house, {
       listingPrice: price,
       sellerUid: this.uid,
-      sellerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+      sellerName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Unknown',
       listedAt: Date.now(),
     });
     return this.db.ref('houseListings/' + house.id).set(listing)
@@ -2845,7 +2856,7 @@ const Firebase = {
         type: 'house',
         houseId: listingId,
         buyerUid: this.uid,
-        buyerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+        buyerName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Unknown',
         ts: Date.now(),
       }).catch(err => console.error('buyHouseListing receipt error:', err));
     }
@@ -2862,7 +2873,7 @@ const Firebase = {
     if (!this.isOnline() || !this.uid) return Promise.resolve();
     const listing = {
       sellerUid: this.uid,
-      sellerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+      sellerName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Unknown',
       item,
       price,
       listedAt: Date.now(),
@@ -2898,7 +2909,7 @@ const Firebase = {
         type: 'item',
         listingId,
         buyerUid: this.uid,
-        buyerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+        buyerName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Unknown',
         ts: Date.now(),
       }).catch(err => console.error('buyItem receipt error:', err));
     }
@@ -2912,7 +2923,6 @@ const Firebase = {
 
   // === CUSTOM PET MARKETPLACE ===
   listenPetListings(cb) {
-    if (!this.isOnline()) return;
     this.db.ref('petListings').limitToFirst(100).on('value', snap => cb(snap.val() || {}),
       err => console.warn('listenPetListings denied:', err.code));
   },
@@ -2921,7 +2931,7 @@ const Firebase = {
     if (!this.isOnline() || !this.uid) return Promise.resolve();
     return this.db.ref('petListings').push({
       sellerUid: this.uid,
-      sellerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Trainer',
+      sellerName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Trainer',
       pet, price, listedAt: Date.now(),
     }).catch(err => console.error('listCustomPet error:', err));
   },
@@ -2933,7 +2943,7 @@ const Firebase = {
       await this.db.ref('saleReceipts/' + sellerUid).push({
         amount: price, type: 'custom_pet', listingId,
         buyerUid: this.uid,
-        buyerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+        buyerName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Unknown',
         ts: Date.now(),
       }).catch(() => {});
     }
@@ -2997,7 +3007,7 @@ const Firebase = {
     await this.db.ref('saleReceipts/' + ownerUid).push({
       amount: price, type: 'food_menu', menuItemId,
       buyerUid: this.uid,
-      buyerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+      buyerName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Unknown',
       ts: Date.now(),
     }).catch(() => {});
 
@@ -3112,7 +3122,7 @@ const Firebase = {
         if (current && current.ownerUid) return; // abort — already owned
         return {
           ownerUid: this.uid,
-          ownerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+          ownerName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Unknown',
           claimedAt: Date.now(),
           listedForSale: false,
           listingPrice: null,
@@ -3144,7 +3154,7 @@ const Firebase = {
         return {
           ...current,
           ownerUid: this.uid,
-          ownerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+          ownerName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Unknown',
           listedForSale: false,
           listingPrice: null,
           boughtAt: Date.now(),
@@ -3157,7 +3167,7 @@ const Firebase = {
           this.db.ref('saleReceipts/' + sellerUid).push({
             amount: price, type: 'godMansion', mansionId,
             buyerUid: this.uid,
-            buyerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+            buyerName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Unknown',
             ts: Date.now(),
           }).catch(() => {});
         }
@@ -3171,7 +3181,7 @@ const Firebase = {
     if (!this.isOnline() || !this.uid) return Promise.resolve(null);
     const listing = {
       sellerUid: this.uid,
-      sellerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+      sellerName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Unknown',
       car,
       price,
       listedAt: Date.now(),
@@ -3212,7 +3222,7 @@ const Firebase = {
           this.db.ref('saleReceipts/' + sellerUid).push({
             amount: price, type: 'car', listingId,
             buyerUid: this.uid,
-            buyerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+            buyerName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Unknown',
             ts: Date.now(),
           }).catch(() => {});
         }
@@ -3222,7 +3232,6 @@ const Firebase = {
   },
 
   listenCarListings(cb) {
-    if (!this.isOnline()) return;
     this.db.ref('carListings').limitToFirst(100).on('value', snap => cb(snap.val() || {}),
       err => console.warn('listenCarListings denied:', err.code));
   },

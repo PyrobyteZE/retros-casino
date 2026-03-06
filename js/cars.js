@@ -95,7 +95,7 @@ const Cars = {
   // === INIT ===
   init() {
     this._startTick();
-    if (typeof Firebase !== 'undefined' && Firebase.isOnline() && !this._listenersInited) {
+    if (typeof Firebase !== 'undefined' && !this._listenersInited) {
       this._listenersInited = true;
       Firebase.listenCarListings(data => {
         this._carListings = data || {};
@@ -533,15 +533,18 @@ const Cars = {
 
   // === MARKETPLACE ===
 
-  listCar(carId, price) {
+  async listCar(carId, price) {
     const idx = this._garage.findIndex(c => c.id === carId);
     if (idx < 0) return;
     if (price <= 0) { Toast.show('Invalid price', '#f44336', 2000); return; }
-    const car = this._garage.splice(idx, 1)[0];
+    const car = this._garage[idx]; // don't remove yet — wait for Firebase to confirm
     if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
-      Firebase.listCarForSale(car, price);
+      const key = await Firebase.listCarForSale(car, price);
+      if (!key) { Toast.show('Listing failed — try again', '#f44336', 2500); return; }
+      this._garage.splice(idx, 1); // only remove after confirmed
     } else {
       // Local listing
+      this._garage.splice(idx, 1);
       this._carListings['local_' + car.id] = {
         sellerUid: 'local', sellerName: 'You', car, price, listedAt: Date.now()
       };

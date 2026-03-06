@@ -2792,13 +2792,13 @@ html[data-platform="desktop"] #balance-display {
   padding: 8px 20px;
 }
 
-/* Casino grid: 4 columns on desktop */
+/* Casino grid: auto-fill on desktop so rows stay complete */
 html[data-platform="desktop"] .casino-grid-section {
-  grid-template-columns: 1fr 1fr 1fr 1fr;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: 16px;
 }
 html[data-platform="desktop"] .casino-favs-strip {
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
 }
 
 html[data-platform="desktop"] .casino-card {
@@ -7684,6 +7684,12 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
 .pp-swatch-transparent { background: repeating-conic-gradient(#444 0% 25%, #333 0% 50%) 0 0 / 8px 8px; }
 .pp-swatch-active { border-color: #fff; }
 .pp-swatch:hover { transform: scale(1.2); }
+.pp-color-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 2px;
+}
 .pp-tools {
   display: flex;
   gap: 5px;

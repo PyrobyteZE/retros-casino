@@ -692,6 +692,11 @@
       <div class="pp-header">&#x1F3A8; Paint Your Item</div>
       <div id="pp-grid" class="pp-grid"></div>
       <div id="pp-palette" class="pp-palette"></div>
+      <div class="pp-color-picker-row">
+        <label style="font-size:11px;color:var(--text-dim)">Custom color:</label>
+        <input type="color" id="pp-custom-color" value="#ff0000" style="width:36px;height:28px;border:none;background:none;cursor:pointer;padding:0">
+        <span style="font-size:11px;color:var(--text-dim)">← changes selected swatch</span>
+      </div>
       <div class="pp-tools">
         <button id="pp-brush" class="pp-tool-btn pp-tool-active" onclick="Crafting.setPpTool('brush')">&#x1F58C;&#xFE0F; Brush</button>
         <button id="pp-fill" class="pp-tool-btn" onclick="Crafting.setPpTool('fill')">&#x1FAA3; Fill</button>
