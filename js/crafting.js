@@ -484,7 +484,104 @@ const Crafting = {
     App.save();
     this.closePixelPainter();
     this._triggerRender();
-    Toast.show('🎨 Pixel art saved!', '#4caf50', 2000);
+    // After painting, ask where to put the item
+    if (item) this._showItemDestinationModal(item);
+    else Toast.show('🎨 Pixel art saved!', '#4caf50', 2000);
+  },
+
+  _showItemDestinationModal(item) {
+    const existing = document.getElementById('item-dest-modal');
+    if (existing) existing.remove();
+
+    // Get player's own stores
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    const myStores = typeof Stores !== 'undefined'
+      ? Object.entries(Stores._stores).filter(([, s]) => s.ownerUid === myUid)
+      : [];
+
+    const storeOptions = myStores.length
+      ? myStores.map(([sid, s]) => `<option value="${sid}">${this._esc(s.storeName || sid)}</option>`).join('')
+      : '';
+
+    const modal = document.createElement('div');
+    modal.id = 'item-dest-modal';
+    modal.className = 'house-modal-overlay';
+    modal.innerHTML = `
+      <div class="house-modal-box" style="max-width:320px">
+        <div class="house-modal-title">🎨 Item Created!</div>
+        <div style="display:flex;align-items:center;gap:10px;background:var(--bg3);border-radius:8px;padding:10px;margin-bottom:14px">
+          <div style="font-size:28px">${item.icon || '📦'}</div>
+          <div>
+            <div style="font-weight:700;font-size:14px">${this._esc(item.name)}</div>
+            <div style="font-size:11px;color:var(--text-dim)">${item.category || ''} · ${item.rarity || ''}</div>
+          </div>
+          <div style="margin-left:auto">${this.renderPixelArt(item.pixels, 40)}</div>
+        </div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px">Where do you want to put this?</div>
+
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer;font-size:13px">
+          <input type="radio" name="item-dest" value="inventory" checked onchange="Crafting._onDestChange(this.value)"> 📦 Add to Inventory
+        </label>
+
+        ${myStores.length ? `
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer;font-size:13px">
+          <input type="radio" name="item-dest" value="store" onchange="Crafting._onDestChange(this.value)"> 🏪 Put in a Store
+        </label>
+        <div id="item-dest-store-opts" style="display:none;padding:0 0 0 24px">
+          <select id="item-dest-store-select" style="width:100%;margin-bottom:8px;padding:7px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:8px;font-size:13px">
+            ${storeOptions}
+          </select>
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <input type="number" id="item-dest-price" placeholder="Price $" min="1" style="flex:1;padding:7px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:8px;font-size:13px">
+            <input type="number" id="item-dest-qty" placeholder="Qty" min="1" max="99" value="1" style="width:60px;padding:7px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:8px;font-size:13px">
+          </div>
+        </div>` : `<div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Open a Store from Companies to sell items directly.</div>`}
+
+        <div class="house-modal-actions">
+          <button class="house-modal-btn" onclick="Crafting._confirmItemDest('${item.id}')">Confirm</button>
+          <button class="house-modal-btn house-modal-cancel" onclick="document.getElementById('item-dest-modal').remove()">Keep in Bag</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+  },
+
+  _onDestChange(val) {
+    const opts = document.getElementById('item-dest-store-opts');
+    if (opts) opts.style.display = val === 'store' ? 'block' : 'none';
+  },
+
+  _confirmItemDest(itemId) {
+    const dest = document.querySelector('input[name="item-dest"]:checked')?.value || 'inventory';
+    document.getElementById('item-dest-modal')?.remove();
+
+    if (dest === 'inventory') {
+      Toast.show('📦 Item added to inventory!', '#4caf50', 2000);
+      return;
+    }
+
+    // Store path
+    const storeId = document.getElementById('item-dest-store-select')?.value;
+    const price = parseFloat(document.getElementById('item-dest-price')?.value) || 0;
+    const qty = Math.max(1, parseInt(document.getElementById('item-dest-qty')?.value) || 1);
+    if (!storeId) { Toast.show('Select a store', '#f44336', 2000); return; }
+    if (price <= 0) { Toast.show('Set a price', '#f44336', 2000); return; }
+
+    const idx = this._inventory.findIndex(i => i.id === itemId);
+    if (idx < 0) { Toast.show('Item not found', '#f44336', 2000); return; }
+    const item = this._inventory[idx];
+    this._inventory.splice(idx, 1);
+    App.save();
+    Firebase.updateStore(storeId, { ['inventory/item_' + item.id]: { item, price, qty } })
+      .then(() => {
+        Toast.show('🏪 Listed in store!', '#27ae60', 2500);
+        this._triggerRender();
+      })
+      .catch(() => {
+        // Refund — put item back
+        this._inventory.push(item);
+        App.save();
+        Toast.show('Failed to list — item returned to bag', '#f44336', 3000);
+      });
   },
 
   setPpTool(tool) {
