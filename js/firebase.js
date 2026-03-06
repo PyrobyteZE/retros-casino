@@ -1520,7 +1520,7 @@ const Firebase = {
     }).catch(() => {});
   },
 
-  // === ACCOUNT PASSWORDS ===
+  // === ACCOUNT PASSWORDS & RECOVERY ===
   async _hashPassword(password) {
     const encoder = new TextEncoder();
     const data = encoder.encode(password);
@@ -1529,51 +1529,91 @@ const Firebase = {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   },
 
+  _generateRecoveryCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars (0,O,1,I)
+    let code = '';
+    for (let i = 0; i < 12; i++) {
+      if (i === 4 || i === 8) code += '-';
+      code += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return code; // format: XXXX-XXXX-XXXX
+  },
+
   async saveAccountPassword(name, password) {
     if (!this.isOnline()) { return { ok: false, error: 'Offline' }; }
     const nameLower = name.toLowerCase();
     const hash = await this._hashPassword(password);
+    const recoveryCode = this._generateRecoveryCode();
+    const recoveryHash = await this._hashPassword(recoveryCode);
     const save = localStorage.getItem('retros_casino_save') || '{}';
     await this.db.ref('accounts/' + nameLower).set({
       passwordHash: hash,
+      recoveryHash,
       uid: this.uid,
       save,
+      loginAttempts: 0,
+      lockedUntil: 0,
       updatedAt: Date.now(),
     });
-    return { ok: true };
+    return { ok: true, recoveryCode };
   },
 
   async loginWithPassword(name, password) {
     if (!this.isOnline()) { return { ok: false, error: 'Offline' }; }
     const nameLower = name.toLowerCase();
-    // Rate limit
-    const rateLimitKey = 'retros_pw_attempts_' + nameLower;
-    const lockKey = 'retros_pw_lockout_' + nameLower;
-    const lockUntil = parseInt(localStorage.getItem(lockKey) || '0');
-    if (Date.now() < lockUntil) {
-      const secs = Math.ceil((lockUntil - Date.now()) / 1000);
-      return { ok: false, error: 'Too many attempts. Wait ' + secs + 's.' };
-    }
-    const hash = await this._hashPassword(password);
     const snap = await this.db.ref('accounts/' + nameLower).once('value');
     const account = snap.val();
     if (!account) { return { ok: false, error: 'No account found for that name.' }; }
 
-    const attempts = parseInt(localStorage.getItem(rateLimitKey) || '0') + 1;
-    if (account.passwordHash !== hash) {
-      localStorage.setItem(rateLimitKey, String(attempts));
-      if (attempts >= 3) {
-        localStorage.setItem(lockKey, String(Date.now() + 60000));
-        localStorage.removeItem(rateLimitKey);
-        return { ok: false, error: 'Too many attempts. Locked for 60s.' };
-      }
-      return { ok: false, error: 'Wrong password. (' + (3 - attempts) + ' left)' };
+    // Server-side rate limit check (stored in Firebase, not localStorage)
+    if (account.lockedUntil && Date.now() < account.lockedUntil) {
+      const secs = Math.ceil((account.lockedUntil - Date.now()) / 1000);
+      return { ok: false, error: 'Too many attempts. Wait ' + secs + 's.' };
     }
 
-    // Success — clear rate limit
-    localStorage.removeItem(rateLimitKey);
-    localStorage.removeItem(lockKey);
-    // Load save
+    const hash = await this._hashPassword(password);
+    if (account.passwordHash !== hash) {
+      const attempts = (account.loginAttempts || 0) + 1;
+      const update = { loginAttempts: attempts };
+      if (attempts >= 3) {
+        update.lockedUntil = Date.now() + 5 * 60 * 1000; // 5 min lockout
+        update.loginAttempts = 0;
+      }
+      await this.db.ref('accounts/' + nameLower).update(update).catch(() => {});
+      if (attempts >= 3) {
+        return { ok: false, error: 'Too many attempts. Locked for 5 minutes.' };
+      }
+      return { ok: false, error: 'Wrong password. (' + (3 - attempts) + ' tries left)' };
+    }
+
+    // Success — clear rate limit, load save
+    await this.db.ref('accounts/' + nameLower).update({ loginAttempts: 0, lockedUntil: 0 }).catch(() => {});
+    return this._loadAccountSave(account);
+  },
+
+  async recoverAccount(name, recoveryCode) {
+    if (!this.isOnline()) { return { ok: false, error: 'Offline' }; }
+    const nameLower = name.toLowerCase();
+    const snap = await this.db.ref('accounts/' + nameLower).once('value');
+    const account = snap.val();
+    if (!account) { return { ok: false, error: 'No account found for that name.' }; }
+    if (!account.recoveryHash) { return { ok: false, error: 'This account has no recovery code. Contact an admin.' }; }
+
+    const hash = await this._hashPassword(recoveryCode.replace(/-/g, '').toUpperCase()
+      // normalize: allow with or without dashes
+      .replace(/(.{4})(.{4})(.{4})/, '$1-$2-$3'));
+    // just hash the code as-is after normalizing dashes
+    const codeNorm = recoveryCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const codeFormatted = codeNorm.slice(0,4) + '-' + codeNorm.slice(4,8) + '-' + codeNorm.slice(8,12);
+    const codeHash = await this._hashPassword(codeFormatted);
+    if (account.recoveryHash !== codeHash) {
+      return { ok: false, error: 'Invalid recovery code.' };
+    }
+
+    return this._loadAccountSave(account);
+  },
+
+  _loadAccountSave(account) {
     if (account.save) {
       localStorage.setItem('retros_casino_save', account.save);
       App.load();
@@ -1797,7 +1837,11 @@ const Firebase = {
     if (!nameLower || !newPassword) return { ok: false, error: 'Missing name or password' };
     const hash = await this._hashPassword(newPassword);
     try {
-      await this.db.ref('accounts/' + nameLower + '/passwordHash').set(hash);
+      await this.db.ref('accounts/' + nameLower).update({
+        passwordHash: hash,
+        loginAttempts: 0,
+        lockedUntil: 0,
+      });
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e.message };

@@ -1,0 +1,187 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "leaderboard": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth.uid === $uid"
+      }
+    },
+
+    "presence": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth.uid === $uid"
+      }
+    },
+
+    "accounts": {
+      "$name": {
+        ".read": false,
+        ".write": "auth !== null"
+      }
+    },
+
+    "adminsList": {
+      ".read": true,
+      ".write": "root.child('adminsList').child(auth.uid).exists()"
+    },
+
+    "adminPlayerCommands": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        ".write": "root.child('adminsList').child(auth.uid).exists()"
+      }
+    },
+
+    "adminCommands": {
+      ".read": true,
+      ".write": "root.child('adminsList').child(auth.uid).exists()"
+    },
+
+    "worldEvent": {
+      ".read": true,
+      ".write": "root.child('adminsList').child(auth.uid).exists()"
+    },
+
+    "worldEvents": {
+      ".read": true,
+      ".write": "root.child('adminsList').child(auth.uid).exists()"
+    },
+
+    "stockPrices": {
+      ".read": true,
+      "adminCommand": {
+        ".write": "root.child('adminsList').child(auth.uid).exists()"
+      }
+    },
+
+    "cryptoPrices": {
+      ".read": true,
+      "adminCommand": {
+        ".write": "root.child('adminsList').child(auth.uid).exists()"
+      }
+    },
+
+    "playerStockPrices": {
+      ".read": true,
+      "adminCommand": {
+        ".write": "root.child('adminsList').child(auth.uid).exists()"
+      },
+      "$ticker": {
+        ".write": "auth !== null"
+      }
+    },
+
+    "playerCoinPrices": {
+      ".read": true,
+      "adminCommand": {
+        ".write": "root.child('adminsList').child(auth.uid).exists()"
+      },
+      "$coin": {
+        ".write": "auth !== null"
+      }
+    },
+
+    "gifts": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        ".write": "auth !== null"
+      }
+    },
+
+    "invites": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        ".write": "auth !== null"
+      }
+    },
+
+    "playerIds": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth.uid === $uid"
+      }
+    },
+
+    "playerIdToUid": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "playerIdCounter": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "cloudSaves": {
+      "$uid": {
+        ".read": "auth.uid === $uid || root.child('adminsList').child(auth.uid).exists()",
+        ".write": "auth.uid === $uid || root.child('adminsList').child(auth.uid).exists()"
+      }
+    },
+
+    "newsPosts": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth.uid === $uid"
+      }
+    },
+
+    "playerBanks": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth.uid === $uid || root.child('adminsList').child(auth.uid).exists()"
+      }
+    },
+
+    "playerBankLoans": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "playerStores": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "itemListings": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "houseListings": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "carListings": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "petListings": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "foodMenus": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth.uid === $uid || root.child('adminsList').child(auth.uid).exists()"
+      }
+    },
+
+    "gameRooms": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "eventAuthority": {
+      ".read": true,
+      ".write": "auth !== null"
+    }
+  }
+}

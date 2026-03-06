@@ -193,7 +193,7 @@ const Settings = {
       <!-- Account / Save Transfer -->
       <div class="settings-section">
         <h3>Account (Save Transfer)</h3>
-        <p class="settings-hint">Set a password to recover your save on any device.</p>
+        <p class="settings-hint">Set a password to recover your save on any device. A one-time recovery code will be shown — save it somewhere safe.</p>
         <div class="settings-row">
           <label>New Password:</label>
           <input type="password" id="settings-set-pw" placeholder="Min 4 chars" autocomplete="new-password">
@@ -203,9 +203,17 @@ const Settings = {
           <input type="password" id="settings-confirm-pw" placeholder="Confirm password" autocomplete="new-password">
         </div>
         <button class="settings-btn" onclick="Settings.setAccountPassword()">Set Password</button>
+        <div id="settings-recovery-box" style="display:none;margin-top:10px;background:var(--bg3);border-radius:8px;padding:10px">
+          <div style="font-size:12px;color:var(--gold);font-weight:700;margin-bottom:4px">Recovery Code (save this!)</div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <code id="settings-recovery-code" style="flex:1;font-size:15px;letter-spacing:2px;color:var(--text);background:var(--bg);padding:6px 8px;border-radius:6px;text-align:center"></code>
+            <button onclick="Settings.copyRecoveryCode()" style="font-size:11px;padding:5px 8px;border-radius:6px;border:1px solid var(--bg3);background:var(--bg);color:var(--text);cursor:pointer">Copy</button>
+          </div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:6px">This code is shown once. Use it if you forget your password.</div>
+        </div>
 
         <div class="settings-divider"></div>
-        <p class="settings-hint">On a new device, login to restore your save:</p>
+        <p class="settings-hint">On a new device, login with your name + password:</p>
         <div class="settings-row">
           <label>Username:</label>
           <input type="text" id="settings-login-name" placeholder="Your username" autocomplete="username">
@@ -215,6 +223,18 @@ const Settings = {
           <input type="password" id="settings-login-pw" placeholder="Your password" autocomplete="current-password">
         </div>
         <button class="settings-btn" onclick="Settings.loginWithPassword()">Login / Restore Save</button>
+
+        <div class="settings-divider"></div>
+        <p class="settings-hint">Forgot your password? Use your recovery code:</p>
+        <div class="settings-row">
+          <label>Username:</label>
+          <input type="text" id="settings-recover-name" placeholder="Your username" autocomplete="username">
+        </div>
+        <div class="settings-row">
+          <label>Code:</label>
+          <input type="text" id="settings-recover-code" placeholder="XXXX-XXXX-XXXX" autocomplete="off" maxlength="14" style="text-transform:uppercase;letter-spacing:1px">
+        </div>
+        <button class="settings-btn" onclick="Settings.recoverWithCode()">Recover Account</button>
       </div>
 
       <!-- Options -->
@@ -307,9 +327,42 @@ const Settings = {
     if (result.ok) {
       document.getElementById('settings-set-pw').value = '';
       document.getElementById('settings-confirm-pw').value = '';
-      alert('Password set! You can now recover your save on any device by logging in with your name and password.');
+      // Show recovery code
+      const box = document.getElementById('settings-recovery-box');
+      const codeEl = document.getElementById('settings-recovery-code');
+      if (box && codeEl) {
+        codeEl.textContent = result.recoveryCode;
+        box.style.display = 'block';
+      } else {
+        alert('Password set!\n\nYour recovery code: ' + result.recoveryCode + '\n\nSave this! It lets you recover your account if you forget your password.');
+      }
     } else {
       alert('Failed: ' + result.error);
+    }
+  },
+
+  copyRecoveryCode() {
+    const code = document.getElementById('settings-recovery-code')?.textContent;
+    if (code) navigator.clipboard.writeText(code).then(() => Toast.show('Recovery code copied!', '#00e676', 2000));
+  },
+
+  async recoverWithCode() {
+    const name = document.getElementById('settings-recover-name')?.value?.trim();
+    const code = document.getElementById('settings-recover-code')?.value?.trim();
+    if (!name || !code) { alert('Enter your username and recovery code.'); return; }
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline()) { alert('Must be online to recover.'); return; }
+
+    const result = await Firebase.recoverAccount(name, code);
+    if (result.ok) {
+      document.getElementById('settings-recover-name').value = '';
+      document.getElementById('settings-recover-code').value = '';
+      alert('Account recovered! Your save has been restored.');
+      this.profile.name = name;
+      this.updateProfileDisplay();
+      this.save();
+      this.render();
+    } else {
+      alert('Recovery failed: ' + result.error);
     }
   },
 
