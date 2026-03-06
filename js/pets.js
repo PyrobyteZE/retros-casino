@@ -353,6 +353,7 @@ const Pets = {
       this.initialized = true;
     }
     this.renderPixelArt();
+    this.initCustomPets();
     this.render();
   },
 
@@ -413,10 +414,18 @@ const Pets = {
       income += b.income;
       luck   += b.luck;
     }
+    // Merge custom pet boosts
+    const cb = this.getCustomPetBoosts();
+    income += (cb.earningsMult || 0) * 100;
+    luck   += (cb.luckBoost || 0) * 100;
     return {
       clickMult:  1 + click / 100,
       incomeMult: 1 + income / 100,
       luckAdd:    luck,
+      gamblingBonus: cb.gamblingBonus || 0,
+      passiveIncome: cb.passiveIncome || 0,
+      crimeBonus:    cb.crimeBonus || 0,
+      hackingBonus:  cb.hackingBonus || 0,
     };
   },
 
@@ -647,6 +656,8 @@ const Pets = {
       instanceIds: this.instanceIds.slice(),
       gacha: { ...this.gacha },
       eggStats: { ...this.eggStats },
+      customPets: this._customPets,
+      equippedCustom: { ...this._equippedCustom },
     };
   },
 
@@ -657,6 +668,8 @@ const Pets = {
     if (data.instanceIds) this.instanceIds = data.instanceIds;
     if (data.gacha) this.gacha = { ...this.gacha, ...data.gacha };
     if (data.eggStats) this.eggStats = { ...this.eggStats, ...data.eggStats };
+    if (data.customPets) this._customPets = data.customPets;
+    if (data.equippedCustom) this._equippedCustom = data.equippedCustom;
     while (this.owned.length < this.pets.length) this.owned.push(false);
     while (this.levels.length < this.pets.length) this.levels.push(0);
     while (this.instanceIds.length < this.pets.length) this.instanceIds.push('');
@@ -738,6 +751,7 @@ const Pets = {
     if (this.activeTab === 'collection') this._renderCollection(container);
     else if (this.activeTab === 'gacha') this._renderGacha(container);
     else if (this.activeTab === 'forge') this._renderForge(container);
+    else if (this.activeTab === 'custom') this._renderCustom(container);
     else if (this.activeTab === 'market') this._renderMarket(container);
   },
 
@@ -898,6 +912,340 @@ const Pets = {
     if (boost.income) parts.push('+' + (boost.income * scale).toFixed(0) + '% income');
     if (boost.luck)   parts.push('+' + (boost.luck * scale).toFixed(1) + '% luck');
     return parts.join(', ');
+  },
+
+  // =============================================
+  // === CUSTOM PETS =============================
+  // =============================================
+
+  // State
+  _customPets: [],          // [{ id, name, pixels, rarity, stats, level, crafterUid, crafterName, createdAt }]
+  _equippedCustom: { slot0: null, slot1: null, slot2: null },
+  _petListings: {},         // Firebase marketplace { [listingId]: listing }
+  _petDraft: null,          // { rarity, stats } — in-progress creation
+
+  CUSTOM_PET_CREATE_COST: 500_000,
+  CUSTOM_PET_STAT_POOL: ['luckBoost', 'earningsMult', 'gamblingBonus', 'passiveIncome', 'crimeBonus', 'hackingBonus'],
+  CUSTOM_PET_STAT_LABELS: { luckBoost: 'Luck', earningsMult: 'Earnings', gamblingBonus: 'Gambling', passiveIncome: 'Passive/s', crimeBonus: 'Crime', hackingBonus: 'Hacking' },
+  CUSTOM_PET_RARITY_COLORS: { common: '#9badb7', uncommon: '#99e550', rare: '#639bff', legendary: '#f4b41b' },
+
+  initCustomPets() {
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.listenPetListings(data => {
+        this._petListings = data || {};
+        if (this.activeTab === 'custom') this.render();
+      });
+    }
+  },
+
+  getCustomPetBoosts() {
+    const out = { luckBoost: 0, earningsMult: 0, gamblingBonus: 0, passiveIncome: 0, crimeBonus: 0, hackingBonus: 0 };
+    for (const slotKey of ['slot0', 'slot1', 'slot2']) {
+      const petId = this._equippedCustom[slotKey];
+      if (!petId) continue;
+      const pet = this._customPets.find(p => p.id === petId);
+      if (!pet) continue;
+      const lvlScale = 1 + ((pet.level || 1) - 1) * 0.2;
+      for (const stat of (pet.stats || [])) {
+        if (stat.statType in out) out[stat.statType] += stat.value * lvlScale;
+      }
+    }
+    return out;
+  },
+
+  _rollCustomPetRarity() {
+    const rebirth = typeof App !== 'undefined' ? (App.rebirth || 0) : 0;
+    const legBonus = Math.min(rebirth * 0.002, 0.1);
+    const rareBonus = Math.min(rebirth * 0.005, 0.12);
+    const r = Math.random();
+    if (r < 0.07 + legBonus) return 'legendary';
+    if (r < 0.25 + rareBonus) return 'rare';
+    if (r < 0.55) return 'uncommon';
+    return 'common';
+  },
+
+  _rollCustomPetStats(rarity) {
+    const COUNT = { common: 1, uncommon: 1, rare: 2, legendary: 3 }[rarity] || 1;
+    const RANGE = { common: [0.03, 0.08], uncommon: [0.05, 0.12], rare: [0.08, 0.18], legendary: [0.12, 0.28] }[rarity];
+    const rebirth = typeof App !== 'undefined' ? (App.rebirth || 0) : 0;
+    const rebirthMult = 1 + Math.min(rebirth * 0.03, 2.0);
+    const pool = [...this.CUSTOM_PET_STAT_POOL];
+    const stats = [];
+    for (let i = 0; i < COUNT; i++) {
+      if (!pool.length) break;
+      const idx = Math.floor(Math.random() * pool.length);
+      const statType = pool.splice(idx, 1)[0];
+      const [min, max] = RANGE;
+      let value = min + Math.random() * (max - min);
+      if (statType === 'passiveIncome') {
+        value = Math.round(value * 10000 * rebirthMult);
+      } else {
+        value = Math.round(value * rebirthMult * 100) / 100;
+      }
+      stats.push({ statType, value, label: this.CUSTOM_PET_STAT_LABELS[statType] || statType });
+    }
+    return stats;
+  },
+
+  startCustomPetCreate() {
+    if (!Firebase || !Firebase.isOnline()) { alert('Must be online to create custom pets.'); return; }
+    if (App.balance < this.CUSTOM_PET_CREATE_COST) { alert('Need ' + App.formatMoney(this.CUSTOM_PET_CREATE_COST) + ' to create a custom pet.'); return; }
+    App.addBalance(-this.CUSTOM_PET_CREATE_COST);
+    const rarity = this._rollCustomPetRarity();
+    const stats = this._rollCustomPetStats(rarity);
+    this._petDraft = { rarity, stats };
+    App.save();
+    Toast.show('🐾 ' + rarity[0].toUpperCase() + rarity.slice(1) + ' pet slot unlocked! Paint your pet.', this.CUSTOM_PET_RARITY_COLORS[rarity], 4000);
+    if (typeof Crafting !== 'undefined') Crafting.openPixelPainterForPet(rarity);
+  },
+
+  _showNamePetModal(pixels) {
+    if (!this._petDraft) return;
+    const { rarity } = this._petDraft;
+    const rc = this.CUSTOM_PET_RARITY_COLORS[rarity] || '#aaa';
+    const existing = document.getElementById('pet-name-modal');
+    if (existing) existing.remove();
+    const modal = document.createElement('div');
+    modal.id = 'pet-name-modal';
+    modal.className = 'house-modal-overlay';
+    modal.innerHTML = `
+      <div class="house-modal-box" style="max-width:300px;text-align:center">
+        <div class="house-modal-title" style="color:${rc}">🐾 Name Your ${rarity[0].toUpperCase() + rarity.slice(1)} Pet</div>
+        <div style="margin:10px auto;display:inline-block">${typeof Crafting !== 'undefined' ? Crafting.renderPixelArt(pixels, 64) : ''}</div>
+        <div class="inv-item-stats" style="justify-content:center;margin:8px 0">
+          ${this._petDraft.stats.map(s => {
+            const sign = s.value >= 0 ? '+' : '';
+            const val = s.statType === 'passiveIncome'
+              ? sign + App.formatMoney(s.value) + '/s'
+              : sign + Math.round(s.value * 100) + '% ' + (s.label || s.statType);
+            return `<span class="inv-stat-tag" style="color:${rc}">${val}</span>`;
+          }).join('')}
+        </div>
+        <input id="pet-name-input" type="text" maxlength="20" placeholder="Enter a name..." class="sh-input house-modal-input">
+        <div class="house-modal-actions">
+          <button class="house-modal-btn" onclick="Pets._finalizePet('${pixels.replace(/'/g, '')}')">Create</button>
+          <button class="house-modal-btn house-modal-cancel" onclick="document.getElementById('pet-name-modal').remove();Pets._petDraft=null">Cancel</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    setTimeout(() => document.getElementById('pet-name-input')?.focus(), 50);
+  },
+
+  _finalizePet(pixels) {
+    if (!this._petDraft) return;
+    const nameEl = document.getElementById('pet-name-input');
+    const name = (nameEl ? nameEl.value.trim() : '') || ('Custom ' + this._petDraft.rarity);
+    document.getElementById('pet-name-modal')?.remove();
+    const pet = {
+      id: 'cpet_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+      name,
+      pixels,
+      rarity: this._petDraft.rarity,
+      stats: this._petDraft.stats,
+      level: 1,
+      crafterUid: typeof Firebase !== 'undefined' ? Firebase.uid : 'local',
+      crafterName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'You',
+      createdAt: Date.now(),
+    };
+    this._customPets.push(pet);
+    this._petDraft = null;
+    App.save();
+    if (this.activeTab === 'custom') this.render();
+    Toast.show('🐾 ' + name + ' created!', this.CUSTOM_PET_RARITY_COLORS[pet.rarity] || '#aaa', 3000);
+  },
+
+  equipCustomPet(petId, slotKey) {
+    if (!this._equippedCustom.hasOwnProperty(slotKey)) return;
+    for (const s of ['slot0', 'slot1', 'slot2']) {
+      if (this._equippedCustom[s] === petId) this._equippedCustom[s] = null;
+    }
+    this._equippedCustom[slotKey] = petId;
+    App.save();
+    this.render();
+  },
+
+  unequipCustomSlot(slotKey) {
+    this._equippedCustom[slotKey] = null;
+    App.save();
+    this.render();
+  },
+
+  levelUpCustomPet(petId) {
+    const pet = this._customPets.find(p => p.id === petId);
+    if (!pet) return;
+    if ((pet.level || 1) >= 10) return;
+    const LEVEL_COSTS = { common: 50_000, uncommon: 150_000, rare: 500_000, legendary: 2_000_000 };
+    const cost = (LEVEL_COSTS[pet.rarity] || 50_000) * Math.pow(2, (pet.level || 1) - 1);
+    if (App.balance < cost) { Toast.show('Need ' + App.formatMoney(cost), '#f44336', 2000); return; }
+    App.addBalance(-cost);
+    pet.level = (pet.level || 1) + 1;
+    App.save();
+    this.render();
+    Toast.show('⬆️ ' + pet.name + ' → Lv ' + pet.level, this.CUSTOM_PET_RARITY_COLORS[pet.rarity], 2000);
+  },
+
+  listCustomPet(petId) {
+    if (!Firebase || !Firebase.isOnline()) { alert('Must be online.'); return; }
+    const pet = this._customPets.find(p => p.id === petId);
+    if (!pet) return;
+    const priceStr = prompt('List ' + pet.name + ' for how much?');
+    if (!priceStr) return;
+    const price = App.parseAmount(priceStr);
+    if (isNaN(price) || price <= 0) { Toast.show('Invalid price', '#f44336', 2000); return; }
+    this._customPets = this._customPets.filter(p => p.id !== petId);
+    for (const s of ['slot0', 'slot1', 'slot2']) {
+      if (this._equippedCustom[s] === petId) this._equippedCustom[s] = null;
+    }
+    Firebase.listCustomPet(pet, price);
+    App.save();
+    this.render();
+    Toast.show('🐾 ' + pet.name + ' listed for ' + App.formatMoney(price), '#4caf50', 2500);
+  },
+
+  async buyCustomPet(listingId) {
+    const listing = this._petListings[listingId];
+    if (!listing) { Toast.show('Listing gone', '#f44336', 2000); return; }
+    const isGod = typeof Admin !== 'undefined' && Admin.godMode;
+    if (!isGod && App.balance < listing.price) { Toast.show('Not enough money!', '#f44336', 2000); return; }
+    if (!isGod) App.addBalance(-listing.price);
+    const pet = { ...listing.pet, id: 'cpet_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 4) };
+    this._customPets.push(pet);
+    if (typeof Firebase !== 'undefined') await Firebase.buyCustomPet(listingId, listing.price, listing.sellerUid);
+    App.save();
+    this.render();
+    Toast.show('🐾 ' + pet.name + ' adopted!', this.CUSTOM_PET_RARITY_COLORS[pet.rarity] || '#aaa', 3000);
+  },
+
+  _renderCustom(container) {
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    const rc = this.CUSTOM_PET_RARITY_COLORS;
+
+    // Equip slots
+    let html = `<div class="custom-pet-equip-bar">`;
+    for (const slotKey of ['slot0', 'slot1', 'slot2']) {
+      const equippedId = this._equippedCustom[slotKey];
+      const ep = equippedId ? this._customPets.find(p => p.id === equippedId) : null;
+      if (ep) {
+        html += `<div class="custom-pet-slot custom-pet-slot-filled" style="border-color:${rc[ep.rarity]}">
+          ${typeof Crafting !== 'undefined' ? Crafting.renderPixelArt(ep.pixels, 40) : ''}
+          <span class="cps-name" style="color:${rc[ep.rarity]}">${this._esc(ep.name)}</span>
+          <button class="inv-sell-btn" style="font-size:10px" onclick="Pets.unequipCustomSlot('${slotKey}')">✕</button>
+        </div>`;
+      } else {
+        html += `<div class="custom-pet-slot custom-pet-slot-empty"><span style="color:var(--text-dim);font-size:12px">Empty Slot</span></div>`;
+      }
+    }
+    html += `</div>`;
+
+    // Create button
+    const canCreate = App.balance >= this.CUSTOM_PET_CREATE_COST;
+    html += `<div style="margin:10px 0;text-align:center">
+      <button class="pet-buy-btn ${canCreate ? 'affordable' : ''}" onclick="Pets.startCustomPetCreate()" style="width:100%;padding:10px">
+        🎨 Create Custom Pet — ${App.formatMoney(this.CUSTOM_PET_CREATE_COST)}
+      </button>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:4px">Roll rarity → paint pixel art → name it → equip for boosts</div>
+    </div>`;
+
+    // Owned custom pets
+    if (this._customPets.length > 0) {
+      html += `<div style="font-weight:700;font-size:13px;margin:10px 0 6px">🐾 My Custom Pets (${this._customPets.length})</div>
+        <div class="inv-item-grid">`;
+      for (const pet of this._customPets) {
+        const isEquipped = Object.values(this._equippedCustom).includes(pet.id);
+        const lvlCostBase = { common: 50_000, uncommon: 150_000, rare: 500_000, legendary: 2_000_000 }[pet.rarity] || 50_000;
+        const lvlCost = lvlCostBase * Math.pow(2, (pet.level || 1) - 1);
+        html += `<div class="inv-item-card${isEquipped ? ' inv-item-equipped' : ''}" style="border-color:${rc[pet.rarity]}">
+          <div class="inv-item-top">
+            <div class="inv-item-art">${typeof Crafting !== 'undefined' ? Crafting.renderPixelArt(pet.pixels, 48) : ''}</div>
+            <div class="inv-item-info">
+              <div class="inv-item-name">${this._esc(pet.name)}</div>
+              <div class="inv-item-rarity" style="color:${rc[pet.rarity]}">${pet.rarity} pet · Lv ${pet.level || 1}</div>
+              <div class="inv-item-crafter">by ${this._esc(pet.crafterName || '?')}</div>
+            </div>
+          </div>
+          <div class="inv-item-stats">
+            ${(pet.stats || []).map(s => {
+              const val = s.statType === 'passiveIncome'
+                ? '+' + App.formatMoney(s.value) + '/s'
+                : '+' + Math.round(s.value * 100) + '% ' + (s.label || s.statType);
+              return `<span class="inv-stat-tag" style="color:${rc[pet.rarity]}">${val}</span>`;
+            }).join('')}
+          </div>
+          <div class="inv-item-actions">
+            ${isEquipped
+              ? `<span class="inv-equipped-badge">Equipped</span>`
+              : `<select class="inv-equip-select" onchange="Pets.equipCustomPet('${pet.id}',this.value);this.value=''">
+                  <option value="">Equip to...</option>
+                  <option value="slot0">Slot 1</option>
+                  <option value="slot1">Slot 2</option>
+                  <option value="slot2">Slot 3</option>
+                </select>`}
+            ${(pet.level || 1) < 10
+              ? `<button class="inv-edit-art-btn" onclick="Pets.levelUpCustomPet('${pet.id}')">⬆️ Lv Up ${App.formatMoney(lvlCost)}</button>`
+              : `<span class="pet-card-maxed" style="font-size:10px">MAX</span>`}
+            <button class="inv-sell-btn" onclick="Pets.listCustomPet('${pet.id}')">💰 Sell</button>
+          </div>
+        </div>`;
+      }
+      html += `</div>`;
+    } else {
+      html += `<div class="inv-empty" style="padding:16px">No custom pets yet.<br>Create one with the painter above!</div>`;
+    }
+
+    // Pet market
+    const listings = Object.entries(this._petListings);
+    const myListings = listings.filter(([, l]) => l.sellerUid === myUid);
+    const otherListings = listings.filter(([, l]) => l.sellerUid !== myUid);
+
+    if (listings.length > 0) {
+      html += `<div style="font-weight:700;font-size:13px;margin:14px 0 6px;border-top:1px solid var(--bg3);padding-top:12px">🏪 Pet Market (${listings.length})</div>
+        <div class="inv-item-grid">`;
+      for (const [lid, listing] of [...myListings, ...otherListings]) {
+        const pet = listing.pet;
+        if (!pet) continue;
+        const isMine = listing.sellerUid === myUid;
+        const canAfford = App.balance >= listing.price || (typeof Admin !== 'undefined' && Admin.godMode);
+        html += `<div class="inv-item-card" style="border-color:${rc[pet.rarity] || '#aaa'}">
+          <div class="inv-item-top">
+            <div class="inv-item-art">${typeof Crafting !== 'undefined' ? Crafting.renderPixelArt(pet.pixels, 48) : ''}</div>
+            <div class="inv-item-info">
+              <div class="inv-item-name">${this._esc(pet.name)}</div>
+              <div class="inv-item-rarity" style="color:${rc[pet.rarity] || '#aaa'}">${pet.rarity} pet · Lv ${pet.level || 1}</div>
+              <div class="inv-item-crafter">by ${this._esc(listing.sellerName || '?')}</div>
+            </div>
+          </div>
+          <div class="inv-item-stats">
+            ${(pet.stats || []).map(s => {
+              const val = s.statType === 'passiveIncome'
+                ? '+' + App.formatMoney(s.value) + '/s'
+                : '+' + Math.round(s.value * 100) + '% ' + (s.label || s.statType);
+              return `<span class="inv-stat-tag" style="color:${rc[pet.rarity] || '#aaa'}">${val}</span>`;
+            }).join('')}
+          </div>
+          <div class="inv-item-actions">
+            ${isMine
+              ? `<button class="inv-sell-btn" onclick="Firebase.delistCustomPet('${lid}',this)">Delist</button>`
+              : `<button class="house-buy-btn${canAfford ? '' : ' unaffordable'}" onclick="Pets.buyCustomPet('${lid}')">Adopt ${App.formatMoney(listing.price)}</button>`}
+          </div>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+
+    container.innerHTML = html;
+  },
+
+  _esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); },
+
+  // === SAVE / LOAD for custom pets ===
+  getCustomPetSaveData() {
+    return { customPets: this._customPets, equippedCustom: this._equippedCustom };
+  },
+
+  loadCustomPetSaveData(d) {
+    if (!d) return;
+    this._customPets = d.customPets || [];
+    this._equippedCustom = d.equippedCustom || { slot0: null, slot1: null, slot2: null };
   },
 
   _recipeStr(pet) {

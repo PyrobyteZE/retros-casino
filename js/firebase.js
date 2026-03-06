@@ -2850,6 +2850,51 @@ const Firebase = {
       err => console.warn('listenItemListings denied:', err.code));
   },
 
+  // === CUSTOM PET MARKETPLACE ===
+  listenPetListings(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('petListings').limitToFirst(100).on('value', snap => cb(snap.val() || {}),
+      err => console.warn('listenPetListings denied:', err.code));
+  },
+
+  listCustomPet(pet, price) {
+    if (!this.isOnline() || !this.uid) return Promise.resolve();
+    return this.db.ref('petListings').push({
+      sellerUid: this.uid,
+      sellerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Trainer',
+      pet, price, listedAt: Date.now(),
+    }).catch(err => console.error('listCustomPet error:', err));
+  },
+
+  async buyCustomPet(listingId, price, sellerUid) {
+    if (!this.isOnline() || !this.uid) return;
+    await this.db.ref('petListings/' + listingId).remove().catch(() => {});
+    if (sellerUid) {
+      await this.db.ref('saleReceipts/' + sellerUid).push({
+        amount: price, type: 'custom_pet', listingId,
+        buyerUid: this.uid,
+        buyerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+        ts: Date.now(),
+      }).catch(() => {});
+    }
+  },
+
+  delistCustomPet(listingId, btn) {
+    if (!this.isOnline()) return;
+    this.db.ref('petListings/' + listingId).once('value').then(snap => {
+      const listing = snap.val();
+      if (listing && listing.sellerUid === this.uid && listing.pet) {
+        if (typeof Pets !== 'undefined') {
+          Pets._customPets.push({ ...listing.pet });
+          App.save();
+          Pets.render();
+          Toast.show('🐾 Pet returned', '#4caf50', 2000);
+        }
+      }
+    });
+    this.db.ref('petListings/' + listingId).remove().catch(() => {});
+  },
+
   // === FOOD MENUS ===
   listenFoodMenus(cb) {
     if (!this.isOnline()) return;

@@ -413,8 +413,32 @@ const Crafting = {
     this._ppPixels = null;
   },
 
+  openPixelPainterForPet(rarity) {
+    this._ppItemDraft = 'pet_draft';
+    this._ppPixels = '0'.repeat(256);
+    this._ppColor = 1;
+    this._ppTool = 'brush';
+    const modal = document.getElementById('pixel-painter-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    const rc = { common: '#9badb7', uncommon: '#99e550', rare: '#639bff', legendary: '#f4b41b' };
+    const ppHeader = modal.querySelector('.pp-header');
+    if (ppHeader) ppHeader.textContent = '🐾 Paint Your ' + rarity[0].toUpperCase() + rarity.slice(1) + ' Pet';
+    this._buildPpGrid();
+  },
+
   savePixels() {
     if (!this._ppItemDraft || !this._ppPixels) { this.closePixelPainter(); return; }
+
+    // Pet creation path
+    if (this._ppItemDraft === 'pet_draft') {
+      const pixels = this._ppPixels;
+      this.closePixelPainter();
+      const ppHeader = document.getElementById('pixel-painter-modal')?.querySelector('.pp-header');
+      if (ppHeader) ppHeader.textContent = '🎨 Paint Your Item';
+      if (typeof Pets !== 'undefined') Pets._showNamePetModal(pixels);
+      return;
+    }
 
     // Auto-list path: itemId + ':list:' + price (entertainment content listings)
     if (this._ppItemDraft.includes(':list:')) {
