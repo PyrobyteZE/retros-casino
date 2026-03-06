@@ -7,7 +7,7 @@ const Clicker = {
       desc: 'Increase money per click',
       baseCost: 0.50,
       costScale: 1.9,
-      maxLevel: 50,
+      get maxLevel() { return Clicker.getMaxUpgradeLevel(); },
       effect(level) { return 0.01 + level * 0.01; } // +$0.01 per level
     },
     {
@@ -16,7 +16,7 @@ const Clicker = {
       desc: 'Earn money automatically',
       baseCost: 5,
       costScale: 2.3,
-      maxLevel: 50,
+      get maxLevel() { return Clicker.getMaxUpgradeLevel(); },
       effect(level) { return level * 0.008; } // $0.008/sec per level
     }
   ],
