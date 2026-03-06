@@ -89,39 +89,70 @@ const Clicker = {
   // === Rebirth System ===
   getRebirths() { return App.rebirth || 0; },
 
+  // VIP milestone perks — each level unlocks cumulative bonuses
+  VIP_MILESTONES: [
+    { level: 1,  label: 'Lucky Click unlocked' },
+    { level: 2,  label: 'Critical Click unlocked' },
+    { level: 3,  label: 'Auto Bet unlocked' },
+    { level: 5,  label: 'Casino +10% · Loan interest -1%',    casinoMult: 0.10, interestFlat: -1 },
+    { level: 10, label: 'Crime fines -25% · Passive +20%',    fineMult: -0.25,  passiveMult: 0.20 },
+    { level: 25, label: 'All income +20% · Raids -15%',       incomeMult: 0.20, raidMult: -0.15 },
+    { level: 50, label: 'All income +50% · SHARK rate -5%',   incomeMult: 0.50, interestFlat: -5 },
+  ],
+
+  // Sum up all bonuses earned from VIP milestones up to current level
+  getVipBonus(type) {
+    const r = this.getRebirths();
+    let total = 0;
+    for (const m of this.VIP_MILESTONES) {
+      if (r >= m.level && m[type] !== undefined) total += m[type];
+    }
+    return total;
+  },
+
   getEarningsMultiplier() {
     const r = this.getRebirths();
-    let mult = Math.min(5, 1 + r * 0.5); // +0.5x per rebirth, capped at 5x
+    // r 0-10: +0.5x per rebirth (1x → 5x); r 10+: +0.1x per rebirth (slower, no cap)
+    let mult = r <= 10 ? (1 + r * 0.5) : (5 + (r - 10) * 0.1);
+    // VIP passive income bonus
+    mult *= (1 + this.getVipBonus('passiveMult'));
+    mult *= (1 + this.getVipBonus('incomeMult'));
     if (typeof App !== 'undefined') mult *= (1 - App.getHungerPenalty());
     return mult;
   },
 
   getCostDiscount() {
     const r = this.getRebirths();
-    return Math.max(0.5, 1 - r * 0.1); // 10% cheaper per rebirth, max 50%
+    // r 0-5: discount grows (50% off at r5)
+    // r 5-15: flat 50% off
+    // r 15+: costs creep back up (+5% per rebirth above 15)
+    if (r <= 5)  return 1 - r * 0.10;          // 0% → 50% off
+    if (r <= 15) return 0.5;                    // flat 50% off
+    return 0.5 + (r - 15) * 0.05;              // 50% off → eventually more expensive
   },
 
-  // Dynamic max upgrade level: 10 base + 10 per VIP level, capped at 50
+  // Max upgrade level — no hard cap, grows with rebirth
   getMaxUpgradeLevel() {
     const r = this.getRebirths();
-    return Math.min(50, 10 + r * 10);
+    // r 0-5: +10/rebirth (10 → 60); r 5+: +5/rebirth (slower, keeps growing)
+    if (r <= 5) return 10 + r * 10;
+    return 60 + (r - 5) * 5;
   },
 
   getStartingCash() {
     const r = this.getRebirths();
     const base = (typeof Admin !== 'undefined') ? Admin.startingBalance : 0.02;
-    return base * Math.pow(5, r); // 5x more starting cash per rebirth
+    return base * Math.pow(5, r);
   },
 
   // Rebirth requirements scale with each rebirth
   getRebirthRequirements() {
     const r = this.getRebirths();
-    // Require current max upgrade level (scales with VIP)
     const maxLvl = this.getMaxUpgradeLevel();
     const clickReq = maxLvl;
     const autoReq = maxLvl;
-    // Each rebirth also requires more total earned money
-    const earnedReq = r === 0 ? 5000 : 5000 * Math.pow(10, r); // 5K, 50K, 500K, 5M, 50M...
+    // Each rebirth requires exponentially more total earned money
+    const earnedReq = r === 0 ? 5000 : 5000 * Math.pow(10, r);
     return { clickReq, autoReq, earnedReq };
   },
 
@@ -136,26 +167,30 @@ const Clicker = {
     if (!this.canRebirth()) return;
     const req = this.getRebirthRequirements();
     const unstoredPets = typeof Pets !== 'undefined' ? Pets.owned.filter(o => o).length : 0;
-    if (!confirm('REBIRTH: Reset ALL progress for permanent bonuses?\n\n' +
-      'This will reset:\n' +
+    const nextR = this.getRebirths() + 1;
+    const nextMaxLvl = nextR <= 5 ? 10 + nextR * 10 : 60 + (nextR - 5) * 5;
+    const newMilestone = this.VIP_MILESTONES.find(m => m.level === nextR);
+    const costNote = nextR > 15
+      ? '⚠️ Upgrade costs now ' + Math.round((0.5 + (nextR - 15) * 0.05) * 100) + '% of base (harder!)\n'
+      : nextR > 5 ? '• Upgrade costs stay at 50% off\n'
+      : '• Upgrades ' + (nextR * 10) + '% cheaper\n';
+    if (!confirm('REBIRTH → VIP ' + nextR + '\n\n' +
+      'RESET:\n' +
       '• All upgrades & balance\n' +
       '• Properties & Crime buildings\n' +
       '• Stock portfolio & crypto rigs\n' +
       '• Loans & debt\n' +
-      '• Your player stock holdings (shares owned)\n' +
+      '• Your player stock holdings\n' +
       (unstoredPets > 0 ? '• ' + unstoredPets + ' ACTIVE PETS WILL BE LOST!\n' : '') +
-      '\nKEPT through rebirth:\n' +
-      '• Your owned companies & their upgrades\n' +
-      '• Pets in storage\n\n' +
-      'You will get:\n' +
-      '• 1.5x earnings multiplier (stacks)\n' +
-      '• 10% cheaper upgrades\n' +
-      '• ' + App.formatMoney(this.getStartingCash() * 5) + ' starting cash\n' +
-      '• Max upgrade level +10 (now ' + Math.min(50, 10 + (this.getRebirths() + 1) * 10) + ')\n' +
-      (this.getRebirths() === 0 ? '• UNLOCK: Lucky Click upgrade\n' : '') +
-      (this.getRebirths() === 1 ? '• UNLOCK: Critical Click upgrade\n' : '') +
-      (this.getRebirths() === 2 ? '• UNLOCK: Auto Bet upgrade\n' : '') +
-      '• VIP Level ' + (this.getRebirths() + 1) + ' casino perks'
+      '\nKEPT:\n' +
+      '• Your companies, pets in storage\n\n' +
+      'YOU GET:\n' +
+      '• Earnings mult: ' + (nextR <= 10 ? (1 + nextR * 0.5).toFixed(1) : (5 + (nextR - 10) * 0.1).toFixed(1)) + 'x\n' +
+      costNote +
+      '• Starting cash: ' + App.formatMoney(this.getStartingCash() * 5) + '\n' +
+      '• Max upgrade level: ' + nextMaxLvl + '\n' +
+      (newMilestone ? '🌟 NEW VIP PERK: ' + newMilestone.label + '\n' : '') +
+      '\n⚠️ Gets harder each rebirth!'
     )) return;
 
     App.rebirth = (App.rebirth || 0) + 1;
@@ -238,9 +273,18 @@ const Clicker = {
     const multEl = document.getElementById('rebirth-mult');
     if (multEl) multEl.textContent = this.getEarningsMultiplier().toFixed(2) + 'x';
 
-    // Discount display
+    // Discount/premium display
     const discEl = document.getElementById('rebirth-discount');
-    if (discEl) discEl.textContent = Math.round((1 - this.getCostDiscount()) * 100) + '%';
+    if (discEl) {
+      const disc = this.getCostDiscount();
+      if (disc < 1) {
+        discEl.textContent = Math.round((1 - disc) * 100) + '% off';
+        discEl.style.color = '';
+      } else {
+        discEl.textContent = '+' + Math.round((disc - 1) * 100) + '% harder';
+        discEl.style.color = '#ff5252';
+      }
+    }
 
     // VIP level
     const vipEl = document.getElementById('vip-level');
@@ -250,6 +294,26 @@ const Clicker = {
         vipEl.classList.remove('hidden');
       } else {
         vipEl.classList.add('hidden');
+      }
+    }
+
+    // VIP perks earned so far
+    const perksEl = document.getElementById('vip-perks-list');
+    if (perksEl) {
+      const earned = this.VIP_MILESTONES.filter(m => r >= m.level);
+      if (earned.length) {
+        perksEl.innerHTML = earned.map(m =>
+          `<div class="vip-perk-row">🌟 VIP ${m.level}: ${m.label}</div>`
+        ).join('');
+        perksEl.classList.remove('hidden');
+      } else {
+        perksEl.innerHTML = '<div style="color:var(--text-dim);font-size:12px">Reach VIP 5 for first bonus</div>';
+        perksEl.classList.remove('hidden');
+      }
+      // Next milestone teaser
+      const next = this.VIP_MILESTONES.find(m => r < m.level);
+      if (next) {
+        perksEl.innerHTML += `<div class="vip-perk-next">🔒 VIP ${next.level}: ${next.label}</div>`;
       }
     }
 

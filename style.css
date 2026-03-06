@@ -845,6 +845,29 @@ input, textarea, select {
 .req-unmet { color: #ff5252; }
 .req-unmet::before { content: '\2718 '; }
 
+.vip-perks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(255,215,0,0.06);
+  border: 1px solid rgba(255,215,0,0.25);
+  border-radius: 8px;
+  font-size: 11px;
+}
+
+.vip-perk-row {
+  color: #ffd740;
+}
+
+.vip-perk-next {
+  color: var(--text-dim);
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px solid var(--bg3);
+}
+
 @keyframes rebirthPulse {
   0%, 100% { box-shadow: 0 0 10px rgba(156,39,176,0.3); }
   50% { box-shadow: 0 0 25px rgba(156,39,176,0.6); }

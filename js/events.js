@@ -245,7 +245,8 @@ const Events = {
 
   getCasinoMultiplier() {
     const fx = this.getActiveEffect();
-    return 1 + (fx.casinoBonus || 0);
+    const vipBonus = typeof Clicker !== 'undefined' ? Clicker.getVipBonus('casinoMult') : 0;
+    return 1 + (fx.casinoBonus || 0) + vipBonus;
   },
 
   getCryptoMultiplier() {

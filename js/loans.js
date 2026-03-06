@@ -144,14 +144,20 @@ const Loans = {
     return `The Shark won't deal with you. Rebirth ${needed} more time${needed !== 1 ? 's' : ''} to restore credit.`;
   },
 
-  // Get interest rate based on current debt level
+  // Get interest rate based on current debt level + rebirth difficulty
   getInterestPercent() {
-    if (this.debt <= 0) return 5;
-    if (this.debt < 1000) return 5;
-    if (this.debt < 10000) return 8;
-    if (this.debt < 100000) return 12;
-    if (this.debt < 1000000) return 20;
-    return 30;
+    const r = typeof App !== 'undefined' ? (App.rebirth || 0) : 0;
+    // Higher rebirth = base rate creeps up (+1% per 2 rebirths, max +10%)
+    const rebirthPenalty = Math.min(10, Math.floor(r / 2));
+    // VIP perk can reduce interest
+    const vipDiscount = typeof Clicker !== 'undefined' ? Clicker.getVipBonus('interestFlat') : 0;
+    const adjust = rebirthPenalty + vipDiscount;
+    if (this.debt <= 0) return Math.max(1, 5 + adjust);
+    if (this.debt < 1000) return Math.max(1, 5 + adjust);
+    if (this.debt < 10000) return Math.max(1, 8 + adjust);
+    if (this.debt < 100000) return Math.max(1, 12 + adjust);
+    if (this.debt < 1000000) return Math.max(1, 20 + adjust);
+    return Math.max(1, 30 + adjust);
   },
 
   takeLoan(amount) {

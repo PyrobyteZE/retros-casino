@@ -178,10 +178,17 @@ const Crime = {
     this.paths[this._path].upgrades.forEach(upg => {
       if (this._upgrades[upg.id] && upg.raidMult) mult *= upg.raidMult;
     });
-    // Apply house/item raidReduction (bigger raidReductionMult = longer delay = fewer raids)
+    // Apply house/item raidReduction
     const boosts = typeof App !== 'undefined' ? App.getAllBoosts() : {};
     mult *= (1 + (boosts.raidReductionMult || 0));
-    return mult;
+    // Higher rebirth = more heat on you (raids come faster)
+    const r = typeof App !== 'undefined' ? (App.rebirth || 0) : 0;
+    const rebirthRaidPenalty = 1 - Math.min(0.6, r * 0.03); // -3% raid delay per rebirth, max -60%
+    mult *= rebirthRaidPenalty;
+    // VIP perk offsets some of the penalty
+    const vipRaidBonus = typeof Clicker !== 'undefined' ? Clicker.getVipBonus('raidMult') : 0;
+    mult *= (1 + vipRaidBonus);
+    return Math.max(0.1, mult);
   },
 
   getFineMult() {
@@ -190,7 +197,10 @@ const Crime = {
     this.paths[this._path].upgrades.forEach(upg => {
       if (this._upgrades[upg.id] && upg.fineMult) mult *= upg.fineMult;
     });
-    return mult;
+    // VIP perk reduces fines
+    const vipFineMult = typeof Clicker !== 'undefined' ? Clicker.getVipBonus('fineMult') : 0;
+    mult *= (1 + vipFineMult);
+    return Math.max(0.1, mult);
   },
 
   // ── Raid System ─────────────────────────────────────────────────────────────
