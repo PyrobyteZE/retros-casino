@@ -152,8 +152,12 @@ const Firebase = {
     }).catch(err => {
       this.online = false;
       this.connectionState = 'disconnected';
-      this._updateChatStatus('Auth failed: ' + err.code);
+      this._updateChatStatus('Retrying...');
       console.error('Firebase auth error:', err.code, err.message);
+      // Auto-retry after 5s
+      setTimeout(() => {
+        if (!this.online) this._signIn();
+      }, 5000);
     });
   },
 
@@ -162,13 +166,17 @@ const Firebase = {
     this._listenChat();
     this._listenTrades();
     this._listenPvpFlips();
-    // Monitor connection
+    // Monitor connection state — auto-reconnect if dropped
     this.db.ref('.info/connected').on('value', snap => {
       if (snap.val() === true) {
         this._updateChatStatus('Online');
-        this._setupPresence(); // Ensure presence is set up on reconnect
+        this._setupPresence();
       } else if (this.connectionState === 'connected') {
         this._updateChatStatus('Reconnecting...');
+        // If still disconnected after 10s, re-sign in
+        setTimeout(() => {
+          if (!this.online || this.connectionState !== 'connected') this._signIn();
+        }, 10000);
       }
     });
     // Listen for synced stock news

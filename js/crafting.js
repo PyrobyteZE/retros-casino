@@ -1425,6 +1425,18 @@ const Crafting = {
   _onCraftModeChange(val) {
     document.getElementById('craft-template-opts').style.display = val === 'template' ? 'block' : 'none';
     document.getElementById('craft-autostore-opts').style.display = val === 'autostore' ? 'block' : 'none';
+    // Re-populate store select with latest data when switching to autostore
+    if (val === 'autostore') {
+      const sel = document.getElementById('craft-autostore-select');
+      if (!sel) return;
+      const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+      const myStores = typeof Stores !== 'undefined'
+        ? Object.entries(Stores._stores).filter(([, s]) => s.ownerUid === myUid)
+        : [];
+      sel.innerHTML = myStores.length
+        ? myStores.map(([sid, s]) => `<option value="${sid}">${this._esc(s.storeName || sid)}</option>`).join('')
+        : '<option value="">No stores yet — open one in Companies</option>';
+    }
   },
 
   confirmCraftSetup(cIdx, industry) {
