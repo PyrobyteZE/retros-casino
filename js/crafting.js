@@ -754,21 +754,18 @@ const Crafting = {
   // === RENDER ===
   _triggerRender() {
     if (App.currentScreen === 'inventory') this.render();
-    if (App.currentScreen === 'shop') this.renderShopScreen();
+    if (App.currentScreen === 'stores') { if (typeof Stores !== 'undefined') Stores.renderStoresScreen(); }
   },
 
-  renderShopScreen() {
-    const container = document.getElementById('shop-content');
+  renderShopScreen(container) {
+    if (!container) container = document.getElementById('stores-content');
     if (!container) return;
     const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
     const listings = Object.entries(this._itemListings);
     const templates = Object.entries(this._templates);
     const total = listings.length + templates.length;
 
-    let html = `<div style="padding:4px 0 10px">
-      <div style="font-size:15px;font-weight:700;margin-bottom:2px">🛒 Player Shop</div>
-      <div style="font-size:12px;color:var(--text-dim)">${total} item${total !== 1 ? 's' : ''} listed by players</div>
-    </div>`;
+    let html = '';
 
     if (total === 0) {
       html += `<div class="inv-empty">No items in the shop yet.<br>Craft &amp; list items from your Inventory!</div>`;

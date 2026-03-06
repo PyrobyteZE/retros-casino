@@ -45,8 +45,43 @@ const Stores = {
     });
   },
 
+  _storesTab: 'browse',
+
   _triggerRender() {
     if (typeof Companies !== 'undefined') Companies._triggerRender();
+    if (typeof App !== 'undefined' && App.currentScreen === 'stores') this.renderStoresScreen();
+  },
+
+  setStoresTab(tab) {
+    this._storesTab = tab;
+    this.renderStoresScreen();
+  },
+
+  renderStoresScreen() {
+    const container = document.getElementById('stores-content');
+    if (!container) return;
+
+    const tab = this._storesTab;
+    const storeCount = Object.keys(this._stores).length;
+    const itemCount = typeof Crafting !== 'undefined'
+      ? Object.keys(Crafting._itemListings || {}).length + Object.keys(Crafting._templates || {}).length
+      : 0;
+
+    const tabs = `<div class="inv-tabs" style="margin-bottom:12px">
+      <button class="inv-tab${tab === 'browse' ? ' active' : ''}" onclick="Stores.setStoresTab('browse')">🏪 Player Stores ${storeCount > 0 ? `<span style="font-size:10px;background:var(--accent);color:#000;border-radius:8px;padding:1px 6px;margin-left:3px">${storeCount}</span>` : ''}</button>
+      <button class="inv-tab${tab === 'market' ? ' active' : ''}" onclick="Stores.setStoresTab('market')">🛍 Item Market ${itemCount > 0 ? `<span style="font-size:10px;background:var(--accent);color:#000;border-radius:8px;padding:1px 6px;margin-left:3px">${itemCount}</span>` : ''}</button>
+    </div>`;
+
+    const browseHtml = tab === 'browse' ? this.renderBrowseStores() : '';
+    container.innerHTML = `<div style="padding:4px 0 10px">
+        <div style="font-size:15px;font-weight:700;margin-bottom:2px">\u{1F3EA} Shops</div>
+        <div style="font-size:12px;color:var(--text-dim)">${tab === 'browse' ? `${storeCount} store${storeCount !== 1 ? 's' : ''} open across the city` : 'Items listed by players'}</div>
+      </div>${tabs}${tab === 'browse' ? browseHtml : '<div id="stores-market-inner"></div>'}`;
+
+    if (tab === 'market' && typeof Crafting !== 'undefined') {
+      const inner = document.getElementById('stores-market-inner');
+      if (inner) Crafting.renderShopScreen(inner);
+    }
   },
 
   // ─── OPEN / CLOSE / COLLECT ─────────────────────────────────────────────────
