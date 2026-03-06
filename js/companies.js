@@ -788,10 +788,11 @@ const Companies = {
     const ownerUid = s.ownerUid;
     const ticker = s.companyTicker || sym;
 
-    // All own companies and sub-stocks are bankruptcy-immune
-    if (typeof Firebase !== 'undefined' && Firebase.uid === ownerUid) {
+    // If this company is set as the player's main company, block bankruptcy
+    if (typeof Firebase !== 'undefined' && Firebase.uid === ownerUid && this.isMainCompany(ticker)) {
       s._bankruptDeclared = false;
       s._lowTicks = 0;
+      Toast.show('⭐ ' + ticker + ' is your main company — bankruptcy blocked!', '#f39c12', 4000);
       return;
     }
 
