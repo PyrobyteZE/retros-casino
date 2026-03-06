@@ -2696,8 +2696,15 @@ const Companies = {
     return result;
   },
 
+  _newsActiveOrg: 'all',
+
+  setNewsOrg(key) {
+    this._newsActiveOrg = key;
+    const container = document.getElementById('companies-content');
+    if (container) this._renderNewsTab(container);
+  },
+
   _renderNewsTab(container) {
-    let html = '';
     const activeOrgs = this._flatActiveOrgs();
     if (activeOrgs.length === 0) {
       container.innerHTML = `<div style="text-align:center;color:var(--text-dim);padding:40px 16px">
@@ -2707,36 +2714,113 @@ const Companies = {
       </div>`;
       return;
     }
-    activeOrgs.forEach(({ uid, entityKey, org }) => {
-      const posts = this._newsPosts[uid] || {};
-      // Show only posts for this entityKey, fall back to all posts if no entityKey on post
-      const postList = Object.entries(posts)
-        .filter(([, p]) => !p.entityKey || p.entityKey === entityKey)
-        .sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
-      postList.forEach(([postId, post]) => {
-        const net = (post.upvotes || 0) - (post.downvotes || 0);
-        const repColor = net > 0 ? '#27ae60' : net < 0 ? '#c0392b' : 'var(--text-dim)';
-        const age = Date.now() - (post.ts || 0);
-        const ageStr = age < 60000 ? 'just now' : age < 3600000 ? Math.floor(age / 60000) + 'm ago' : Math.floor(age / 3600000) + 'h ago';
-        html += `<div class="company-card" style="border-color:var(--accent)">
-          <div class="company-card-header">
-            <div><span class="company-card-sym">\u{1F4F0}</span> <span>${this._esc(entityKey)}</span></div>
-            <div style="font-size:11px;color:var(--text-dim)">${ageStr}</div>
+
+    const _ageStr = ts => {
+      const age = Date.now() - (ts || 0);
+      return age < 60000 ? 'just now' : age < 3600000 ? Math.floor(age / 60000) + 'm ago' : Math.floor(age / 3600000) + 'h ago';
+    };
+
+    const _repBadge = rep => {
+      const r = rep || 50;
+      const color = r >= 75 ? '#f4b41b' : r >= 50 ? '#27ae60' : r >= 25 ? '#2196f3' : '#9e9e9e';
+      return `<span style="background:${color}22;color:${color};border:1px solid ${color}44;border-radius:10px;font-size:10px;font-weight:700;padding:2px 7px">★ ${r}</span>`;
+    };
+
+    const _postCard = (uid, postId, post, org, entityKey, showSource) => {
+      const net = (post.upvotes || 0) - (post.downvotes || 0);
+      const netColor = net > 0 ? '#27ae60' : net < 0 ? '#c0392b' : 'var(--text-dim)';
+      return `<div class="news-post-card">
+        ${showSource ? `<div class="news-post-source">\u{1F4E1} ${this._esc(entityKey)}</div>` : ''}
+        <div class="news-post-text">${this._esc(post.text)}</div>
+        <div class="news-post-meta">
+          <span style="color:var(--text-dim)">${_ageStr(post.ts)}</span>
+          <span style="color:var(--text-dim)">by ${this._esc(post.authorName || entityKey)}</span>
+          <div style="display:flex;gap:6px;align-items:center;margin-left:auto">
+            <button class="news-vote-btn news-vote-up" onclick="Companies.voteNews('${uid}','${postId}','up')">\u{1F44D} ${post.upvotes || 0}</button>
+            <button class="news-vote-btn news-vote-down" onclick="Companies.voteNews('${uid}','${postId}','down')">\u{1F44E} ${post.downvotes || 0}</button>
+            <span style="font-size:11px;font-weight:700;color:${netColor};min-width:28px;text-align:right">${net > 0 ? '+' : ''}${net}</span>
           </div>
-          <div class="company-card-name" style="font-size:14px;line-height:1.4">${this._esc(post.text)}</div>
-          <div class="company-card-owner" style="font-size:11px;margin-bottom:8px">by ${this._esc(post.authorName || entityKey)} &bull; Rep: ${org.reputation || 50}</div>
-          <div class="company-card-actions" style="justify-content:space-between">
+        </div>
+      </div>`;
+    };
+
+    // Build channel bar
+    const activeKey = this._newsActiveOrg || 'all';
+    let channelBar = `<div class="news-channel-bar">
+      <button class="news-channel-btn${activeKey === 'all' ? ' active' : ''}" onclick="Companies.setNewsOrg('all')">
+        \u{1F4F0} All News
+      </button>`;
+    activeOrgs.forEach(({ uid, entityKey, org }) => {
+      const key = uid + ':' + entityKey;
+      const postCount = Object.keys(this._newsPosts[uid] || {}).length;
+      const rep = org.reputation || 50;
+      channelBar += `<button class="news-channel-btn${activeKey === key ? ' active' : ''}" onclick="Companies.setNewsOrg('${key}')">
+        <span style="font-weight:700">${this._esc(entityKey)}</span>
+        <span class="news-channel-rep">★ ${rep}</span>
+        ${postCount > 0 ? `<span class="news-channel-count">${postCount}</span>` : ''}
+      </button>`;
+    });
+    channelBar += `</div>`;
+
+    let feedHtml = '';
+
+    if (activeKey === 'all') {
+      // Merged feed — all posts newest first
+      const allPosts = [];
+      activeOrgs.forEach(({ uid, entityKey, org }) => {
+        const posts = this._newsPosts[uid] || {};
+        Object.entries(posts)
+          .filter(([, p]) => !p.entityKey || p.entityKey === entityKey)
+          .forEach(([postId, post]) => allPosts.push({ uid, entityKey, org, postId, post }));
+      });
+      allPosts.sort((a, b) => (b.post.ts || 0) - (a.post.ts || 0));
+      if (allPosts.length === 0) {
+        feedHtml = `<div style="text-align:center;color:var(--text-dim);padding:32px 16px">No posts yet.</div>`;
+      } else {
+        feedHtml = allPosts.map(({ uid, entityKey, org, postId, post }) =>
+          _postCard(uid, postId, post, org, entityKey, true)
+        ).join('');
+      }
+    } else {
+      // Single org channel
+      const [orgUid, orgKey] = activeKey.split(':');
+      const match = activeOrgs.find(o => o.uid === orgUid && o.entityKey === orgKey);
+      if (!match) {
+        feedHtml = `<div style="text-align:center;color:var(--text-dim);padding:32px">Channel not found.</div>`;
+      } else {
+        const { uid, entityKey, org } = match;
+        const rep = org.reputation || 50;
+        const repColor = rep >= 75 ? '#f4b41b' : rep >= 50 ? '#27ae60' : rep >= 25 ? '#2196f3' : '#9e9e9e';
+        const posts = this._newsPosts[uid] || {};
+        const postList = Object.entries(posts)
+          .filter(([, p]) => !p.entityKey || p.entityKey === entityKey)
+          .sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+
+        feedHtml += `<div class="news-org-header" style="border-color:${repColor}">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="font-size:36px">\u{1F4E1}</div>
             <div>
-              <button class="company-buy-btn" style="background:#27ae60;padding:4px 12px;font-size:13px" onclick="Companies.voteNews('${uid}','${postId}','up')">\u{1F44D} ${post.upvotes || 0}</button>
-              <button class="company-sell-btn" style="padding:4px 12px;font-size:13px" onclick="Companies.voteNews('${uid}','${postId}','down')">\u{1F44E} ${post.downvotes || 0}</button>
+              <div style="font-size:20px;font-weight:700;color:${repColor}">${this._esc(entityKey)}</div>
+              <div style="font-size:12px;color:var(--text-dim)">by ${this._esc(org.ownerName || 'Unknown')}</div>
             </div>
-            <div style="font-size:12px;color:${repColor};font-weight:700">${net > 0 ? '+' : ''}${net} net</div>
+            <div style="margin-left:auto;text-align:right">
+              ${_repBadge(rep)}
+              <div style="font-size:11px;color:var(--text-dim);margin-top:4px">${postList.length} post${postList.length !== 1 ? 's' : ''}</div>
+            </div>
           </div>
         </div>`;
-      });
-    });
-    if (!html) html = `<div style="text-align:center;color:var(--text-dim);padding:32px">No posts yet.</div>`;
-    container.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;padding-top:8px">${html}</div>`;
+
+        if (postList.length === 0) {
+          feedHtml += `<div style="text-align:center;color:var(--text-dim);padding:24px">No posts from this org yet.</div>`;
+        } else {
+          feedHtml += postList.map(([postId, post]) =>
+            _postCard(uid, postId, post, org, entityKey, false)
+          ).join('');
+        }
+      }
+    }
+
+    container.innerHTML = `<div class="news-tab-wrap">${channelBar}<div class="news-feed-list">${feedHtml}</div></div>`;
   },
 
   _renderNewsFeed(html) {

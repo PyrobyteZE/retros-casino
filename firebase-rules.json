@@ -17,6 +17,16 @@
       }
     },
 
+    "chat": {
+      ".read": "auth !== null",
+      ".write": "auth !== null"
+    },
+
+    "stockNews": {
+      ".read": "auth !== null",
+      ".write": "auth !== null"
+    },
+
     "accounts": {
       "$name": {
         ".read": false,
@@ -24,79 +34,157 @@
       }
     },
 
-    "adminsList": {
-      ".read": true,
-      ".write": "root.child('adminsList').child(auth.uid).exists()"
+    "registeredNames": {
+      ".read": "auth !== null",
+      ".write": "auth !== null"
+    },
+
+    "cloudSaves": {
+      "$uid": {
+        ".read": "auth.uid === $uid || root.child('admins').child(auth.uid).exists()",
+        ".write": "auth.uid === $uid || root.child('admins').child(auth.uid).exists()"
+      }
+    },
+
+    "admins": {
+      ".read": "auth !== null",
+      "$uid": {
+        ".write": "auth.uid === $uid || root.child('admins').child(auth.uid).exists()"
+      }
     },
 
     "adminPlayerCommands": {
       "$uid": {
         ".read": "auth.uid === $uid",
-        ".write": "root.child('adminsList').child(auth.uid).exists()"
+        ".write": "root.child('admins').child(auth.uid).exists()"
       }
     },
 
     "adminCommands": {
-      ".read": true,
-      ".write": "root.child('adminsList').child(auth.uid).exists()"
+      ".read": "auth !== null",
+      ".write": "root.child('admins').child(auth.uid).exists()"
+    },
+
+    "adminHunger": {
+      ".read": "auth !== null",
+      ".write": "root.child('admins').child(auth.uid).exists()"
     },
 
     "worldEvent": {
       ".read": true,
-      ".write": "root.child('adminsList').child(auth.uid).exists()"
+      ".write": "root.child('admins').child(auth.uid).exists()"
     },
 
     "worldEvents": {
       ".read": true,
-      ".write": "root.child('adminsList').child(auth.uid).exists()"
+      ".write": "root.child('admins').child(auth.uid).exists()"
+    },
+
+    "eventAuthority": {
+      ".read": true,
+      ".write": "auth !== null"
     },
 
     "stockPrices": {
       ".read": true,
+      ".write": "auth !== null",
       "adminCommand": {
-        ".write": "root.child('adminsList').child(auth.uid).exists()"
+        ".write": "root.child('admins').child(auth.uid).exists()"
       }
     },
 
     "cryptoPrices": {
       ".read": true,
+      ".write": "auth !== null",
       "adminCommand": {
-        ".write": "root.child('adminsList').child(auth.uid).exists()"
+        ".write": "root.child('admins').child(auth.uid).exists()"
       }
     },
 
     "playerStockPrices": {
       ".read": true,
-      "adminCommand": {
-        ".write": "root.child('adminsList').child(auth.uid).exists()"
-      },
-      "$ticker": {
-        ".write": "auth !== null"
-      }
+      ".write": "auth !== null"
     },
 
     "playerCoinPrices": {
       ".read": true,
-      "adminCommand": {
-        ".write": "root.child('adminsList').child(auth.uid).exists()"
-      },
-      "$coin": {
-        ".write": "auth !== null"
+      ".write": "auth !== null"
+    },
+
+    "companies": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth.uid === $uid || root.child('admins').child(auth.uid).exists()"
       }
     },
 
-    "gifts": {
+    "bankruptCompanies": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "companySales": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "companySaleReceipts": {
       "$uid": {
         ".read": "auth.uid === $uid",
         ".write": "auth !== null"
       }
     },
 
-    "invites": {
+    "trades": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "tradeInfluence": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "tradeInfluenceCoin": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "pvpFlips": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "stockOffers": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "stockDeletions": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "scandals": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "bounties": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "bountyRefunds": {
       "$uid": {
         ".read": "auth.uid === $uid",
         ".write": "auth !== null"
       }
+    },
+
+    "playerDividends": {
+      ".read": "auth !== null",
+      ".write": "auth !== null"
     },
 
     "playerIds": {
@@ -116,10 +204,38 @@
       ".write": "auth !== null"
     },
 
-    "cloudSaves": {
+    "gifts": {
       "$uid": {
-        ".read": "auth.uid === $uid || root.child('adminsList').child(auth.uid).exists()",
-        ".write": "auth.uid === $uid || root.child('adminsList').child(auth.uid).exists()"
+        ".read": "auth.uid === $uid",
+        ".write": "auth !== null"
+      }
+    },
+
+    "playerGifts": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        ".write": "auth !== null"
+      }
+    },
+
+    "invites": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        ".write": "auth !== null"
+      }
+    },
+
+    "playerInvites": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        ".write": "auth !== null"
+      }
+    },
+
+    "saleReceipts": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        ".write": "auth !== null"
       }
     },
 
@@ -130,15 +246,32 @@
       }
     },
 
+    "newsOrgs": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth.uid === $uid"
+      }
+    },
+
     "playerBanks": {
       ".read": true,
       "$uid": {
-        ".write": "auth.uid === $uid || root.child('adminsList').child(auth.uid).exists()"
+        ".write": "auth.uid === $uid || root.child('admins').child(auth.uid).exists()"
       }
+    },
+
+    "playerBankVaults": {
+      ".read": "auth !== null",
+      ".write": "auth !== null"
     },
 
     "playerBankLoans": {
       ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "playerLoans": {
+      ".read": "auth !== null",
       ".write": "auth !== null"
     },
 
@@ -167,20 +300,127 @@
       ".write": "auth !== null"
     },
 
-    "foodMenus": {
-      ".read": true,
-      "$uid": {
-        ".write": "auth.uid === $uid || root.child('adminsList').child(auth.uid).exists()"
-      }
-    },
-
-    "gameRooms": {
+    "itemTemplates": {
       ".read": true,
       ".write": "auth !== null"
     },
 
-    "eventAuthority": {
+    "foodMenus": {
       ".read": true,
+      "$uid": {
+        ".write": "auth.uid === $uid || root.child('admins').child(auth.uid).exists()"
+      }
+    },
+
+    "godMansions": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "playerCoins": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth.uid === $uid"
+      }
+    },
+
+    "playerCoinSlots": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "coinSold": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "coinPromotions": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "coinTransfers": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        ".write": "auth !== null"
+      }
+    },
+
+    "friends": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        ".write": "auth !== null"
+      }
+    },
+
+    "friendRequests": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        ".write": "auth !== null"
+      }
+    },
+
+    "dms": {
+      ".read": "auth !== null",
+      ".write": "auth !== null"
+    },
+
+    "dmUnread": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        ".write": "auth !== null"
+      }
+    },
+
+    "competitors": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        ".write": "auth.uid === $uid"
+      }
+    },
+
+    "allies": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        ".write": "auth.uid === $uid"
+      }
+    },
+
+    "allyNotifications": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        ".write": "auth !== null"
+      }
+    },
+
+    "sabotageNotifications": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        ".write": "auth !== null"
+      }
+    },
+
+    "privateShareOffers": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        ".write": "auth !== null"
+      }
+    },
+
+    "acquisitionTransfers": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        ".write": "auth !== null"
+      }
+    },
+
+    "mainRoom": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
+    "privateRooms": {
+      ".read": "auth !== null",
       ".write": "auth !== null"
     }
   }
