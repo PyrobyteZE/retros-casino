@@ -205,6 +205,8 @@ const Firebase = {
     if (typeof Cars !== 'undefined') Cars.init();
     if (typeof Stores !== 'undefined') Stores.init();
     if (typeof Events !== 'undefined') Events.init();
+    // Re-init marketplace listeners that couldn't attach before db was ready
+    if (typeof Pets !== 'undefined') Pets.initCustomPets();
     // Incoming gifts — persisted in Firebase until received, batched for offline catch-up
     this.listenGifts(this.uid, (giftId, gift) => {
       if (this._pendingGifts[giftId]) return;
@@ -2923,6 +2925,7 @@ const Firebase = {
 
   // === CUSTOM PET MARKETPLACE ===
   listenPetListings(cb) {
+    if (!this.db) return;
     this.db.ref('petListings').limitToFirst(100).on('value', snap => cb(snap.val() || {}),
       err => console.warn('listenPetListings denied:', err.code));
   },
@@ -3232,6 +3235,7 @@ const Firebase = {
   },
 
   listenCarListings(cb) {
+    if (!this.db) return;
     this.db.ref('carListings').limitToFirst(100).on('value', snap => cb(snap.val() || {}),
       err => console.warn('listenCarListings denied:', err.code));
   },
