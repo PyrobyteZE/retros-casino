@@ -828,6 +828,14 @@ const Admin = {
         </div>
       </div>
       <div class="admin-section">
+        <h3>Credit Score</h3>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">Current: <span id="admin-credit-display" style="color:var(--green);font-weight:700">${typeof App !== 'undefined' ? App.creditScore : 600}</span> &nbsp; Range: 300–850</div>
+        <div class="admin-row">
+          <input type="number" id="admin-credit-score" min="300" max="850" placeholder="300–850">
+          <button onclick="Admin.setCreditScore()">Set</button>
+        </div>
+      </div>
+      <div class="admin-section">
         <h3>Stats</h3>
         <div class="admin-row">
           <label>Total Earned:</label>
@@ -923,6 +931,19 @@ const Admin = {
             </select>
             <button class="rig-btn win" onclick="Admin.playerCmd('${safeUid}','grantCar')" style="font-size:11px;white-space:nowrap">Grant</button>
           </div>
+          <!-- Credit Score -->
+          <div class="admin-pe-section-label" style="margin-top:8px">📊 Credit Score</div>
+          <div style="display:flex;gap:4px;margin-top:4px;align-items:center">
+            <input type="number" id="admin-pe-credit-${safeUid}" placeholder="300–850" min="300" max="850" style="width:80px;font-size:12px;padding:5px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px">
+            <button class="rig-btn" onclick="Admin.playerCmd('${safeUid}','setCreditScore')" style="font-size:11px;white-space:nowrap">Set Score</button>
+          </div>
+          <!-- Password Reset -->
+          <div class="admin-pe-section-label" style="margin-top:8px">🔑 Reset Password</div>
+          <div style="display:flex;gap:4px;margin-top:4px;align-items:center">
+            <input type="text" id="admin-pe-pwname-${safeUid}" placeholder="Account name" value="${name}" style="flex:1;font-size:12px;padding:5px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;min-width:0">
+            <input type="text" id="admin-pe-pw-${safeUid}" placeholder="New password" style="flex:1;font-size:12px;padding:5px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;min-width:0">
+            <button class="rig-btn lose" onclick="Admin.resetPlayerPassword('${safeUid}')" style="font-size:11px;white-space:nowrap">Reset</button>
+          </div>
           <!-- Forged item -->
           ${this._forgeItem ? `
           <div class="admin-pe-section-label" style="margin-top:8px">📦 Send Forged Item</div>
@@ -939,6 +960,32 @@ const Admin = {
   togglePlayerEdit(safeUid) {
     const el = document.getElementById('admin-player-edit-' + safeUid);
     if (el) el.classList.toggle('hidden');
+  },
+
+  setCreditScore() {
+    const score = parseInt(document.getElementById('admin-credit-score')?.value);
+    if (isNaN(score) || score < 300 || score > 850) { Toast.show('Score must be 300–850', '#ff5252', 2000); return; }
+    App.creditScore = score;
+    App.save();
+    const disp = document.getElementById('admin-credit-display');
+    if (disp) disp.textContent = score;
+    Toast.show('Credit score set to ' + score, '#00e676', 2000);
+  },
+
+  async resetPlayerPassword(safeUid) {
+    const nameInput = document.getElementById('admin-pe-pwname-' + safeUid);
+    const pwInput = document.getElementById('admin-pe-pw-' + safeUid);
+    const accountName = nameInput?.value.trim();
+    const newPw = pwInput?.value.trim();
+    if (!accountName || !newPw) { Toast.show('Enter account name and new password', '#ff5252', 2000); return; }
+    if (!confirm('Reset password for "' + accountName + '" to "' + newPw + '"?')) return;
+    const result = await Firebase.adminResetPassword(accountName, newPw);
+    if (result.ok) {
+      Toast.show('Password reset for ' + accountName, '#00e676', 3000);
+      if (pwInput) pwInput.value = '';
+    } else {
+      Toast.show('Error: ' + result.error, '#ff5252', 3000);
+    }
   },
 
   playerCmd(safeUid, cmd) {
@@ -963,6 +1010,10 @@ const Admin = {
     } else if (cmd === 'grantItem') {
       if (!this._forgeItem) { Toast.show('No forged item — use 🔨 Forge tab first', '#ff5252', 2000); return; }
       payload.item = this._forgeItem;
+    } else if (cmd === 'setCreditScore') {
+      const score = parseInt(document.getElementById('admin-pe-credit-' + safeUid)?.value);
+      if (isNaN(score) || score < 300 || score > 850) { Toast.show('Score must be 300–850', '#ff5252', 2000); return; }
+      payload.score = score;
     }
     if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
       Firebase.pushAdminPlayerCommand(realUid, payload);

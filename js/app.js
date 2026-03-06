@@ -5,6 +5,7 @@ const App = {
   totalClicks: 0,
   upgrades: { clickValue: 0, autoClicker: 0, luckyClick: 0, critClick: 0, autoBet: 0 },
   rebirth: 0,
+  creditScore: 600,
   stats: { gamesWon: 0, gamesLost: 0 },
   currentScreen: 'home',
   screenHistory: [],
@@ -438,6 +439,7 @@ const App = {
       totalClicks: this.totalClicks,
       upgrades: this.upgrades,
       rebirth: this.rebirth,
+      creditScore: this.creditScore,
       stats: this.stats,
       hunger: this.hunger,
       lastHungerTick: this.lastHungerTick,
@@ -475,6 +477,7 @@ const App = {
       this.totalClicks = data.totalClicks || 0;
       this.upgrades = data.upgrades || { clickValue: 0, autoClicker: 0, luckyClick: 0, critClick: 0, autoBet: 0 };
       this.rebirth = data.rebirth || 0;
+      this.creditScore = data.creditScore !== undefined ? data.creditScore : 600;
       this.stats = data.stats || { gamesWon: 0, gamesLost: 0 };
       this.hunger = data.hunger !== undefined ? data.hunger : 100;
       this.lastHungerTick = data.lastHungerTick || 0;

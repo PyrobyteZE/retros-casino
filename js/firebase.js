@@ -303,6 +303,9 @@ const Firebase = {
           Cars.adminGrantCar(cmd.category || 'economy');
           Toast.show('🎁 Admin granted you a ' + (cmd.category || 'economy') + ' car!', '#00e676', 5000);
         }
+      } else if (cmd.cmd === 'setCreditScore') {
+        App.creditScore = Math.max(300, Math.min(850, cmd.score || 600));
+        Toast.show('⚡ Admin set your credit score to ' + App.creditScore, '#ffd740', 4000);
       }
       App.save();
       this._lastCloudSave = 0;
@@ -1788,6 +1791,19 @@ const Firebase = {
   },
 
   // === ADMIN COMMANDS ===
+  async adminResetPassword(accountName, newPassword) {
+    if (!this.isOnline()) return { ok: false, error: 'Offline' };
+    const nameLower = accountName.toLowerCase().trim();
+    if (!nameLower || !newPassword) return { ok: false, error: 'Missing name or password' };
+    const hash = await this._hashPassword(newPassword);
+    try {
+      await this.db.ref('accounts/' + nameLower + '/passwordHash').set(hash);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  },
+
   pushAdminPlayerCommand(uid, cmd) {
     if (!this.isOnline()) return;
     this.db.ref('adminPlayerCommands/' + uid).set({ ...cmd, ts: Date.now() });
