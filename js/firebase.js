@@ -2850,6 +2850,55 @@ const Firebase = {
       err => console.warn('listenItemListings denied:', err.code));
   },
 
+  // === FOOD MENUS ===
+  listenFoodMenus(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('foodMenus').on('value', snap => cb(snap.val() || {}),
+      err => console.warn('listenFoodMenus denied:', err.code));
+  },
+
+  createFoodMenuItem(ownerUid, menuItemId, data) {
+    if (!this.isOnline() || !this.uid) return Promise.resolve();
+    return this.db.ref('foodMenus/' + ownerUid + '/' + menuItemId).set(data)
+      .catch(err => console.error('createFoodMenuItem error:', err));
+  },
+
+  removeFoodMenuItem(ownerUid, menuItemId) {
+    if (!this.isOnline()) return Promise.resolve();
+    return this.db.ref('foodMenus/' + ownerUid + '/' + menuItemId).remove()
+      .catch(err => console.error('removeFoodMenuItem error:', err));
+  },
+
+  async buyFoodMenuItem(ownerUid, menuItemId, price) {
+    if (!this.isOnline() || !this.uid) return { ok: false };
+    const ref = this.db.ref('foodMenus/' + ownerUid + '/' + menuItemId);
+    const snap = await ref.once('value').catch(() => null);
+    const entry = snap && snap.val();
+    if (!entry) return { ok: false, reason: 'not_found' };
+    if (entry.expiresAt && Date.now() > entry.expiresAt) return { ok: false, reason: 'expired' };
+
+    if (entry.qty !== null && entry.qty !== undefined) {
+      // Limited — use transaction to decrement
+      const result = await ref.transaction(cur => {
+        if (!cur || cur.qty <= 0) return; // abort
+        return { ...cur, qty: cur.qty - 1, totalSold: (cur.totalSold || 0) + 1 };
+      }).catch(() => ({ committed: false }));
+      if (!result.committed) return { ok: false, reason: 'sold_out' };
+      if ((result.snapshot.val()?.qty ?? 1) <= 0) await ref.remove().catch(() => {});
+    } else {
+      await ref.update({ totalSold: (entry.totalSold || 0) + 1 }).catch(() => {});
+    }
+
+    await this.db.ref('saleReceipts/' + ownerUid).push({
+      amount: price, type: 'food_menu', menuItemId,
+      buyerUid: this.uid,
+      buyerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Unknown',
+      ts: Date.now(),
+    }).catch(() => {});
+
+    return { ok: true };
+  },
+
   // === ITEM TEMPLATES (Limited Edition) ===
   listenItemTemplates(cb) {
     if (!this.isOnline()) return;

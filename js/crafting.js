@@ -64,6 +64,7 @@ const Crafting = {
   _inventory: [],       // [ itemObj ]
   _equipped: { slot0: null, slot1: null, slot2: null },
   _activeBuffs: [],     // [ { id, itemName, icon, stats, expiresAt } ] — consumed food buffs
+  _foodMenus: {},       // { [ownerUid]: { [menuItemId]: menuEntry } }
   _itemListings: {},    // { listingId: { sellerUid, sellerName, item, price, listedAt } }
   _templates: {},       // { [templateId]: templateObj } — limited edition listings from Firebase
   _activeTab: 'bag',    // 'bag' | 'market'
@@ -90,6 +91,10 @@ const Crafting = {
       });
       Firebase.listenItemTemplates(data => {
         this._templates = data || {};
+        this._triggerRender();
+      });
+      Firebase.listenFoodMenus(data => {
+        this._foodMenus = data || {};
         this._triggerRender();
       });
     }
@@ -757,7 +762,8 @@ const Crafting = {
       html += `</div>
         <div class="inv-item-actions">
           ${isFood
-            ? `<button class="inv-eat-btn" onclick="Crafting.eatItem('${item.id}')">🍽️ Eat</button>`
+            ? `<button class="inv-eat-btn" onclick="Crafting.eatItem('${item.id}')">🍽️ Eat</button>
+               <button class="inv-menu-btn" onclick="Crafting._showFoodMenuModal('${item.id}')">📋 Menu</button>`
             : isEquipped
               ? `<span class="inv-equipped-badge">Equipped</span>`
               : `<select class="inv-equip-select" onchange="Crafting.equipItem('${item.id}',this.value);this.value=''">
@@ -778,6 +784,63 @@ const Crafting = {
 
   _renderMarket() {
     const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    const now = Date.now();
+
+    // === Food Market section ===
+    const allMenuEntries = [];
+    for (const uid in this._foodMenus) {
+      for (const mid in this._foodMenus[uid]) {
+        const e = this._foodMenus[uid][mid];
+        if (!e || !e.item) continue;
+        if (e.expiresAt && now > e.expiresAt) continue;
+        if (e.qty !== null && e.qty !== undefined && e.qty <= 0) continue;
+        allMenuEntries.push({ uid, mid, e });
+      }
+    }
+    let foodHtml = '';
+    if (allMenuEntries.length > 0) {
+      foodHtml += `<div style="font-weight:700;font-size:13px;margin:8px 0 6px">🍔 Food Market</div>
+        <div class="inv-item-grid" style="margin-bottom:14px">`;
+      for (const { uid, mid, e } of allMenuEntries) {
+        const item = e.item;
+        const rarityColor = this.RARITY_COLORS[item.rarity] || '#aaa';
+        const isMine = uid === myUid;
+        const canAfford = App.balance >= e.price || (typeof Admin !== 'undefined' && Admin.godMode);
+        const typeTag = e.listType === 'permanent' ? '♾️ Always' :
+          e.listType === 'limited' ? `📦 ${e.qty} left` :
+          e.listType === 'timed' ? `⏳ ${Math.max(1, Math.ceil(((e.expiresAt||0)-now)/60000))}m left` :
+          `📦 ${e.qty} · ⏳ ${Math.max(1, Math.ceil(((e.expiresAt||0)-now)/60000))}m`;
+        const durMins = (this.BUFF_DURATIONS[item.rarity] || this.BUFF_DURATIONS.common) / 60_000;
+        foodHtml += `<div class="inv-item-card food-menu-card" style="border-color:${rarityColor}">
+          <div class="inv-item-top">
+            <div class="inv-item-art">${this.renderPixelArt(item.pixels, 48)}</div>
+            <div class="inv-item-info">
+              <div class="inv-item-name">${this._esc(item.name)}</div>
+              <div class="inv-item-rarity" style="color:${rarityColor}">${item.rarity} ${item.category}</div>
+              <div class="inv-item-crafter">🍴 ${this._esc(e.companyName || e.ownerName || '?')}</div>
+            </div>
+          </div>
+          <div class="inv-item-stats">`;
+        for (const stat of (item.stats || [])) {
+          const isCurse = stat.isCurse || stat.value < 0;
+          const sign = (!isCurse && stat.value >= 0) ? '+' : '';
+          const pct = stat.statType === 'passiveIncome'
+            ? sign + App.formatMoney(stat.value) + '/s'
+            : sign + Math.round(stat.value * 100) + '% ' + (this.STAT_LABELS[stat.statType] || stat.statType);
+          foodHtml += `<span class="inv-stat-tag${isCurse ? ' inv-stat-curse' : ''}">${pct}</span>`;
+        }
+        foodHtml += `<span class="inv-stat-tag" style="color:#4caf50;border-color:#4caf5055">⏱ ${durMins}m buff</span>
+          <span class="inv-stat-tag food-menu-type-tag">${typeTag}</span>
+          </div>
+          <div class="inv-item-actions">
+            ${isMine
+              ? `<button class="inv-sell-btn" onclick="Crafting.delistFoodItem('${uid}','${mid}')">Delist</button>`
+              : `<button class="inv-eat-btn${canAfford?'':' unaffordable'}" style="flex:1" onclick="Crafting.buyFoodMenuItem('${uid}','${mid}')">Buy ${App.formatMoney(e.price)}</button>`}
+          </div>
+        </div>`;
+      }
+      foodHtml += `</div>`;
+    }
 
     // === Limited Edition Templates section ===
     const tplEntries = Object.entries(this._templates);
@@ -814,9 +877,10 @@ const Crafting = {
     }
 
     const listings = Object.entries(this._itemListings);
-    if (listings.length === 0 && tplEntries.length === 0) {
+    if (listings.length === 0 && tplEntries.length === 0 && allMenuEntries.length === 0) {
       return `<div class="inv-empty">No items listed yet.<br>Craft items and sell them from your Bag!</div>`;
     }
+    html = foodHtml + html;
     if (listings.length > 0) {
       html += `<div style="font-weight:700;font-size:13px;margin:8px 0 6px">🛒 Listed Items</div>`;
     }
@@ -927,6 +991,176 @@ const Crafting = {
         </div>`;
       }
       html += `</div>`;
+    }
+
+    html += `</div>`;
+    return html;
+  },
+
+  // === FOOD MENU ===
+  _showFoodMenuModal(itemId) {
+    const item = this._inventory.find(i => i.id === itemId);
+    if (!item || item.industry !== 'food') return;
+    const existing = document.getElementById('food-menu-modal');
+    if (existing) existing.remove();
+    const modal = document.createElement('div');
+    modal.id = 'food-menu-modal';
+    modal.className = 'house-modal-overlay';
+    modal.innerHTML = `
+      <div class="house-modal-box" style="max-width:320px">
+        <div class="house-modal-title">🍔 List on Food Menu</div>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">${this._esc(item.name)} — ${item.rarity} ${item.category}</div>
+        <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Price per item</label>
+        <input id="fm-price" type="text" class="sh-input house-modal-input" placeholder="e.g. 50k" style="margin-bottom:10px">
+        <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Listing type</label>
+        <select id="fm-type" class="inv-equip-select" style="width:100%;margin-bottom:10px" onchange="Crafting._onFoodMenuTypeChange()">
+          <option value="permanent">♾️ Permanent (infinite stock)</option>
+          <option value="limited">📦 Limited stock</option>
+          <option value="timed">⏳ Time-limited</option>
+          <option value="both">📦⏳ Limited + Timed</option>
+        </select>
+        <div id="fm-qty-row" style="display:none;margin-bottom:10px">
+          <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Quantity (portions)</label>
+          <input id="fm-qty" type="number" min="1" class="sh-input house-modal-input" placeholder="e.g. 20">
+        </div>
+        <div id="fm-time-row" style="display:none;margin-bottom:10px">
+          <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px">Available for (minutes)</label>
+          <input id="fm-mins" type="number" min="1" class="sh-input house-modal-input" placeholder="e.g. 60">
+        </div>
+        <div class="house-modal-actions">
+          <button class="house-modal-btn" onclick="Crafting._confirmFoodMenu('${itemId}')">List</button>
+          <button class="house-modal-btn house-modal-cancel" onclick="document.getElementById('food-menu-modal').remove()">Cancel</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    setTimeout(() => document.getElementById('fm-price')?.focus(), 50);
+  },
+
+  _onFoodMenuTypeChange() {
+    const type = document.getElementById('fm-type')?.value;
+    const qtyRow = document.getElementById('fm-qty-row');
+    const timeRow = document.getElementById('fm-time-row');
+    if (qtyRow) qtyRow.style.display = (type === 'limited' || type === 'both') ? 'block' : 'none';
+    if (timeRow) timeRow.style.display = (type === 'timed' || type === 'both') ? 'block' : 'none';
+  },
+
+  _confirmFoodMenu(itemId) {
+    const item = this._inventory.find(i => i.id === itemId);
+    if (!item) return;
+    const price = App.parseAmount(document.getElementById('fm-price')?.value || '');
+    if (isNaN(price) || price <= 0) { Toast.show('Enter a valid price', '#f44336', 2000); return; }
+    const type = document.getElementById('fm-type')?.value || 'permanent';
+    let qty = null, expiresAt = null;
+    if (type === 'limited' || type === 'both') {
+      qty = parseInt(document.getElementById('fm-qty')?.value) || 0;
+      if (qty <= 0) { Toast.show('Enter a valid quantity', '#f44336', 2000); return; }
+    }
+    if (type === 'timed' || type === 'both') {
+      const mins = parseInt(document.getElementById('fm-mins')?.value) || 0;
+      if (mins <= 0) { Toast.show('Enter a valid duration', '#f44336', 2000); return; }
+      expiresAt = Date.now() + mins * 60_000;
+    }
+    document.getElementById('food-menu-modal')?.remove();
+
+    // Find which food company owns this listing (first food company the player has)
+    const foodCo = typeof Companies !== 'undefined'
+      ? (Companies._companies.find(c => c.industry === 'food') ||
+         Companies._companies.find(c => (c.stocks || []).some(s => (s.industry || c.industry) === 'food')))
+      : null;
+    const companyName = foodCo ? foodCo.name : 'Food Co';
+    const menuItemId = 'fm_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : 'local';
+
+    // Consume item from inventory (stored as template in listing)
+    this._inventory = this._inventory.filter(i => i.id !== itemId);
+    for (const s of ['slot0','slot1','slot2']) {
+      if (this._equipped[s] === itemId) this._equipped[s] = null;
+    }
+
+    const entry = {
+      menuItemId, ownerUid: myUid,
+      ownerName: typeof Settings !== 'undefined' ? Settings.options.playerName : 'Chef',
+      companyName,
+      item: { ...item, id: itemId },
+      price, listType: type, qty, expiresAt,
+      listedAt: Date.now(), totalSold: 0,
+    };
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.createFoodMenuItem(myUid, menuItemId, entry);
+    }
+    App.save();
+    this._triggerRender();
+    Toast.show('🍔 Listed on food menu!', '#4caf50', 2500);
+  },
+
+  async buyFoodMenuItem(ownerUid, menuItemId) {
+    if (!Firebase || !Firebase.isOnline()) { alert('Must be online.'); return; }
+    const ownerData = this._foodMenus[ownerUid];
+    const entry = ownerData && ownerData[menuItemId];
+    if (!entry) { Toast.show('Item no longer available', '#f44336', 2000); return; }
+    if (entry.expiresAt && Date.now() > entry.expiresAt) { Toast.show('This listing has expired', '#f44336', 2000); return; }
+    if (entry.qty !== null && entry.qty !== undefined && entry.qty <= 0) { Toast.show('Sold out!', '#f44336', 2000); return; }
+    const isGod = typeof Admin !== 'undefined' && Admin.godMode;
+    if (!isGod && App.balance < entry.price) { Toast.show('Not enough money!', '#f44336', 2000); return; }
+    if (!isGod) App.addBalance(-entry.price);
+
+    const result = await Firebase.buyFoodMenuItem(ownerUid, menuItemId, entry.price);
+    if (!result || !result.ok) {
+      App.addBalance(entry.price); // refund
+      Toast.show(result?.reason === 'sold_out' ? 'Sold out!' : 'Purchase failed', '#f44336', 2000);
+      return;
+    }
+    // Give buyer a fresh copy of the food item
+    const copy = { ...entry.item, id: 'item_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 4) };
+    this._inventory.push(copy);
+    App.save();
+    this._triggerRender();
+    Toast.show(`${entry.item.icon} Bought ${entry.item.name} — eat it from your bag!`, '#4caf50', 3000);
+  },
+
+  delistFoodItem(ownerUid, menuItemId) {
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : 'local';
+    if (ownerUid !== myUid) return;
+    const entry = this._foodMenus[ownerUid]?.[menuItemId];
+    if (!entry) return;
+    if (!confirm('Remove "' + entry.item.name + '" from your menu? It returns to your bag.')) return;
+    // Return item to inventory
+    this._inventory.push({ ...entry.item });
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.removeFoodMenuItem(ownerUid, menuItemId);
+    }
+    App.save();
+    this._triggerRender();
+    Toast.show('Item returned to bag', '#4caf50', 2000);
+  },
+
+  _renderFoodMenuManagement(cIdx, company) {
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    const myMenuEntries = Object.entries((this._foodMenus[myUid] || {}))
+      .filter(([, e]) => e.companyName === company.name || !e.companyName);
+    const now = Date.now();
+    let html = `<div style="margin-top:14px;border-top:1px solid var(--bg3);padding-top:12px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">🍔 My Menu</div>`;
+    if (myMenuEntries.length === 0) {
+      html += `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">No items on the menu yet.<br>Craft food items and use 📋 Menu in your bag to list them.</div>`;
+    } else {
+      for (const [mid, e] of myMenuEntries) {
+        const expired = e.expiresAt && now > e.expiresAt;
+        const soldOut = e.qty !== null && e.qty !== undefined && e.qty <= 0;
+        const statusColor = expired || soldOut ? 'var(--red)' : 'var(--green)';
+        const statusLabel = expired ? '⏰ Expired' : soldOut ? '📭 Sold Out' : '✅ Active';
+        const typeLabel = e.listType === 'permanent' ? '♾️' : e.listType === 'limited' ? `📦 ${e.qty ?? 0} left` : e.listType === 'timed' ? `⏳ ${Math.max(0, Math.ceil(((e.expiresAt||0)-now)/60000))}m left` : `📦⏳`;
+        html += `<div class="food-menu-manage-row">
+          <span style="font-size:13px">${e.item.icon} <strong>${this._esc(e.item.name)}</strong></span>
+          <span style="font-size:11px;color:var(--text-dim)">${typeLabel} · ${App.formatMoney(e.price)} · sold ${e.totalSold||0}</span>
+          <span style="font-size:11px;color:${statusColor}">${statusLabel}</span>
+          <button class="inv-sell-btn" style="font-size:11px" onclick="Crafting.delistFoodItem('${myUid}','${mid}')">Delist</button>
+        </div>`;
+      }
+    }
+    // Food menu management section
+    if (company.industry === 'food' || (company.stocks || []).some(s => (s.industry || company.industry) === 'food')) {
+      html += this._renderFoodMenuManagement(cIdx, company);
     }
 
     html += `</div>`;

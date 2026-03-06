@@ -788,11 +788,10 @@ const Companies = {
     const ownerUid = s.ownerUid;
     const ticker = s.companyTicker || sym;
 
-    // If this stock's company is the owner's locked main company, block full bankruptcy
-    if (typeof Firebase !== 'undefined' && Firebase.uid === ownerUid && this.isMainCompany(ticker)) {
-      s._bankruptDeclared = false; // allow it to recover
+    // All own companies and sub-stocks are bankruptcy-immune
+    if (typeof Firebase !== 'undefined' && Firebase.uid === ownerUid) {
+      s._bankruptDeclared = false;
       s._lowTicks = 0;
-      Toast.show('⭐ ' + ticker + ' is your main company — bankruptcy blocked!', '#f39c12', 4000);
       return;
     }
 

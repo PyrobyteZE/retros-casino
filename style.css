@@ -7505,6 +7505,27 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   cursor: pointer;
 }
 .inv-eat-btn:active { opacity: 0.75; }
+.inv-eat-btn.unaffordable { opacity: 0.45; pointer-events: none; }
+.inv-menu-btn {
+  padding: 5px 8px;
+  background: #1a2a3a;
+  color: #64b5f6;
+  border: 1px solid #64b5f655;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.inv-menu-btn:active { opacity: 0.75; }
+.food-menu-type-tag { color: #ffb74d; border-color: #ffb74d44; }
+.food-menu-manage-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--bg3);
+  font-size: 12px;
+}
 .active-buffs-bar {
   display: flex;
   flex-wrap: wrap;
