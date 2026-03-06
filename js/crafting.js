@@ -293,6 +293,30 @@ const Crafting = {
     App.save();
     Toast.show(`${craftType.icon} Crafted ${rarity} ${craftType.category}!`, this.RARITY_COLORS[rarity], 3000);
 
+    // Auto-list to store if draft says so (skip pixel painter)
+    const draft = this._craftSetupDraft;
+    if (draft && draft.autoStore && draft.storeId) {
+      this._craftSetupDraft = null;
+      const price = draft.price;
+      const qty = draft.qty || 1;
+      const storeId = draft.storeId;
+      const idx = this._inventory.findIndex(i => i.id === item.id);
+      if (idx >= 0) this._inventory.splice(idx, 1);
+      App.save();
+      Firebase.updateStore(storeId, { ['inventory/item_' + item.id]: { item, price, qty } })
+        .then(() => {
+          Toast.show('🏪 Auto-listed in store!', '#27ae60', 2500);
+          this._triggerRender();
+        })
+        .catch(() => {
+          this._inventory.push(item);
+          App.save();
+          Toast.show('Failed to list — item returned to bag', '#f44336', 3000);
+        });
+      this._triggerRender();
+      return;
+    }
+
     // Open pixel painter
     this.openPixelPainter(item.id);
     this._triggerRender();
@@ -1336,6 +1360,15 @@ const Crafting = {
     const existing = document.getElementById('craft-setup-modal');
     if (existing) existing.remove();
 
+    // Build store options for auto-list mode
+    const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
+    const myStores = typeof Stores !== 'undefined'
+      ? Object.entries(Stores._stores).filter(([, s]) => s.ownerUid === myUid)
+      : [];
+    const storeOptions = myStores.length
+      ? myStores.map(([sid, s]) => `<option value="${sid}">${this._esc(s.storeName || sid)}</option>`).join('')
+      : '<option value="">No stores — open one in Companies</option>';
+
     const modal = document.createElement('div');
     modal.id = 'craft-setup-modal';
     modal.className = 'house-modal-overlay';
@@ -1346,10 +1379,17 @@ const Crafting = {
           <label class="car-design-label">Item Name</label>
           <input id="craft-setup-name" type="text" maxlength="32" class="house-modal-input" value="${this._esc(defaultName)}">
         </div>
-        <div class="car-design-row" style="gap:8px;margin-bottom:10px">
-          <label style="font-size:13px;color:var(--text-dim)">Mode:</label>
-          <label style="font-size:13px;cursor:pointer"><input type="radio" name="craft-mode" value="inventory" checked onchange="document.getElementById('craft-template-opts').style.display='none'"> To Inventory</label>
-          <label style="font-size:13px;cursor:pointer"><input type="radio" name="craft-mode" value="template" onchange="document.getElementById('craft-template-opts').style.display='block'"> Limited Edition</label>
+        <div style="margin-bottom:10px">
+          <div style="font-size:13px;color:var(--text-dim);margin-bottom:6px">Mode:</div>
+          <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px;cursor:pointer">
+            <input type="radio" name="craft-mode" value="inventory" checked onchange="Crafting._onCraftModeChange(this.value)"> 📦 To Inventory
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px;cursor:pointer">
+            <input type="radio" name="craft-mode" value="template" onchange="Crafting._onCraftModeChange(this.value)"> 🏭 Limited Edition
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px;cursor:pointer">
+            <input type="radio" name="craft-mode" value="autostore" onchange="Crafting._onCraftModeChange(this.value)"> 🏪 Auto List to Store
+          </label>
         </div>
         <div id="craft-template-opts" style="display:none">
           <div class="car-design-row">
@@ -1362,6 +1402,23 @@ const Crafting = {
             <input id="craft-setup-mint" type="number" min="2" max="50" value="10" class="house-modal-input">
           </div>
         </div>
+        <div id="craft-autostore-opts" style="display:none">
+          <div class="car-design-row">
+            <label class="car-design-label">Store</label>
+            <select id="craft-autostore-select" style="flex:1;padding:7px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:8px;font-size:13px">
+              ${storeOptions}
+            </select>
+          </div>
+          <div class="car-design-row">
+            <label class="car-design-label">Price ($)</label>
+            <input id="craft-autostore-price" type="text" class="sh-input house-modal-input" placeholder="e.g. 10k">
+            <span class="sh-preview" style="display:none"></span>
+          </div>
+          <div class="car-design-row">
+            <label class="car-design-label">Quantity</label>
+            <input id="craft-autostore-qty" type="number" min="1" max="99" value="1" class="house-modal-input">
+          </div>
+        </div>
         <div class="house-modal-actions">
           <button class="house-modal-btn" onclick="Crafting.confirmCraftSetup(${cIdx},'${industry}')">Confirm</button>
           <button class="house-modal-btn house-modal-cancel" onclick="document.getElementById('craft-setup-modal').remove()">Cancel</button>
@@ -1371,15 +1428,20 @@ const Crafting = {
     document.getElementById('craft-setup-name').focus();
   },
 
+  _onCraftModeChange(val) {
+    document.getElementById('craft-template-opts').style.display = val === 'template' ? 'block' : 'none';
+    document.getElementById('craft-autostore-opts').style.display = val === 'autostore' ? 'block' : 'none';
+  },
+
   confirmCraftSetup(cIdx, industry) {
     const company = typeof Companies !== 'undefined' ? Companies._companies[cIdx] : null;
     if (!company) return;
     const nameEl = document.getElementById('craft-setup-name');
     const modeEl = document.querySelector('input[name="craft-mode"]:checked');
     const name = (nameEl ? nameEl.value.trim() : '') || industry + ' item';
-    const isTemplate = modeEl && modeEl.value === 'template';
+    const mode = modeEl ? modeEl.value : 'inventory';
 
-    if (isTemplate) {
+    if (mode === 'template') {
       const priceEl = document.getElementById('craft-setup-price');
       const mintEl = document.getElementById('craft-setup-mint');
       const price = App.parseAmount(priceEl ? priceEl.value : '0');
@@ -1388,6 +1450,17 @@ const Crafting = {
       this._craftSetupDraft = { name, isTemplate: true, price, mintLimit, cIdx, industry };
       document.getElementById('craft-setup-modal')?.remove();
       this.craftTemplate();
+    } else if (mode === 'autostore') {
+      const storeId = document.getElementById('craft-autostore-select')?.value;
+      const priceEl = document.getElementById('craft-autostore-price');
+      const qtyEl = document.getElementById('craft-autostore-qty');
+      const price = App.parseAmount(priceEl ? priceEl.value : '0');
+      const qty = Math.max(1, Math.min(99, parseInt(qtyEl ? qtyEl.value : '1') || 1));
+      if (!storeId) { alert('Select a store'); return; }
+      if (isNaN(price) || price <= 0) { alert('Enter a valid price'); return; }
+      this._craftSetupDraft = { name, isTemplate: false, autoStore: true, storeId, price, qty, cIdx, industry };
+      document.getElementById('craft-setup-modal')?.remove();
+      this.craftItem(company, industry, name);
     } else {
       this._craftSetupDraft = { name, isTemplate: false, cIdx, industry };
       document.getElementById('craft-setup-modal')?.remove();
