@@ -81,6 +81,13 @@ const Events = {
       desc: 'Major heist reported! Crime income ×2, but raids +50% more frequent.',
       effects: { crimeBonus: 1.0, raidFreqMult: 1.5 },
     },
+    {
+      id: 'project_mayhem', label: '🧼 PROJECT MAYHEM', color: '#ff4400',
+      duration: 15 * 60_000,
+      adminOnly: true,
+      desc: 'The first rule of Project Mayhem: you do not ask questions. All bank vaults zeroed. All NPC debt wiped. News hijacked by followers.',
+      effects: { projectMayhem: true, crimeBonus: 2.0, incomeMult: -0.5 },
+    },
   ],
 
   // === Init ===
@@ -97,6 +104,7 @@ const Events = {
           this._lastNotifiedEvent = event.startedAt;
           const type = this.EVENT_TYPES.find(t => t.id === event.type);
           if (type) Toast.show(type.label + ' started!', type.color, 5000);
+          if (event.type === 'project_mayhem') this._applyProjectMayhem();
         }
         if (!event && wasEvent) {
           Toast.show('World Event ended.', '#aaa', 3000);
@@ -148,7 +156,8 @@ const Events = {
   },
 
   _generateEvent() {
-    const type = this.EVENT_TYPES[Math.floor(Math.random() * this.EVENT_TYPES.length)];
+    const pool = this.EVENT_TYPES.filter(t => !t.adminOnly);
+    const type = pool[Math.floor(Math.random() * pool.length)];
     const startedAt = Date.now();
     Firebase.pushWorldEvent({
       type: type.id,
@@ -164,6 +173,50 @@ const Events = {
         Firebase.clearWorldEvent();
       }
     }, type.duration + 5000);
+  },
+
+  isProjectMayhem() {
+    const fx = this.getActiveEffect();
+    return !!fx.projectMayhem;
+  },
+
+  // Called when Project Mayhem event starts on this client
+  _applyProjectMayhem() {
+    // Wipe NPC loan debt
+    if (typeof Loans !== 'undefined' && Loans.debt > 0) {
+      Loans.debt = 0;
+      Loans.loanTime = 0;
+      Loans.stopInterest();
+      Loans.updateUI();
+      Loans.updateDebtDisplay();
+      Loans._pushDebt();
+      App.save();
+      Toast.show('🧼 Your NPC debt has been wiped — Project Mayhem!', '#ff4400', 8000);
+    }
+    // Push Fight Club news posts from "followers"
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      const posts = [
+        "The things you own end up owning you.",
+        "It's only after we've lost everything that we're free to do anything.",
+        "You are not your balance. You are not how much money you have in the bank.",
+        "We buy things we don't need with money we don't have to impress people we don't like.",
+        "This is your life and it's ending one tick at a time.",
+        "Sticking feathers up your butt does not make you a chicken.",
+        "On a long enough timeline, the survival rate for everyone drops to zero.",
+        "First rule of Project Mayhem: you do not ask questions.",
+        "Second rule of Project Mayhem: you DO NOT ask questions.",
+        "The liberator who destroys my property is fighting for my freedom.",
+      ];
+      const post = posts[Math.floor(Math.random() * posts.length)];
+      Firebase.pushStockNews('🧼 ' + post, false);
+      setTimeout(() => {
+        const post2 = posts[Math.floor(Math.random() * posts.length)];
+        Firebase.pushStockNews('🧼 SPACE MONKEY: ' + post2, false);
+      }, 30000);
+      setTimeout(() => {
+        Firebase.pushStockNews('🧼 MAYHEM REPORT: Banks have been destabilized. SHARK is the only winner tonight.', true);
+      }, 90000);
+    }
   },
 
   // === Effect Accessors ===
@@ -228,20 +281,33 @@ const Events = {
       stock.price = Math.max(0.01, stock.price * (1 + pct * (0.5 + Math.random() * 0.5)));
     };
 
+    const allStocks = typeof Stocks !== 'undefined' ? Stocks.stocks : [];
     if (fx.stockBias) {
-      Stocks._stocks.forEach(s => nudge(s, fx.stockBias));
+      allStocks.forEach((s, i) => {
+        const obj = { price: Stocks.prices[i] };
+        nudge(obj, fx.stockBias);
+        Stocks.prices[i] = obj.price;
+      });
     }
     if (fx.spaceBias) {
-      const luna = Stocks._stocks.find(s => s.symbol === 'LUNA');
-      if (luna) nudge(luna, fx.spaceBias);
+      const i = allStocks.findIndex(s => s.symbol === 'LUNA');
+      if (i >= 0) { const obj = { price: Stocks.prices[i] }; nudge(obj, fx.spaceBias); Stocks.prices[i] = obj.price; }
     }
     if (fx.energyBias) {
-      const neon = Stocks._stocks.find(s => s.symbol === 'NEON');
-      if (neon) nudge(neon, fx.energyBias);
+      const i = allStocks.findIndex(s => s.symbol === 'NEON');
+      if (i >= 0) { const obj = { price: Stocks.prices[i] }; nudge(obj, fx.energyBias); Stocks.prices[i] = obj.price; }
     }
     if (fx.techBias) {
-      const pixel = Stocks._stocks.find(s => s.symbol === 'PIXEL');
-      if (pixel) nudge(pixel, fx.techBias);
+      const i = allStocks.findIndex(s => s.symbol === 'PIXEL');
+      if (i >= 0) { const obj = { price: Stocks.prices[i] }; nudge(obj, fx.techBias); Stocks.prices[i] = obj.price; }
+    }
+    if (fx.projectMayhem) {
+      // Project Mayhem: SHARK moons, all other stocks crater
+      allStocks.forEach((s, i) => {
+        const obj = { price: Stocks.prices[i] };
+        nudge(obj, s.symbol === 'SHARK' ? 0.08 : -0.03);
+        Stocks.prices[i] = obj.price;
+      });
     }
   },
 

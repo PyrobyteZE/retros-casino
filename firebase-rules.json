@@ -182,6 +182,13 @@
       }
     },
 
+    "playerDebt": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth.uid === $uid"
+      }
+    },
+
     "playerDividends": {
       ".read": "auth !== null",
       ".write": "auth !== null"

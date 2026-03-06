@@ -62,10 +62,16 @@ const Stocks = {
   },
 
   // Called once after Firebase is online (from Firebase._startListeners or lazily)
+  _totalPlayerDebt: 0,
+
   _initFirebaseFeatures() {
     if (this._firebaseFeaturesInit) return;
     if (typeof Firebase === 'undefined' || !Firebase.isOnline()) return;
     this._firebaseFeaturesInit = true;
+    // Track total debt across all players for SHARK stock
+    Firebase.listenPlayerDebt(data => {
+      this._totalPlayerDebt = Object.values(data).reduce((s, v) => s + (v || 0), 0);
+    });
     Firebase.listenBounties(data => {
       this._bounties = data;
       this._expireBounties();
@@ -174,8 +180,9 @@ const Stocks = {
         t.stepsLeft--;
 
       } else if (s.symbol === 'SHARK') {
-        // ── Shark Loans: drifts with debt level + interest rate ───────────
-        const debt        = typeof Loans !== 'undefined' ? Loans.debt : 0;
+        // ── Shark Loans: drifts with TOTAL server debt + interest rate ───────────
+        const localDebt   = typeof Loans !== 'undefined' ? Loans.debt : 0;
+        const debt        = Math.max(localDebt, this._totalPlayerDebt);
         const interestPct = typeof Loans !== 'undefined' ? Loans.getInterestPercent() : 5;
         // Log scale: $0 ≈ 0, $1M ≈ 0.15, $1B ≈ 0.29, $1T ≈ 0.43
         const debtLog     = debt > 0 ? Math.log10(Math.max(10, debt)) / 13 : 0;

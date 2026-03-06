@@ -293,31 +293,7 @@ const Crafting = {
     App.save();
     Toast.show(`${craftType.icon} Crafted ${rarity} ${craftType.category}!`, this.RARITY_COLORS[rarity], 3000);
 
-    // Auto-list to store if draft says so (skip pixel painter)
-    const draft = this._craftSetupDraft;
-    if (draft && draft.autoStore && draft.storeId) {
-      this._craftSetupDraft = null;
-      const price = draft.price;
-      const qty = draft.qty || 1;
-      const storeId = draft.storeId;
-      const idx = this._inventory.findIndex(i => i.id === item.id);
-      if (idx >= 0) this._inventory.splice(idx, 1);
-      App.save();
-      Firebase.updateStore(storeId, { ['inventory/item_' + item.id]: { item, price, qty } })
-        .then(() => {
-          Toast.show('🏪 Auto-listed in store!', '#27ae60', 2500);
-          this._triggerRender();
-        })
-        .catch(() => {
-          this._inventory.push(item);
-          App.save();
-          Toast.show('Failed to list — item returned to bag', '#f44336', 3000);
-        });
-      this._triggerRender();
-      return;
-    }
-
-    // Open pixel painter
+    // Open pixel painter (autoStore draft is kept — savePixels will handle listing)
     this.openPixelPainter(item.id);
     this._triggerRender();
   },
@@ -509,7 +485,24 @@ const Crafting = {
     App.save();
     this.closePixelPainter();
     this._triggerRender();
-    // After painting, ask where to put the item
+
+    // Auto-list mode: list directly to store after painting
+    const draft = this._craftSetupDraft;
+    if (item && draft && draft.autoStore && draft.storeId) {
+      this._craftSetupDraft = null;
+      const { storeId, price, qty } = draft;
+      const idx = this._inventory.findIndex(i => i.id === item.id);
+      if (idx >= 0) this._inventory.splice(idx, 1);
+      App.save();
+      if (typeof Firebase !== 'undefined') {
+        Firebase.updateStore(storeId, { ['inventory/item_' + item.id]: { item, price, qty: qty || 1 } })
+          .then(() => { Toast.show('🏪 Painted & listed in store!', '#27ae60', 2500); this._triggerRender(); })
+          .catch(() => { this._inventory.push(item); App.save(); Toast.show('Failed to list — item returned to bag', '#f44336', 3000); });
+      }
+      return;
+    }
+
+    // Normal: ask where to put the item
     if (item) this._showItemDestinationModal(item);
     else Toast.show('🎨 Pixel art saved!', '#4caf50', 2000);
   },
@@ -576,7 +569,11 @@ const Crafting = {
   },
 
   _confirmItemDest(itemId) {
+    // Read all values BEFORE removing the modal
     const dest = document.querySelector('input[name="item-dest"]:checked')?.value || 'inventory';
+    const storeId = document.getElementById('item-dest-store-select')?.value;
+    const price = parseFloat(document.getElementById('item-dest-price')?.value) || 0;
+    const qty = Math.max(1, parseInt(document.getElementById('item-dest-qty')?.value) || 1);
     document.getElementById('item-dest-modal')?.remove();
 
     if (dest === 'inventory') {
@@ -585,9 +582,6 @@ const Crafting = {
     }
 
     // Store path
-    const storeId = document.getElementById('item-dest-store-select')?.value;
-    const price = parseFloat(document.getElementById('item-dest-price')?.value) || 0;
-    const qty = Math.max(1, parseInt(document.getElementById('item-dest-qty')?.value) || 1);
     if (!storeId) { Toast.show('Select a store', '#f44336', 2000); return; }
     if (price <= 0) { Toast.show('Set a price', '#f44336', 2000); return; }
 

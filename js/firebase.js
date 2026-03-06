@@ -1359,6 +1359,17 @@ const Firebase = {
       .catch(err => console.error('Firebase playerStockPrices error:', err));
   },
 
+  pushPlayerDebt(debt) {
+    if (!this.isOnline()) return;
+    this.db.ref('playerDebt/' + this.uid).set(Math.round(debt)).catch(() => {});
+  },
+
+  listenPlayerDebt(cb) {
+    if (!this.db) return;
+    this.db.ref('playerDebt').on('value', snap => cb(snap.val() || {}),
+      err => console.warn('playerDebt read error:', err.code));
+  },
+
   pushPlayerDividend(symbol, perShare, ownerUid) {
     if (!this.isOnline()) return;
     this.db.ref('playerDividends').push({ symbol, perShare, ownerUid, ts: Date.now() })

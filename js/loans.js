@@ -88,6 +88,12 @@ const Loans = {
     ],
   },
 
+  _pushDebt() {
+    if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+      Firebase.pushPlayerDebt(this.debt);
+    }
+  },
+
   init() {
     this.updateUI();
     this.startInterest();
@@ -165,6 +171,7 @@ const Loans = {
     this.startInterest();
     this.updateUI();
     this.updateDebtDisplay();
+    this._pushDebt();
     App.save();
 
     // Show dialogue based on debt level
@@ -210,6 +217,7 @@ const Loans = {
     }
     this.updateUI();
     this.updateDebtDisplay();
+    this._pushDebt();
     App.save();
   },
 
@@ -250,6 +258,7 @@ const Loans = {
 
       this.updateUI();
       this.updateDebtDisplay();
+      this._pushDebt();
 
       // Hard cap: trigger reckoning at 10 trillion
       if (this.debt >= this.MAX_DEBT && !this._reckoningActive) {
