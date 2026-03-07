@@ -1652,15 +1652,14 @@ const Firebase = {
   },
 
   async _loadAccountSave(account, nameLower) {
-    // account.save is the authoritative save (pushed every 55s by pushAccountSave)
-    // cloudSaves/[this.uid] may have a newer copy if already on this device
+    // Primary: cloudSaves/[nameLower] — name-based, accessible from any device
+    // Fallback: account.save — direct field on account record
     let bestSave = account.save || null;
     let bestSavedAt = 0;
     try { bestSavedAt = JSON.parse(bestSave || '{}').savedAt || 0; } catch(e) {}
 
-    // Also check this session's own cloud save (same uid, so rules allow it)
     try {
-      const cloudSnap = await this.db.ref('cloudSaves/' + this.uid).once('value');
+      const cloudSnap = await this.db.ref('cloudSaves/' + nameLower).once('value');
       const cloud = cloudSnap.val();
       if (cloud && cloud.data && (cloud.savedAt || 0) > bestSavedAt) {
         bestSave = cloud.data;
@@ -1709,9 +1708,18 @@ const Firebase = {
   // === CLOUD SAVE ===
   _lastCloudSave: 0,
 
+  // Use player name as cloud save key so any device can access it after login.
+  // Falls back to uid for guests with no name set.
+  _cloudSaveKey() {
+    const name = typeof Settings !== 'undefined' ? Settings.profile.name : null;
+    return (name && name !== 'Player') ? name.toLowerCase() : this.uid;
+  },
+
   _initCloudSave() {
     if (!this.isOnline()) return;
-    this._cloudSaveRef = this.db.ref('cloudSaves/' + this.uid);
+    if (this._cloudSaveRef) this._cloudSaveRef.off();
+    const key = this._cloudSaveKey();
+    this._cloudSaveRef = this.db.ref('cloudSaves/' + key);
     let firstLoad = true;
 
     this._cloudSaveRef.on('value', snap => {
@@ -1719,52 +1727,65 @@ const Firebase = {
       const localRaw = localStorage.getItem('retros_casino_save');
 
       if (!localRaw && cloud && cloud.data) {
-        // No local save — restore from cloud immediately
         localStorage.setItem('retros_casino_save', cloud.data);
         if (typeof App !== 'undefined') {
           App.load();
           App.updateBalance();
           if (typeof Clicker !== 'undefined') { Clicker.startAutoClicker(); Clicker.updateStats(); Clicker.renderUpgrades(); }
         }
-        Toast.show('\u2601\uFE0F Save restored from cloud!');
+        Toast.show('☁️ Save restored from cloud!');
         firstLoad = false;
       } else if (localRaw && cloud && cloud.data) {
         let localSaved = 0;
         try { localSaved = JSON.parse(localRaw).savedAt || 0; } catch (e) {}
         const cloudSaved = cloud.savedAt || 0;
-        // Offer restore if cloud is 30+ seconds newer (catches cross-device switches)
-        if (cloudSaved > localSaved + 30_000) {
-          // Don't spam the dialog — only show if not already visible
+        if (!firstLoad) {
+          // Real-time update from another device: only prompt if 5+ min newer
+          if (cloudSaved > localSaved + 5 * 60_000 && !document.querySelector('.cloud-restore-overlay')) {
+            this._offerCloudRestore(cloud.data, cloudSaved, localSaved);
+          }
+        } else if (cloudSaved > localSaved + 30_000) {
+          // On startup: prompt if 30s+ newer
           if (!document.querySelector('.cloud-restore-overlay')) {
             this._offerCloudRestore(cloud.data, cloudSaved, localSaved);
           }
-        } else if (firstLoad) {
+        } else {
           setTimeout(() => this.pushCloudSave(), 5000);
         }
         firstLoad = false;
       } else if (firstLoad) {
-        setTimeout(() => this.pushCloudSave(), 5000);
+        // No cloud save for this name yet — migrate from old uid-based save if it exists
+        this.db.ref('cloudSaves/' + this.uid).once('value').then(oldSnap => {
+          const old = oldSnap.val();
+          if (old && old.data) {
+            // Copy old uid save to name-based path
+            this.db.ref('cloudSaves/' + key).set(old).catch(() => {});
+          } else {
+            setTimeout(() => this.pushCloudSave(), 5000);
+          }
+        }).catch(() => { setTimeout(() => this.pushCloudSave(), 5000); });
         firstLoad = false;
       }
     }, () => { setTimeout(() => this.pushCloudSave(), 5000); });
 
-    // Re-check cloud save whenever the app comes back into focus
-    // (handles switching between APK and browser mid-session)
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && this.isOnline()) {
-        this._cloudSaveRef.once('value', snap => {
-          const cloud = snap.val();
-          if (!cloud || !cloud.data) return;
-          const localRaw = localStorage.getItem('retros_casino_save');
-          let localSaved = 0;
-          try { localSaved = JSON.parse(localRaw || '{}').savedAt || 0; } catch (e) {}
-          const cloudSaved = cloud.savedAt || 0;
-          if (cloudSaved > localSaved + 30_000 && !document.querySelector('.cloud-restore-overlay')) {
-            this._offerCloudRestore(cloud.data, cloudSaved, localSaved);
-          }
-        }).catch(() => {});
-      }
-    });
+    // Re-check when app comes back into focus (switching between APK and browser)
+    if (!this._visibilityListenerAdded) {
+      this._visibilityListenerAdded = true;
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && this.isOnline() && this._cloudSaveRef) {
+          this._cloudSaveRef.once('value', snap => {
+            const cloud = snap.val();
+            if (!cloud || !cloud.data) return;
+            const localRaw = localStorage.getItem('retros_casino_save');
+            let localSaved = 0;
+            try { localSaved = JSON.parse(localRaw || '{}').savedAt || 0; } catch (e) {}
+            if ((cloud.savedAt || 0) > localSaved + 30_000 && !document.querySelector('.cloud-restore-overlay')) {
+              this._offerCloudRestore(cloud.data, cloud.savedAt, localSaved);
+            }
+          }).catch(() => {});
+        }
+      });
+    }
   },
 
   _offerCloudRestore(cloudData, cloudTs, localTs) {
@@ -1819,7 +1840,7 @@ const Firebase = {
     this._lastCloudSave = now;
     const data = localStorage.getItem('retros_casino_save');
     if (!data) return;
-    this.db.ref('cloudSaves/' + this.uid).set({ data, savedAt: now })
+    this.db.ref('cloudSaves/' + this._cloudSaveKey()).set({ data, savedAt: now })
       .catch(err => console.warn('Firebase cloudSave write error:', err.code));
   },
 
