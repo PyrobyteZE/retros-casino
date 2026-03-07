@@ -100,8 +100,8 @@ const MainRoom = {
     if (!this._autoSpinActive[game]) return;
     if (!Firebase.isOnline()) { this._scheduleAutoSpin(game, 10000); return; }
     if (this._rooms[game]) return; // room already active
-    if ((Firebase.onlineCount || 0) < 2) {
-      // Not enough players yet — check again later
+    // Roulette runs solo or multiplayer; horses/crash need 2+ players
+    if (game !== 'roulette' && (Firebase.onlineCount || 0) < 2) {
       this._scheduleAutoSpin(game, 10000);
       return;
     }
@@ -375,6 +375,12 @@ const MainRoom = {
     const o = s.querySelector('.mp-room-overlay');
     if (o) o.remove();
     delete this._myBets[game];
+    // Re-enable solo spin button for roulette
+    if (game === 'roulette') {
+      const spinBtn = document.getElementById('rl-spin-btn');
+      if (spinBtn) { spinBtn.disabled = false; }
+      if (typeof Roulette !== 'undefined') Roulette.renderStats();
+    }
   },
 
   _showBettingOverlay(game, data) {
@@ -415,13 +421,20 @@ const MainRoom = {
         betUI = `
           <div style="font-size:12px;color:var(--text-dim);margin-bottom:4px">Place your bets on the board below, then lock in:</div>
           <div class="mp-bet-row">
-            <button id="mp-bet-btn-roulette" class="mp-bet-btn" onclick="MainRoom.placeBet('roulette')">Lock In Bets</button>
+            <button id="mp-bet-btn-roulette" class="mp-bet-btn" onclick="MainRoom.placeBet('roulette')">🔒 Lock In Bets</button>
           </div>`;
       }
     } else {
       const mine = players[Firebase.uid];
-      betUI = `<div class="mp-bet-confirmed">✓ ${App.formatMoney(mine.bet)}${mine.pick ? ' on ' + mine.pick : ''} — waiting for start</div>`;
+      betUI = `<div class="mp-bet-confirmed">✓ ${App.formatMoney(mine.bet)} locked in — waiting for spin</div>`;
     }
+
+    // For roulette: show each player's total bet amount
+    const roulettePlayerList = game === 'roulette'
+      ? Object.values(players).map(p =>
+          `<span class="mp-player-chip">${p.name}: ${p.bet > 0 ? App.formatMoney(p.bet) : 'watching'}</span>`
+        ).join('')
+      : playerChips;
 
     overlay.innerHTML = `
       <div class="mp-room-header">
@@ -429,9 +442,15 @@ const MainRoom = {
         <span class="mp-room-host">Host: ${data.hostName}</span>
         <span class="mp-room-timer" id="mp-timer-${game}">${timeLeft}s</span>
       </div>
-      <div class="mp-room-players">${playerChips || '<span style="color:var(--text-dim);font-size:11px">No players yet</span>'}</div>
+      <div class="mp-room-players">${(game === 'roulette' ? roulettePlayerList : playerChips) || '<span style="color:var(--text-dim);font-size:11px">No players yet</span>'}</div>
       ${betUI}
     `;
+
+    // Disable solo spin button while MP round is active
+    if (game === 'roulette') {
+      const spinBtn = document.getElementById('rl-spin-btn');
+      if (spinBtn && !myJoined) { spinBtn.disabled = true; spinBtn.textContent = '🎮 MP Round Active — Lock In Above'; }
+    }
 
     if (game === 'horses' && !myJoined) {
       const grid = document.getElementById('mp-horses-grid');
