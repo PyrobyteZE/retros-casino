@@ -5,8 +5,8 @@
 
     "leaderboard": {
       ".read": true,
-      "$uid": {
-        ".write": "auth.uid === $uid"
+      "$key": {
+        ".write": "auth !== null"
       }
     },
 
