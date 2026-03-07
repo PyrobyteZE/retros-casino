@@ -608,7 +608,7 @@ function showFirstTimeUsernamePrompt() {
             btn.textContent='Logging in...';btn.disabled=true;
             Settings.setName(n);
             _initFirebase();
-            await new Promise(r=>setTimeout(r,1500));
+            await new Promise(r=>{const t=Date.now();const i=setInterval(()=>{if((typeof Firebase!=='undefined'&&Firebase.isOnline())||Date.now()-t>8000){clearInterval(i);r();}},100);});
             const result=await Firebase.loginWithPassword(n,p);
             if(result.ok){
               document.getElementById('ft-username-modal').remove();
@@ -640,7 +640,7 @@ function showFirstTimeUsernamePrompt() {
             btn.textContent='Recovering...';btn.disabled=true;
             Settings.setName(n);
             _initFirebase();
-            await new Promise(r=>setTimeout(r,1500));
+            await new Promise(r=>{const t=Date.now();const i=setInterval(()=>{if((typeof Firebase!=='undefined'&&Firebase.isOnline())||Date.now()-t>8000){clearInterval(i);r();}},100);});
             const result=await Firebase.recoverAccount(n,c);
             if(result.ok){
               document.getElementById('ft-username-modal').remove();

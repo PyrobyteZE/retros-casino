@@ -4996,6 +4996,8 @@ html[data-platform="desktop"] .chat-panel {
   align-items: center;
   justify-content: space-between;
   padding: 14px 16px;
+  padding-top: max(14px, env(safe-area-inset-top));
+  padding-right: max(16px, env(safe-area-inset-right));
   background: var(--bg2);
   border-bottom: 1px solid var(--bg3);
   position: sticky;
