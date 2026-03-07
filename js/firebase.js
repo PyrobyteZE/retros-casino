@@ -351,12 +351,15 @@ const Firebase = {
   // === PRESENCE ===
   _setupPresence() {
     if (!this.isOnline()) return;
-    const name = typeof Settings !== 'undefined' ? Settings.profile.name : 'Player';
-    const avatar = typeof Settings !== 'undefined' ? Settings.avatars[Settings.profile.avatar] : '';
+    const prof = typeof Settings !== 'undefined' ? Settings.profile : {};
+    const name = prof.name || 'Player';
+    const avatar = typeof Settings !== 'undefined' ? Settings.avatars[prof.avatar || 0] : '';
     const ref = this.db.ref('presence/' + this.uid);
     ref.set({
       name,
       avatar,
+      title: prof.title || '',
+      bannerColor: prof.bannerColor || '#00e676',
       sessionId: this._sessionId,
       timestamp: firebase.database.ServerValue.TIMESTAMP,
     });
@@ -426,6 +429,7 @@ const Firebase = {
 
     const name = typeof Settings !== 'undefined' ? Settings.profile.name : 'Player';
     const avatar = typeof Settings !== 'undefined' ? Settings.avatars[Settings.profile.avatar] : '';
+    const prof = typeof Settings !== 'undefined' ? Settings.profile : {};
     const data = {
       name,
       avatar,
@@ -439,6 +443,11 @@ const Firebase = {
       totalDebtPaid: typeof Loans !== 'undefined' ? (Loans._totalPaid || 0) : 0,
       currentDebt: typeof Loans !== 'undefined' ? Loans.debt : 0,
       playerId: this._playerId,
+      // Profile customization
+      bio: prof.bio || '',
+      bannerColor: prof.bannerColor || '#00e676',
+      title: prof.title || '',
+      achTiers: typeof Achievements !== 'undefined' ? Achievements.getUnlockedTiers() : 0,
       timestamp: firebase.database.ServerValue.TIMESTAMP,
     };
     this.db.ref('leaderboard/' + this.uid).set(data).then(() => {
@@ -704,37 +713,56 @@ const Firebase = {
       modal.className = 'profile-modal-overlay hidden';
       document.getElementById('app').appendChild(modal);
     }
+    modal.onclick = e => { if (e.target === modal) this.closeProfile(); };
 
     const isMe = uid === this.uid;
     const isFriend = !!this._friends[uid];
+    const banner = entry.bannerColor || '#00e676';
+    const idStr  = (entry.playerId != null) ? `<span class="pcard-id">#${entry.playerId}</span>` : '';
+    const title  = entry.title ? `<div class="pcard-title">${this._escapeHtml(entry.title)}</div>` : '';
+    const bio    = entry.bio   ? `<div class="pcard-bio">${this._escapeHtml(entry.bio)}</div>` : '';
+    const esc    = n => this._escapeHtml(n || 'Player');
 
-    const playerIdStr = entry.playerId !== null && entry.playerId !== undefined
-      ? `<div class="profile-modal-id">#${entry.playerId}</div>` : '';
+    const statCell = (icon, label, val) =>
+      `<div class="pcard-stat"><div class="pcard-stat-val">${val}</div><div class="pcard-stat-lbl">${icon} ${label}</div></div>`;
 
-    let actionBtns = '';
-    if (!isMe) {
-      if (isFriend) {
-        actionBtns = `<button class="game-btn" onclick="Firebase.closeProfile();Firebase.openDM('${uid}')" style="background:var(--green-dark)">💬 Message</button>
-          <button class="game-btn" onclick="Firebase.promptGift('${uid}','${this._escapeHtml(entry.name||'Player')}')" style="background:#e67e22">🎁 Gift Cash</button>`;
-      } else {
-        actionBtns = `<button class="game-btn" onclick="Firebase.sendFriendRequest('${uid}')" style="margin-right:6px">+ Add Friend</button>
-          <button class="game-btn" onclick="Firebase.closeProfile();Firebase.openDM('${uid}')" style="background:var(--green-dark)">💬 Message</button>
-          <button class="game-btn" onclick="Firebase.promptGift('${uid}','${this._escapeHtml(entry.name||'Player')}')" style="background:#e67e22">🎁 Gift Cash</button>`;
-      }
+    const stats = `
+      <div class="pcard-stats">
+        ${statCell('💰','Earned', App.formatMoney(entry.totalEarned || 0))}
+        ${statCell('💵','Balance', App.formatMoney(entry.balance || 0))}
+        ${statCell('⭐','Rebirths', entry.rebirths || 0)}
+        ${statCell('🎮','Wins', (entry.gamesWon || 0).toLocaleString())}
+        ${statCell('🏅','Ach Tiers', entry.achTiers || 0)}
+        ${statCell('🐾','Pets', entry.petCount || 0)}
+      </div>`;
+
+    let actions = '';
+    if (isMe) {
+      actions = `<button class="pcard-btn pcard-btn-dim" onclick="Firebase.closeProfile();App.showScreen('settings')">✏️ Edit Profile</button>`;
+    } else {
+      const friendBtn = isFriend
+        ? `<button class="pcard-btn pcard-btn-msg" onclick="Firebase.closeProfile();Firebase.openDM('${uid}')">💬 Message</button>`
+        : `<button class="pcard-btn pcard-btn-add" onclick="Firebase.sendFriendRequest('${uid}')">+ Add Friend</button>
+           <button class="pcard-btn pcard-btn-msg" onclick="Firebase.closeProfile();Firebase.openDM('${uid}')">💬 Message</button>`;
+      actions = friendBtn + `<button class="pcard-btn pcard-btn-gift" onclick="Firebase.promptGift('${uid}','${esc(entry.name)}')">🎁 Gift</button>`;
     }
 
-    modal.innerHTML = `<div class="profile-modal-content">
-      <div class="profile-modal-avatar">${entry.avatar || '\u{1F3B2}'}</div>
-      <div class="profile-modal-name">${this._escapeHtml(entry.name || 'Player')}${playerIdStr}</div>
-      <div class="profile-modal-stats">
-        <div class="profile-stat"><span class="stat-label">Balance</span><span>${App.formatMoney(entry.balance || 0)}</span></div>
-        <div class="profile-stat"><span class="stat-label">Total Earned</span><span>${App.formatMoney(entry.totalEarned || 0)}</span></div>
-        <div class="profile-stat"><span class="stat-label">Rebirths</span><span>${entry.rebirths || 0}</span></div>
-        <div class="profile-stat"><span class="stat-label">Pets</span><span>${entry.petCount || 0}</span></div>
-      </div>
-      ${actionBtns ? `<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;justify-content:center">${actionBtns}</div>` : ''}
-      <button class="game-btn" onclick="Firebase.closeProfile()" style="margin-top:8px;background:var(--bg3);color:var(--text-dim)">Close</button>
-    </div>`;
+    modal.innerHTML = `
+      <div class="pcard">
+        <div class="pcard-banner" style="background:linear-gradient(135deg,${banner}cc,${banner}55)">
+          <button class="pcard-close" onclick="Firebase.closeProfile()">✕</button>
+        </div>
+        <div class="pcard-avatar-wrap">
+          <div class="pcard-avatar">${entry.avatar || '🎲'}</div>
+        </div>
+        <div class="pcard-body">
+          <div class="pcard-name">${esc(entry.name)}${idStr}</div>
+          ${title}
+          ${bio}
+          ${stats}
+          <div class="pcard-actions">${actions}</div>
+        </div>
+      </div>`;
     modal.classList.remove('hidden');
   },
 

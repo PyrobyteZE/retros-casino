@@ -15,9 +15,16 @@ const Settings = {
     '\u2B50', '\u{1F525}', '\u{1F680}', '\u{1F480}', '\u{1F47D}', '\u{1F916}'
   ],
 
+  // === BANNER COLORS ===
+  bannerColors: [
+    '#00e676','#bb86fc','#ff5252','#448aff',
+    '#ffd740','#ff4081','#00bcd4','#ff9100',
+    '#69f0ae','#ea80fc',
+  ],
+
   // === STATE ===
   currentTheme: 'green',
-  profile: { name: 'Player', avatar: 0 },
+  profile: { name: 'Player', avatar: 0, bio: '', bannerColor: '#00e676', title: '' },
   options: {
     autoSaveInterval: 30,
     numberFormat: 'standard',
@@ -57,6 +64,59 @@ const Settings = {
     this.updateProfileDisplay();
     this.save();
     this.render();
+  },
+
+  setBio(text) {
+    this.profile.bio = text.slice(0, 80);
+    this.save();
+  },
+
+  setBannerColor(color) {
+    this.profile.bannerColor = color;
+    this.save();
+    this.render();
+  },
+
+  setTitle(title) {
+    this.profile.title = title;
+    this.save();
+    this.render();
+  },
+
+  getAvailableTitles() {
+    const titles = [''];   // '' = no title
+    const r = App.rebirth || 0;
+    const achProg = (typeof Achievements !== 'undefined') ? Achievements._progress : {};
+
+    // Rebirth-based titles
+    if (r >= 1)  titles.push('VIP ' + r);
+    if (r >= 10) titles.push('Veteran');
+    if (r >= 25) titles.push('Master');
+    if (r >= 50) titles.push('Legend');
+
+    // Achievement-based (gold tier = index 2)
+    const map = {
+      games_won:    'Lucky Streak',
+      crash_high:   'Moonwalker',
+      big_bet:      'High Roller',
+      debt_paid:    'Debt Slayer',
+      crime_income: 'Crime Baron',
+      total_earned: 'Billionaire',
+      companies:    'Mogul',
+      clicks:       'Click God',
+      friends:      'Social Butterfly',
+      chat_msgs:    'Chatterbox',
+      gifts_sent:   'Philanthropist',
+    };
+    for (const [id, label] of Object.entries(map)) {
+      if ((achProg[id] || -1) >= 2) titles.push(label);
+    }
+
+    // Admin / owner
+    if (typeof Admin !== 'undefined' && Admin.isAdmin()) titles.push('Admin');
+    if (typeof Firebase !== 'undefined' && Firebase._playerId === 0) titles.push('👑 Owner');
+
+    return [...new Set(titles)];
   },
 
   setName(name) {
@@ -177,6 +237,35 @@ const Settings = {
             `<button class="avatar-option${i === this.profile.avatar ? ' selected' : ''}" onclick="Settings.setAvatar(${i})">${a}</button>`
           ).join('')}
         </div>
+        <div class="settings-row" style="align-items:flex-start;margin-top:8px">
+          <label style="padding-top:6px">Bio:</label>
+          <div style="flex:1">
+            <textarea id="settings-bio" maxlength="80" rows="2"
+              style="width:100%;resize:none;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:13px;padding:6px 8px;box-sizing:border-box"
+              placeholder="Tell players about yourself..."
+              onchange="Settings.setBio(this.value)">${this._escapeHtml(this.profile.bio||'')}</textarea>
+            <div style="font-size:10px;color:var(--text-dim);text-align:right">${(this.profile.bio||'').length}/80</div>
+          </div>
+        </div>
+        <div class="settings-row" style="margin-top:4px">
+          <label>Banner:</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            ${this.bannerColors.map(c =>
+              `<button onclick="Settings.setBannerColor('${c}')"
+                style="width:22px;height:22px;border-radius:50%;background:${c};border:2px solid ${c===this.profile.bannerColor?'#fff':'transparent'};cursor:pointer;padding:0"></button>`
+            ).join('')}
+          </div>
+        </div>
+        <div class="settings-row" style="margin-top:4px">
+          <label>Title:</label>
+          <select onchange="Settings.setTitle(this.value)"
+            style="flex:1;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);padding:5px 8px;font-size:13px">
+            ${this.getAvailableTitles().map(t =>
+              `<option value="${t}" ${t===this.profile.title?'selected':''}>${t||'(no title)'}</option>`
+            ).join('')}
+          </select>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:4px">Earn achievements and rebirths to unlock more titles.</div>
       </div>
 
       <!-- Theme -->
@@ -414,12 +503,19 @@ const Settings = {
       const data = JSON.parse(raw);
       if (data.theme) this.currentTheme = data.theme;
       if (data.profile) {
-        this.profile.name = data.profile.name || 'Player';
-        this.profile.avatar = data.profile.avatar || 0;
+        this.profile.name        = data.profile.name || 'Player';
+        this.profile.avatar      = data.profile.avatar || 0;
+        this.profile.bio         = data.profile.bio || '';
+        this.profile.bannerColor = data.profile.bannerColor || '#00e676';
+        this.profile.title       = data.profile.title || '';
       }
       if (data.options) {
         Object.assign(this.options, data.options);
       }
     } catch (e) {}
-  }
+  },
+
+  _escapeHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  },
 };

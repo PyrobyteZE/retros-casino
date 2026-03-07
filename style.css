@@ -4528,58 +4528,138 @@ html[data-platform="desktop"] #screen-pets .game-container {
 .profile-modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(10, 10, 20, 0.92);
+  background: rgba(6, 6, 16, 0.88);
   z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.profile-modal-overlay.hidden { display: none; }
+
+/* ── Profile Card ── */
+.pcard {
+  background: var(--bg2);
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  max-width: 460px;
+  overflow: hidden;
+  animation: pcardSlideUp .22s cubic-bezier(.25,.8,.25,1);
+}
+@keyframes pcardSlideUp {
+  from { transform: translateY(60px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.pcard-banner {
+  height: 72px;
+  position: relative;
+}
+.pcard-close {
+  position: absolute;
+  top: 10px; right: 12px;
+  background: rgba(0,0,0,.4);
+  border: none; color: #fff;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.pcard-avatar-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: -32px;
+  position: relative;
+  z-index: 1;
+}
+.pcard-avatar {
+  font-size: 56px;
+  line-height: 1;
+  background: var(--bg2);
+  border: 3px solid var(--bg2);
+  border-radius: 50%;
+  width: 64px; height: 64px;
+  display: flex; align-items: center; justify-content: center;
+}
+.pcard-body {
+  padding: 6px 16px 20px;
+  text-align: center;
+}
+.pcard-name {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  gap: 6px;
+  margin-top: 4px;
 }
-
-.profile-modal-content {
-  background: var(--bg2);
-  border-radius: var(--radius);
-  padding: 24px;
-  text-align: center;
-  max-width: 320px;
-  width: 100%;
+.pcard-id {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 400;
+}
+.pcard-title {
+  display: inline-block;
+  background: var(--green);
+  color: #000;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 2px 10px;
+  margin-top: 4px;
+  letter-spacing: .04em;
+}
+.pcard-bio {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 6px auto 0;
+  max-width: 280px;
+  line-height: 1.4;
+}
+.pcard-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+  margin: 12px 0 10px;
+}
+.pcard-stat {
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 8px 4px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-}
-
-.profile-modal-avatar { font-size: 48px; }
-
-.profile-modal-name {
-  font-size: 20px;
-  font-weight: 800;
-  color: var(--green);
-}
-
-.profile-modal-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  width: 100%;
-  margin-top: 8px;
-}
-
-.profile-stat {
-  background: var(--bg);
-  border-radius: 8px;
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
   gap: 2px;
-  text-align: center;
 }
-
-.profile-stat span:last-child {
+.pcard-stat-val {
   font-size: 14px;
   font-weight: 700;
   color: var(--green);
 }
+.pcard-stat-lbl {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.pcard-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.pcard-btn {
+  border: none;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pcard-btn-add  { background: var(--green); color: #000; }
+.pcard-btn-msg  { background: var(--bg3); color: var(--text); }
+.pcard-btn-gift { background: #e67e22; color: #fff; }
+.pcard-btn-dim  { background: var(--bg3); color: var(--text-dim); }
 
 /* ====== CHAT PANEL ====== */
 
@@ -9198,11 +9278,7 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   margin-left: 4px;
   opacity: .7;
 }
-.profile-modal-id {
-  font-size: 13px;
-  color: var(--text-dim);
-  margin-top: 2px;
-}
+/* .profile-modal-id replaced by .pcard-id */
 .settings-player-id {
   font-weight: 700;
   color: var(--green);
