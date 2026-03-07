@@ -16,6 +16,7 @@ const App = {
   luckBoostUntil: 0,
   luckBoostPct: 0,
   decaySlowUntil: 0,
+  lastWealthTaxAt: 0,
 
   // Suffixes for large numbers (goes up to 10^63)
   suffixes: [
@@ -137,6 +138,8 @@ const App = {
     }
     if (typeof Houses !== 'undefined') merge(Houses.getBoosts());
     if (typeof Crafting !== 'undefined') merge(Crafting.getEquippedBoosts());
+    if (typeof Crime !== 'undefined' && Crime.getBmBoosts) merge(Crime.getBmBoosts());
+    if (typeof Cards !== 'undefined') merge(Cards.getEquippedBoosts());
     return out;
   },
 
@@ -201,6 +204,9 @@ const App = {
       roulette: 'Roulette',
       horses: 'Horse Racing',
       lottery: 'Lottery',
+      donation: 'Foundation',
+      auction: 'Auction House',
+      cards: 'Card Collection',
       properties: 'Properties',
       crime: 'Crime Empire',
       pets: 'Pets',
@@ -241,6 +247,9 @@ const App = {
       MainRoom.onScreenEnter(name);
     }
     if (name === 'lottery') Lottery.init();
+    if (name === 'donation') { if (typeof Donation !== 'undefined') Donation.init(); }
+    if (name === 'auction') { if (typeof Auction !== 'undefined') Auction.init(); }
+    if (name === 'cards') { if (typeof Cards !== 'undefined') Cards.init(); }
     if (name === 'properties') Properties.init();
     if (name === 'crime') Crime.init();
     if (name === 'pets') Pets.init();
@@ -309,6 +318,7 @@ const App = {
       { label: 'Sports & Luck', links: [
         { id: 'horses', icon: '🏇', label: 'Horse Racing' },
         { id: 'lottery', icon: '🎟', label: 'Lottery' },
+        { id: 'donation', icon: '🏛', label: 'Foundation' },
       ]},
       { label: 'Business', links: [
         { id: 'properties', icon: '🏢', label: 'Properties' },
@@ -320,9 +330,11 @@ const App = {
       { label: 'Markets', links: [
         { id: 'stocks', icon: '📈', label: 'Stocks' },
         { id: 'crypto', icon: '⛏️', label: 'Crypto' },
+        { id: 'auction', icon: '🔨', label: 'Auction House' },
       ]},
       { label: 'Other', links: [
         { id: 'inventory', icon: '🎒', label: 'Inventory' },
+        { id: 'cards', icon: '🃏', label: 'Cards' },
         { id: 'stores', icon: '🏪', label: 'Shops' },
         { id: 'pets', icon: '🐾', label: 'Pets' },
         { id: 'leaderboard', icon: '🏆', label: 'Leaderboard' },
@@ -356,10 +368,10 @@ const App = {
 
   CASINO_CATEGORIES: [
     { label: '🎰 Casino Games',  screens: ['coinflip','slots','crash','blackjack','plinko','roulette'] },
-    { label: '🐎 Sports & Luck', screens: ['horses','lottery'] },
+    { label: '🐎 Sports & Luck', screens: ['horses','lottery','donation'] },
     { label: '💼 Business',      screens: ['properties','crime','companies','houses','cars'] },
-    { label: '📈 Markets',       screens: ['stocks','crypto'] },
-    { label: '🎒 Inventory',     screens: ['inventory', 'stores'] },
+    { label: '📈 Markets',       screens: ['stocks','crypto','auction'] },
+    { label: '🎒 Inventory',     screens: ['inventory', 'stores', 'cards'] },
     { label: '🐾 Social',        screens: ['pets','leaderboard'] },
     { label: '🏆 Progress',      screens: ['achievements'] },
     { label: '⚙️ System',        screens: ['settings'] },
@@ -374,6 +386,9 @@ const App = {
     roulette:   { icon: '🎯', label: 'Roulette' },
     horses:     { icon: '🏇', label: 'Horse Racing' },
     lottery:    { icon: '🎟', label: 'Lottery' },
+    donation:   { icon: '🏛', label: 'Foundation' },
+    auction:    { icon: '🔨', label: 'Auction House' },
+    cards:      { icon: '🃏', label: 'Cards' },
     properties: { icon: '🏢', label: 'Properties' },
     crime:      { icon: '🚨', label: 'Crime' },
     companies:  { icon: '🏛', label: 'Companies' },
@@ -460,6 +475,7 @@ const App = {
       luckBoostUntil: this.luckBoostUntil,
       luckBoostPct: this.luckBoostPct,
       decaySlowUntil: this.decaySlowUntil,
+      lastWealthTaxAt: this.lastWealthTaxAt,
       loans: typeof Loans !== 'undefined' ? Loans.getSaveData() : null,
       properties: typeof Properties !== 'undefined' ? Properties.getSaveData() : null,
       crime: typeof Crime !== 'undefined' ? Crime.getSaveData() : null,
@@ -473,6 +489,13 @@ const App = {
       favorites: this.favorites,
       achievements: typeof Achievements !== 'undefined' ? Achievements.getSaveData() : null,
       tournament: typeof Tournaments !== 'undefined' ? Tournaments.getSaveData() : null,
+      cards: typeof Cards !== 'undefined' ? Cards.getSaveData() : null,
+      settings: typeof Settings !== 'undefined' ? {
+        theme: Settings.currentTheme,
+        customThemeColor: Settings.customThemeColor,
+        profile: Settings.profile,
+        options: Settings.options,
+      } : null,
       version: 7,
       savedAt: Date.now(),
     };
@@ -502,6 +525,7 @@ const App = {
       this.luckBoostUntil = data.luckBoostUntil || 0;
       this.luckBoostPct = data.luckBoostPct || 0;
       this.decaySlowUntil = data.decaySlowUntil || 0;
+      this.lastWealthTaxAt = data.lastWealthTaxAt || 0;
       this.favorites = Array.isArray(data.favorites) ? data.favorites : [];
       if (typeof Loans !== 'undefined') {
         if (data.loans) Loans.loadSaveData(data.loans);
@@ -540,13 +564,66 @@ const App = {
       if (typeof Tournaments !== 'undefined' && data.tournament) {
         Tournaments.loadSaveData(data.tournament);
       }
+      if (typeof Cards !== 'undefined' && data.cards) {
+        Cards.loadSaveData(data.cards);
+      }
+      // Restore settings (profile name, avatar, theme) — also mirror to settings localStorage
+      // so Settings.load() stays consistent on next page load.
+      if (typeof Settings !== 'undefined' && data.settings) {
+        const s = data.settings;
+        if (s.theme) { Settings.currentTheme = s.theme; Settings.applyTheme(); }
+        if (s.customThemeColor) Settings.customThemeColor = s.customThemeColor;
+        if (s.profile) {
+          Settings.profile.name        = s.profile.name        || Settings.profile.name;
+          Settings.profile.avatar      = s.profile.avatar      ?? Settings.profile.avatar;
+          Settings.profile.bio         = s.profile.bio         || '';
+          Settings.profile.bannerColor = s.profile.bannerColor || '#00e676';
+          Settings.profile.title       = s.profile.title       || '';
+        }
+        if (s.options) Object.assign(Settings.options, s.options);
+        Settings.save(); // mirror to retros_casino_settings
+        Settings.updateProfileDisplay();
+      }
     } catch (e) {}
   },
 
   startAutoSave() {
     if (this._autoSaveTimer) clearInterval(this._autoSaveTimer);
     const interval = (typeof Settings !== 'undefined') ? Settings.options.autoSaveInterval * 1000 : 30000;
-    this._autoSaveTimer = setInterval(() => this.save(), interval);
+    this._autoSaveTimer = setInterval(() => { this.save(); this._tickWealthTax(); }, interval);
+  },
+
+  _tickWealthTax() {
+    // God mode immunity
+    if (typeof Admin !== 'undefined' && Admin.godMode) return;
+    const now = Date.now();
+    if (!this.lastWealthTaxAt) { this.lastWealthTaxAt = now; return; }
+    const elapsed = now - this.lastWealthTaxAt;
+    if (elapsed < 60000) return; // check at most every 60s
+    this.lastWealthTaxAt = now;
+
+    const b = this.balance;
+    if (b < 1e9) return; // under $1B, no tax
+
+    // Rebirth discount: -3% per rebirth, max 50% off
+    const rebirthDiscount = Math.min(0.5, (this.rebirth || 0) * 0.03);
+
+    // Progressive daily tax rate
+    let taxRate;
+    let tierLabel;
+    if (b >= 1e13) { taxRate = 0.05; tierLabel = '5%'; }       // $10T+
+    else if (b >= 1e11) { taxRate = 0.02; tierLabel = '2%'; }  // $100B–$10T
+    else { taxRate = 0.005; tierLabel = '0.5%'; }               // $1B–$100B
+    taxRate *= (1 - rebirthDiscount);
+
+    const dayMs = 86400000;
+    const taxAmount = b * (taxRate / dayMs) * elapsed;
+
+    if (taxAmount > 0.01) {
+      this.balance = Math.max(0, this.balance - taxAmount);
+      this.updateBalance();
+      Toast.show('🏛 Wealth Tax: -' + this.formatMoney(taxAmount) + ' (' + tierLabel + '/day)', '#f39c12', 5000);
+    }
   }
 };
 

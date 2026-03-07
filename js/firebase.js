@@ -1730,6 +1730,8 @@ const Firebase = {
         App.load();
         App.updateBalance();
         if (typeof Clicker !== 'undefined') { Clicker.startAutoClicker(); Clicker.updateStats(); Clicker.renderUpgrades(); }
+        // Re-render the currently visible screen so companies/houses/cars etc. reflect restored data
+        if (App.currentScreen) App.showScreen(App.currentScreen);
       }
       Toast.show('✅ Save restored!', '#27ae60', 3000);
     } else {
@@ -1888,6 +1890,7 @@ const Firebase = {
       App.load();
       App.updateBalance();
       if (typeof Clicker !== 'undefined') { Clicker.startAutoClicker(); Clicker.updateStats(); Clicker.renderUpgrades(); }
+      if (App.currentScreen) App.showScreen(App.currentScreen);
     }
     Toast.show('☁️ Cloud save restored!', '#00e676', 4000);
   },
