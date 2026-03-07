@@ -349,6 +349,7 @@ const Companies = {
             companyPersonality: company.personality || 'standard',
             companyProperties: Array.isArray(company.properties) ? company.properties : [],
             companyIncomeShare: typeof company.incomeShare === 'number' ? company.incomeShare : 100,
+            isOwnerMain: !!(comp.mainCompanyTicker && company.ticker === comp.mainCompanyTicker),
           };
         });
       });
@@ -586,11 +587,13 @@ const Companies = {
         }
 
         s.price = Math.max(0.01, s.price + delta);
+      }
 
-        // --- MARKET RESILIENCE upgrade: price floor ---
+      // --- MARKET RESILIENCE upgrade: price floor (all paths except admin force-bankrupt) ---
+      if (!s._forceBankrupt) {
         const resLv = upg.resilience || 0;
         if (resLv > 0) {
-          const floor = effectiveBase * 0.05 * resLv;
+          const floor = this._getEffectiveBase(s) * 0.05 * resLv;
           if (s.price < floor) s.price = floor;
         }
       }
@@ -789,11 +792,12 @@ const Companies = {
     const ownerUid = s.ownerUid;
     const ticker = s.companyTicker || sym;
 
-    // If this company is set as the player's main company, block bankruptcy
-    if (typeof Firebase !== 'undefined' && Firebase.uid === ownerUid && this.isMainCompany(ticker)) {
+    // If this company is marked as the owner's main company, block bankruptcy
+    // (isOwnerMain is set by _onPlayerStocksUpdate from Firebase data, works regardless of who has stock authority)
+    if (s.isOwnerMain) {
       s._bankruptDeclared = false;
       s._lowTicks = 0;
-      Toast.show('⭐ ' + ticker + ' is your main company — bankruptcy blocked!', '#f39c12', 4000);
+      Toast.show('⭐ ' + ticker + ' is the owner\'s main company — bankruptcy blocked!', '#f39c12', 4000);
       return;
     }
 
@@ -1102,6 +1106,7 @@ const Companies = {
       this._mainCompanyTicker = c.ticker;
     }
     this._saveLocal();
+    this._pushToFirebase();
     this._triggerRender();
   },
 
@@ -1647,6 +1652,7 @@ const Companies = {
       companies: this._companies,
       holdings: this._holdings,
       ownerName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Player',
+      mainCompanyTicker: this._mainCompanyTicker || null,
     });
   },
 

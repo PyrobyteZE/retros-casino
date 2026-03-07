@@ -218,6 +218,17 @@ const Settings = {
       <!-- Profile -->
       <div class="settings-section">
         <h3>Profile</h3>
+        <div style="border-radius:10px;overflow:hidden;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
+          <div style="height:56px;background:linear-gradient(135deg,${this.profile.bannerColor}cc,${this.profile.bannerColor}55)"></div>
+          <div style="background:var(--bg);padding:0 12px 12px;display:flex;align-items:flex-start;gap:10px">
+            <div style="margin-top:-22px;width:44px;height:44px;border-radius:50%;background:var(--bg2);border:3px solid var(--bg);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">${this.avatars[this.profile.avatar]}</div>
+            <div style="flex:1;min-width:0;padding-top:4px">
+              <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${this._escapeHtml(this.profile.name||'Player')}</div>
+              ${this.profile.title ? `<div style="font-size:11px;color:${this.profile.bannerColor};font-weight:600">${this._escapeHtml(this.profile.title)}</div>` : ''}
+              ${this.profile.bio ? `<div style="font-size:11px;color:var(--text-dim);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${this._escapeHtml(this.profile.bio)}</div>` : ''}
+            </div>
+          </div>
+        </div>
         <div class="settings-row">
           <label>Username:</label>
           <input type="text" id="settings-name" maxlength="16" value="${this.profile.name}" onchange="Settings.setName(this.value)" placeholder="Player">
@@ -252,8 +263,12 @@ const Settings = {
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             ${this.bannerColors.map(c =>
               `<button onclick="Settings.setBannerColor('${c}')"
-                style="width:22px;height:22px;border-radius:50%;background:${c};border:2px solid ${c===this.profile.bannerColor?'#fff':'transparent'};cursor:pointer;padding:0"></button>`
+                style="width:24px;height:24px;border-radius:50%;background:${c};border:2px solid ${c===this.profile.bannerColor?'#fff':'transparent'};cursor:pointer;padding:0"></button>`
             ).join('')}
+            <label title="Custom color" style="width:24px;height:24px;border-radius:50%;border:2px solid ${this.bannerColors.includes(this.profile.bannerColor)?'#555':'#fff'};cursor:pointer;overflow:hidden;display:inline-block;flex-shrink:0">
+              <input type="color" value="${this.profile.bannerColor}" oninput="Settings.setBannerColor(this.value)"
+                style="width:32px;height:32px;border:none;padding:0;cursor:pointer;margin:-4px 0 0 -4px;opacity:${this.bannerColors.includes(this.profile.bannerColor)?'0.6':'1'}">
+            </label>
           </div>
         </div>
         <div class="settings-row" style="margin-top:4px">
