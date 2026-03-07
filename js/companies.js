@@ -2736,7 +2736,7 @@ const Companies = {
   _renderNewsTab(container) {
     const activeOrgs = this._flatActiveOrgs();
     if (activeOrgs.length === 0) {
-      container.innerHTML = `<div style="text-align:center;color:var(--text-dim);padding:40px 16px">
+      container.innerHTML = `<div style="text-align:center;color:var(--text-dim);padding:40px 16px;width:100%">
         <div style="font-size:48px;margin-bottom:12px">\u{1F4F0}</div>
         <div style="font-weight:700;margin-bottom:6px">No News Organizations</div>
         <div style="font-size:13px">Entertainment companies/stocks can enable a news org in My Company.</div>
@@ -2746,30 +2746,23 @@ const Companies = {
 
     const _ageStr = ts => {
       const age = Date.now() - (ts || 0);
-      return age < 60000 ? 'just now' : age < 3600000 ? Math.floor(age / 60000) + 'm ago' : Math.floor(age / 3600000) + 'h ago';
+      return age < 60000 ? 'just now' : age < 3600000 ? Math.floor(age / 60000) + 'm ago' : age < 86400000 ? Math.floor(age / 3600000) + 'h ago' : Math.floor(age / 86400000) + 'd ago';
     };
 
-    const _repBadge = rep => {
-      const r = rep || 50;
-      const color = r >= 75 ? '#f4b41b' : r >= 50 ? '#27ae60' : r >= 25 ? '#2196f3' : '#9e9e9e';
-      return `<span style="background:${color}22;color:${color};border:1px solid ${color}44;border-radius:10px;font-size:10px;font-weight:700;padding:2px 7px">\u2605 ${r}</span>`;
-    };
+    const _repColor = rep => rep >= 75 ? '#f4b41b' : rep >= 50 ? '#27ae60' : rep >= 25 ? '#2196f3' : '#9e9e9e';
 
-    const _postCard = (uid, postId, post, org, entityKey, showSource) => {
+    const _postCard = (uid, postId, post, org, entityKey) => {
       if (!post || typeof post !== 'object') return '';
       const headline = post.headline || post.text || '';
       const body = post.body || '';
-      // Skip posts with no content (garbage data from old format)
       if (!headline && !body) return '';
       const net = (post.upvotes || 0) - (post.downvotes || 0);
       const netColor = net > 0 ? '#27ae60' : net < 0 ? '#c0392b' : 'var(--text-dim)';
-      const logo = org.logo || '\u{1F4F0}';
       const commentKey = uid + ':' + postId;
       const commentsExpanded = this._expandedComments.has(commentKey);
       const comments = post.comments && typeof post.comments === 'object'
         ? Object.entries(post.comments).sort((a, b) => (a[1].ts || 0) - (b[1].ts || 0))
         : [];
-      const commentCount = comments.length;
 
       let commentsHtml = '';
       if (commentsExpanded) {
@@ -2783,7 +2776,7 @@ const Companies = {
         commentsHtml = `<div class="news-comments-section">
           ${commentItems || '<div style="color:var(--text-dim);font-size:12px;padding:4px 0">No comments yet.</div>'}
           <div class="news-comment-form">
-            <input id="news-comment-input-${postId}" class="news-comment-input" placeholder="Add a comment…" maxlength="200">
+            <input id="news-comment-input-${postId}" class="news-comment-input" placeholder="Add a comment\u2026" maxlength="200">
             <button class="news-comment-submit" onclick="Companies.addComment('${uid}','${postId}')">Post</button>
           </div>
         </div>`;
@@ -2791,8 +2784,6 @@ const Companies = {
 
       return `<div class="news-post-card">
         <div class="news-post-masthead">
-          <span class="news-post-logo">${this._esc(logo)}</span>
-          ${showSource ? `<span class="news-post-orgname">${this._esc(entityKey)}</span>` : ''}
           <span class="news-post-byline">by ${this._esc(post.authorName || 'Unknown')}</span>
           <span class="news-post-age">${_ageStr(post.ts)}</span>
         </div>
@@ -2805,98 +2796,100 @@ const Companies = {
             <span style="font-size:11px;font-weight:700;color:${netColor}">${net > 0 ? '+' : ''}${net}</span>
           </div>
           <button class="news-comments-btn" onclick="Companies.toggleComments('${uid}','${postId}')">
-            \u{1F4AC} ${commentCount > 0 ? commentCount : ''} Comments ${commentsExpanded ? '\u25B2' : '\u25BC'}
+            \u{1F4AC} ${comments.length > 0 ? comments.length + ' ' : ''}Comments ${commentsExpanded ? '\u25B2' : '\u25BC'}
           </button>
         </div>
         ${commentsHtml}
       </div>`;
     };
 
-    // Build channel bar
     const activeKey = this._newsActiveOrg || 'all';
-    let channelBar = `<div class="news-channel-bar">
-      <button class="news-channel-btn${activeKey === 'all' ? ' active' : ''}" onclick="Companies.setNewsOrg('all')">
-        \u{1F4F0} All News
-      </button>`;
-    activeOrgs.forEach(({ uid, entityKey, org }) => {
-      const key = uid + ':' + entityKey;
-      const orgPosts = this._newsPosts[uid] || {};
-      const postCount = Object.values(orgPosts).filter(p => !p.entityKey || p.entityKey === entityKey).length;
-      const rep = org.reputation || 50;
-      const logo = org.logo || '\u{1F4F0}';
-      channelBar += `<button class="news-channel-btn${activeKey === key ? ' active' : ''}" onclick="Companies.setNewsOrg('${key}')">
-        <span>${this._esc(logo)}</span>
-        <span style="font-weight:700">${this._esc(entityKey)}</span>
-        <span class="news-channel-rep">\u2605 ${rep}</span>
-        ${postCount > 0 ? `<span class="news-channel-count">${postCount}</span>` : ''}
-      </button>`;
-    });
-    channelBar += `</div>`;
 
-    let feedHtml = '';
-
-    if (activeKey === 'all') {
-      const allPosts = [];
-      activeOrgs.forEach(({ uid, entityKey, org }) => {
-        const posts = this._newsPosts[uid] || {};
-        Object.entries(posts)
-          .filter(([, p]) => p && typeof p === 'object' && (!p.entityKey || p.entityKey === entityKey))
-          .forEach(([postId, post]) => allPosts.push({ uid, entityKey, org, postId, post }));
-      });
-      allPosts.sort((a, b) => (b.post.ts || 0) - (a.post.ts || 0));
-      const cards = allPosts.map(({ uid, entityKey, org, postId, post }) =>
-        _postCard(uid, postId, post, org, entityKey, true)
-      ).filter(Boolean);
-      feedHtml = cards.length > 0
-        ? cards.join('')
-        : `<div style="text-align:center;color:var(--text-dim);padding:32px 16px">No posts yet.</div>`;
-    } else {
+    // ── Single org page ──────────────────────────────────────────────────
+    if (activeKey !== 'all') {
       const [orgUid, orgKey] = activeKey.split(':');
       const match = activeOrgs.find(o => o.uid === orgUid && o.entityKey === orgKey);
-      if (!match) {
-        feedHtml = `<div style="text-align:center;color:var(--text-dim);padding:32px">Channel not found.</div>`;
-      } else {
-        const { uid, entityKey, org } = match;
-        const rep = org.reputation || 50;
-        const repColor = rep >= 75 ? '#f4b41b' : rep >= 50 ? '#27ae60' : rep >= 25 ? '#2196f3' : '#9e9e9e';
-        const logo = org.logo || '\u{1F4F0}';
-        const posts = this._newsPosts[uid] || {};
-        const postList = Object.entries(posts)
-          .filter(([, p]) => p && typeof p === 'object' && (!p.entityKey || p.entityKey === entityKey))
-          .sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+      if (!match) { this._newsActiveOrg = 'all'; this._renderNewsTab(container); return; }
 
-        const LOGO_EMOJIS = ['\u{1F4F0}','\u{1F5DE}','\u{1F4E1}','\u{1F3A4}','\u{1F4FA}','\u{1F4FB}','\u{1F3A5}','\u{1F4A1}','\u{1F525}','\u2B50','\u{1F680}','\u{1F4B8}'];
-        const isMyOrg = typeof Firebase !== 'undefined' && Firebase.uid === uid;
-        const logoPickerHtml = isMyOrg
-          ? `<div class="news-logo-picker">
-              <span style="font-size:11px;color:var(--text-dim)">Logo:</span>
-              ${LOGO_EMOJIS.map(e => `<button class="news-logo-opt${e===logo?' selected':''}" onclick="Companies.setNewsOrgLogo('${entityKey}','${e}')">${e}</button>`).join('')}
-            </div>`
-          : '';
+      const { uid, entityKey, org } = match;
+      const rep = org.reputation || 50;
+      const repColor = _repColor(rep);
+      const logo = org.logo || '\u{1F4F0}';
+      const posts = this._newsPosts[uid] || {};
+      const postList = Object.entries(posts)
+        .filter(([, p]) => p && typeof p === 'object' && (!p.entityKey || p.entityKey === entityKey))
+        .sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+      const isMyOrg = typeof Firebase !== 'undefined' && Firebase.uid === uid;
 
-        feedHtml += `<div class="news-org-header" style="border-color:${repColor}">
-          <div style="display:flex;align-items:center;gap:12px">
-            <div style="font-size:40px;line-height:1">${this._esc(logo)}</div>
-            <div>
-              <div style="font-size:20px;font-weight:700;color:${repColor}">${this._esc(entityKey)}</div>
+      const LOGO_EMOJIS = ['\u{1F4F0}','\u{1F5DE}','\u{1F4E1}','\u{1F3A4}','\u{1F4FA}','\u{1F4FB}','\u{1F3A5}','\u{1F4A1}','\u{1F525}','\u2B50','\u{1F680}','\u{1F4B8}'];
+      const logoPickerHtml = isMyOrg
+        ? `<div class="news-logo-picker">
+            <span style="font-size:11px;color:var(--text-dim)">Logo:</span>
+            ${LOGO_EMOJIS.map(e => `<button class="news-logo-opt${e===logo?' selected':''}" onclick="Companies.setNewsOrgLogo('${entityKey}','${e}')">${e}</button>`).join('')}
+          </div>`
+        : '';
+
+      const postFormHtml = isMyOrg
+        ? `<div style="background:var(--bg2);border:1px solid var(--bg3);border-radius:10px;padding:12px;margin-bottom:12px">
+            <div style="font-size:12px;font-weight:700;color:var(--text-dim);margin-bottom:8px">\u270F\uFE0F New Post</div>
+            <input id="news-headline-org-${orgKey}" maxlength="100" placeholder="Headline (required)" style="width:100%;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);padding:8px;font-size:14px;font-weight:600;box-sizing:border-box;margin-bottom:6px">
+            <textarea id="news-body-org-${orgKey}" maxlength="300" placeholder="Body text (optional)" style="width:100%;height:56px;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);padding:8px;font-size:13px;resize:none;box-sizing:border-box"></textarea>
+            <button class="company-found-btn" style="margin-top:6px;padding:8px 20px" onclick="Companies._doPostNews('${uid}','${entityKey}','news-headline-org-${orgKey}','news-body-org-${orgKey}')">\u{1F4E2} Publish</button>
+          </div>`
+        : '';
+
+      const cards = postList.map(([postId, post]) => _postCard(uid, postId, post, org, entityKey)).filter(Boolean);
+
+      container.innerHTML = `<div class="news-tab-wrap">
+        <button class="news-back-btn" onclick="Companies.setNewsOrg('all')">\u2190 All News Orgs</button>
+        <div class="news-org-header" style="border-color:${repColor};margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="font-size:48px;line-height:1">${this._esc(logo)}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:22px;font-weight:800;color:${repColor};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${this._esc(entityKey)}</div>
               <div style="font-size:12px;color:var(--text-dim)">by ${this._esc(org.ownerName || 'Unknown')}</div>
-            </div>
-            <div style="margin-left:auto;text-align:right">
-              ${_repBadge(rep)}
-              <div style="font-size:11px;color:var(--text-dim);margin-top:4px">${postList.length} post${postList.length !== 1 ? 's' : ''}</div>
+              <div style="font-size:11px;color:var(--text-dim);margin-top:2px">${postList.length} posts &bull; Rep \u2605${rep}</div>
             </div>
           </div>
           ${logoPickerHtml}
-        </div>`;
-
-        const cards = postList.map(([postId, post]) => _postCard(uid, postId, post, org, entityKey, false)).filter(Boolean);
-        feedHtml += cards.length > 0
-          ? cards.join('')
-          : `<div style="text-align:center;color:var(--text-dim);padding:24px">No posts from this org yet.</div>`;
-      }
+        </div>
+        ${postFormHtml}
+        <div class="news-feed-list">
+          ${cards.length > 0 ? cards.join('') : '<div style="text-align:center;color:var(--text-dim);padding:32px">No posts yet. Be the first!</div>'}
+        </div>
+      </div>`;
+      return;
     }
 
-    container.innerHTML = `<div class="news-tab-wrap">${channelBar}<div class="news-feed-list">${feedHtml}</div></div>`;
+    // ── All-orgs home: one card per org ───────────────────────────────────
+    const orgCards = activeOrgs.map(({ uid, entityKey, org }) => {
+      const rep = org.reputation || 50;
+      const repColor = _repColor(rep);
+      const logo = org.logo || '\u{1F4F0}';
+      const posts = this._newsPosts[uid] || {};
+      const postList = Object.entries(posts)
+        .filter(([, p]) => p && typeof p === 'object' && (!p.entityKey || p.entityKey === entityKey))
+        .sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+      const latest = postList[0];
+      const latestText = latest ? (latest[1].headline || latest[1].text || '') : '';
+      const key = uid + ':' + entityKey;
+      return `<div class="news-org-card" style="border-color:${repColor}22" onclick="Companies.setNewsOrg('${key}')">
+        <div class="news-org-card-header">
+          <div class="news-org-card-logo">${this._esc(logo)}</div>
+          <div class="news-org-card-info">
+            <div class="news-org-card-name" style="color:${repColor}">${this._esc(entityKey)}</div>
+            <div class="news-org-card-sub">by ${this._esc(org.ownerName || 'Unknown')} &bull; \u2605${rep} &bull; ${postList.length} post${postList.length !== 1 ? 's' : ''}</div>
+          </div>
+          <div style="color:var(--text-dim);font-size:18px;flex-shrink:0">\u203A</div>
+        </div>
+        ${latestText ? `<div class="news-org-card-preview">${this._esc(latestText)}</div>` : ''}
+      </div>`;
+    }).join('');
+
+    container.innerHTML = `<div class="news-tab-wrap">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px;color:var(--text)">\u{1F4F0} News Organizations</div>
+      <div class="news-org-grid">${orgCards}</div>
+    </div>`;
   },
 
   _renderNewsFeed(html) {

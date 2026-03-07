@@ -295,28 +295,36 @@ input, textarea, select {
 /* Casino Grid */
 #casino-grid {
   display: block;
+  padding: 0 4px;
 }
 .casino-grid-section {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 4px;
+  display: flex;
+  flex-direction: row;
+  overflow-x: auto;
+  gap: 8px;
+  padding: 4px 2px 12px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.casino-grid-section::-webkit-scrollbar { display: none; }
 
 .casino-card {
   background: var(--bg2);
   border-radius: var(--radius);
-  padding: 24px 16px;
+  padding: 14px 10px 12px;
   text-align: center;
   cursor: pointer;
   border: 1px solid var(--bg3);
   transition: border-color 0.2s, transform 0.1s;
+  flex: 0 0 auto;
+  width: 90px;
+  min-width: 0;
 }
 
-.casino-card:active { transform: scale(0.96); }
+.casino-card:active { transform: scale(0.95); }
 .casino-card:hover { border-color: var(--green); }
-.casino-icon { font-size: 48px; margin-bottom: 8px; }
-.casino-name { font-weight: 700; font-size: 16px; }
+.casino-icon { font-size: 38px; margin-bottom: 6px; }
+.casino-name { font-weight: 700; font-size: 13px; line-height: 1.2; }
 
 /* Game Containers */
 .game-container {
@@ -2815,26 +2823,13 @@ html[data-platform="desktop"] #balance-display {
   padding: 8px 20px;
 }
 
-/* Casino grid: auto-fill on desktop so rows stay complete */
-html[data-platform="desktop"] .casino-grid-section {
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 16px;
-}
-html[data-platform="desktop"] .casino-favs-strip {
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-}
-
+/* Casino grid: larger cards on desktop */
 html[data-platform="desktop"] .casino-card {
-  padding: 32px 20px;
+  width: 120px;
+  padding: 24px 16px 20px;
 }
-
-html[data-platform="desktop"] .casino-icon {
-  font-size: 56px;
-}
-
-html[data-platform="desktop"] .casino-name {
-  font-size: 18px;
-}
+html[data-platform="desktop"] .casino-icon { font-size: 48px; }
+html[data-platform="desktop"] .casino-name { font-size: 15px; }
 
 /* Wider game containers */
 html[data-platform="desktop"] .game-container {
@@ -6929,6 +6924,7 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
 /* ====== NEWS CHANNEL TAB ====== */
 
 .news-tab-wrap {
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -6988,37 +6984,90 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 100%;
 }
 
-.news-post-card {
-  background: var(--bg2);
-  border-radius: 10px;
-  padding: 10px 12px;
+/* org card grid for the "All News" home view */
+.news-org-grid {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
+  width: 100%;
 }
 
-.news-post-source {
-  font-size: 11px;
-  color: var(--text-dim);
-  font-style: italic;
+.news-org-card {
+  background: var(--bg2);
+  border-radius: 12px;
+  border: 2px solid var(--bg3);
+  padding: 14px;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.1s;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
+.news-org-card:active { transform: scale(0.98); }
+.news-org-card:hover { border-color: var(--accent); }
 
-.news-post-text {
-  font-size: 13px;
-  color: var(--text);
-  line-height: 1.4;
-}
-
-.news-post-meta {
+.news-org-card-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.news-org-card-logo {
+  font-size: 36px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.news-org-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.news-org-card-name {
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.news-org-card-sub {
   font-size: 11px;
   color: var(--text-dim);
+  margin-top: 2px;
 }
+
+.news-org-card-preview {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  border-left: 3px solid var(--bg3);
+  padding-left: 10px;
+}
+
+/* back button in single org view */
+.news-back-btn {
+  background: none;
+  border: 1px solid var(--bg3);
+  border-radius: 20px;
+  color: var(--text-dim);
+  font-size: 13px;
+  padding: 5px 14px;
+  cursor: pointer;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.news-back-btn:hover { border-color: var(--accent); color: var(--accent); }
 
 .news-vote-btn {
   background: var(--bg3);
@@ -9044,11 +9093,15 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   line-height: 1;
 }
 .casino-favs-strip {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  display: flex;
+  flex-direction: row;
+  overflow-x: auto;
   gap: 8px;
-  margin-bottom: 4px;
+  padding: 4px 2px 12px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.casino-favs-strip::-webkit-scrollbar { display: none; }
 
 /* ===== World Event Banner ===== */
 .world-event-banner {
