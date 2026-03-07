@@ -46,6 +46,9 @@ input, textarea, select {
   display: flex;
   align-items: center;
   padding: 12px 16px;
+  padding-top: max(12px, env(safe-area-inset-top));
+  padding-right: max(16px, env(safe-area-inset-right));
+  padding-left: max(16px, env(safe-area-inset-left));
   background: var(--bg2);
   border-bottom: 1px solid var(--bg3);
   gap: 12px;

@@ -621,7 +621,40 @@ function showFirstTimeUsernamePrompt() {
       </div>
 
       <button style="width:100%;padding:8px;background:var(--bg3);color:var(--green);border:1px solid var(--bg3);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:6px"
-        onclick="(function(){const s=document.getElementById('ft-login-section');const vis=s.style.display==='none';s.style.display=vis?'block':'none';if(vis)document.getElementById('ft-login-name').focus();this.textContent=vis?'↑ Hide Login':'🔑 Login to Existing Account';})()">🔑 Login to Existing Account</button>
+        onclick="(function(){const s=document.getElementById('ft-login-section');const vis=s.style.display==='none';s.style.display=vis?'block':'none';if(vis){document.getElementById('ft-recover-section').style.display='none';document.getElementById('ft-login-name').focus();}this.textContent=vis?'↑ Hide Login':'🔑 Login to Existing Account';})()">🔑 Login to Existing Account</button>
+
+      <div id="ft-recover-section" style="display:none;margin-bottom:8px">
+        <input id="ft-recover-name" type="text" maxlength="16" placeholder="Username"
+          style="width:100%;padding:10px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:8px;font-size:14px;box-sizing:border-box;text-align:center;margin-bottom:8px;outline:none">
+        <input id="ft-recover-code" type="text" placeholder="Recovery code (XXXX-XXXX-XXXX)"
+          style="width:100%;padding:10px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:8px;font-size:13px;box-sizing:border-box;text-align:center;margin-bottom:10px;outline:none;text-transform:uppercase;letter-spacing:1px"
+          maxlength="14"
+          onkeydown="if(event.key==='Enter')document.getElementById('ft-recover-submit').click()">
+        <button id="ft-recover-submit"
+          style="width:100%;padding:11px;background:var(--bg3);color:var(--text);border:1px solid var(--gold,#f39c12);border-radius:8px;font-size:14px;font-weight:700;cursor:pointer"
+          onclick="(async function(){
+            const n=document.getElementById('ft-recover-name').value.trim();
+            const c=document.getElementById('ft-recover-code').value.trim();
+            if(!n||!c){alert('Enter your username and recovery code');return;}
+            const btn=document.getElementById('ft-recover-submit');
+            btn.textContent='Recovering...';btn.disabled=true;
+            Settings.setName(n);
+            _initFirebase();
+            await new Promise(r=>setTimeout(r,1500));
+            const result=await Firebase.recoverAccount(n,c);
+            if(result.ok){
+              document.getElementById('ft-username-modal').remove();
+              alert('Account recovered successfully!');
+            } else {
+              btn.textContent='Recover Account';btn.disabled=false;
+              alert('Recovery failed: '+(result.error||'invalid code'));
+            }
+          })()">Recover Account</button>
+        <div id="ft-recover-err" style="font-size:11px;color:var(--red);margin-top:6px;min-height:14px"></div>
+      </div>
+
+      <button style="width:100%;padding:8px;background:var(--bg3);color:#f39c12;border:1px solid var(--bg3);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:6px"
+        onclick="(function(){const s=document.getElementById('ft-recover-section');const vis=s.style.display==='none';s.style.display=vis?'block':'none';if(vis){document.getElementById('ft-login-section').style.display='none';document.getElementById('ft-recover-name').focus();}this.textContent=vis?'↑ Hide Recovery':'🔑 Recover with Code';})()">🔑 Recover with Code</button>
 
       <button style="width:100%;padding:8px;background:none;color:var(--text-dim);border:none;font-size:12px;cursor:pointer"
         onclick="document.getElementById('ft-username-modal').remove()">Skip (play as Guest — local only)</button>
