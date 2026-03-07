@@ -9095,13 +9095,10 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
 .casino-favs-strip {
   display: flex;
   flex-direction: row;
-  overflow-x: auto;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 4px 2px 12px;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
 }
-.casino-favs-strip::-webkit-scrollbar { display: none; }
 
 /* ===== World Event Banner ===== */
 .world-event-banner {
