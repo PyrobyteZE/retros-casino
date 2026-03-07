@@ -395,7 +395,7 @@ const Crafting = {
     this._ppPixels = item.pixels || '0'.repeat(256);
     this._ppColor = 1;
     this._ppTool = 'brush';
-    this._ppCustomPalette = null;
+    this._ppCustomPalette = item.customPalette ? [...item.customPalette] : null;
 
     const modal = document.getElementById('pixel-painter-modal');
     if (!modal) return;
@@ -452,7 +452,7 @@ const Crafting = {
       const itemId = this._ppItemDraft.slice(0, sepIdx);
       const price  = parseFloat(this._ppItemDraft.slice(sepIdx + 6)) || 0;
       const item = this._inventory.find(i => i.id === itemId);
-      if (item) item.pixels = this._ppPixels;
+      if (item) { item.pixels = this._ppPixels; if (this._ppCustomPalette) item.customPalette = [...this._ppCustomPalette]; }
       // Restore default header text
       const ppHeader = document.getElementById('pixel-painter-modal')?.querySelector('.pp-header');
       if (ppHeader) ppHeader.textContent = '🎨 Paint Your Item';
@@ -481,6 +481,7 @@ const Crafting = {
     const item = this._inventory.find(i => i.id === this._ppItemDraft);
     if (item) {
       item.pixels = this._ppPixels;
+      if (this._ppCustomPalette) item.customPalette = [...this._ppCustomPalette];
     }
     App.save();
     this.closePixelPainter();
@@ -533,7 +534,7 @@ const Crafting = {
             <div style="font-weight:700;font-size:14px">${this._esc(item.name)}</div>
             <div style="font-size:11px;color:var(--text-dim)">${item.category || ''} · ${item.rarity || ''}</div>
           </div>
-          <div style="margin-left:auto">${this.renderPixelArt(item.pixels, 40)}</div>
+          <div style="margin-left:auto">${this.renderPixelArt(item.pixels, 40, item.customPalette)}</div>
         </div>
         <div style="font-size:13px;font-weight:700;margin-bottom:10px">Where do you want to put this?</div>
 
@@ -700,14 +701,14 @@ const Crafting = {
       });
       palette.appendChild(swatch);
     });
-    // Wire up color picker — only active when painting pets (custom palette)
+    // Wire up color picker — works for all painting modes (initializes custom palette on first use)
     const picker = document.getElementById('pp-custom-color');
     const pickerRow = picker?.closest('.pp-color-picker-row');
     if (picker) {
-      if (pickerRow) pickerRow.style.display = this._ppCustomPalette ? 'flex' : 'none';
+      if (pickerRow) pickerRow.style.display = 'flex';
       picker.value = activePalette[this._ppColor] || '#ffffff';
       picker.oninput = (e) => {
-        if (!this._ppCustomPalette) return;
+        if (!this._ppCustomPalette) this._ppCustomPalette = [...this.PALETTE];
         const newColor = e.target.value;
         this._ppCustomPalette[this._ppColor] = newColor;
         // Update active swatch visual
@@ -785,7 +786,7 @@ const Crafting = {
         const canAfford = App.balance >= tpl.price || (typeof Admin !== 'undefined' && Admin.godMode);
         html += `<div class="inv-item-card" style="border-color:${rarityColor}">
           <div class="inv-item-top">
-            <div class="inv-item-art">${this.renderPixelArt(item.pixels, 48)}</div>
+            <div class="inv-item-art">${this.renderPixelArt(item.pixels, 48, item.customPalette)}</div>
             <div class="inv-item-info">
               <div class="inv-item-name">${this._esc(item.name)}</div>
               <div class="inv-item-rarity" style="color:${rarityColor}">${item.rarity} · ${item.category}</div>
@@ -816,7 +817,7 @@ const Crafting = {
         const canAfford = App.balance >= listing.price || (typeof Admin !== 'undefined' && Admin.godMode);
         html += `<div class="inv-item-card" style="border-color:${rarityColor}">
           <div class="inv-item-top">
-            <div class="inv-item-art">${this.renderPixelArt(item.pixels, 48)}</div>
+            <div class="inv-item-art">${this.renderPixelArt(item.pixels, 48, item.customPalette)}</div>
             <div class="inv-item-info">
               <div class="inv-item-name">${this._esc(item.name)}</div>
               <div class="inv-item-rarity" style="color:${rarityColor}">${item.rarity} · ${item.category}</div>
@@ -985,7 +986,7 @@ const Crafting = {
         const durMins = (this.BUFF_DURATIONS[item.rarity] || this.BUFF_DURATIONS.common) / 60_000;
         foodHtml += `<div class="inv-item-card food-menu-card" style="border-color:${rarityColor}">
           <div class="inv-item-top">
-            <div class="inv-item-art">${this.renderPixelArt(item.pixels, 48)}</div>
+            <div class="inv-item-art">${this.renderPixelArt(item.pixels, 48, item.customPalette)}</div>
             <div class="inv-item-info">
               <div class="inv-item-name">${this._esc(item.name)}</div>
               <div class="inv-item-rarity" style="color:${rarityColor}">${item.rarity} ${item.category}</div>
@@ -1028,7 +1029,7 @@ const Crafting = {
         const canAfford = App.balance >= tpl.price || (typeof Admin !== 'undefined' && Admin.godMode);
         html += `<div class="inv-item-card" style="border-color:${rarityColor}">
           <div class="inv-item-top">
-            <div class="inv-item-art">${this.renderPixelArt(item.pixels, 48)}</div>
+            <div class="inv-item-art">${this.renderPixelArt(item.pixels, 48, item.customPalette)}</div>
             <div class="inv-item-info">
               <div class="inv-item-name">${this._esc(item.name)}</div>
               <div class="inv-item-rarity" style="color:${rarityColor}">${item.rarity} ${item.category}</div>

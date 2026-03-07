@@ -24,6 +24,7 @@ const Settings = {
 
   // === STATE ===
   currentTheme: 'green',
+  customThemeColor: '#00e676',
   profile: { name: 'Player', avatar: 0, bio: '', bannerColor: '#00e676', title: '' },
   options: {
     autoSaveInterval: 30,
@@ -52,10 +53,26 @@ const Settings = {
   },
 
   applyTheme() {
-    const theme = this.themes.find(t => t.id === this.currentTheme) || this.themes[0];
-    document.documentElement.style.setProperty('--green', theme.color);
-    document.documentElement.style.setProperty('--green-dark', theme.dark);
-    document.documentElement.setAttribute('data-theme', theme.id);
+    let color, dark, id;
+    if (this.currentTheme === 'custom') {
+      color = this.customThemeColor || '#00e676';
+      dark = color;
+      id = 'custom';
+    } else {
+      const theme = this.themes.find(t => t.id === this.currentTheme) || this.themes[0];
+      color = theme.color; dark = theme.dark; id = theme.id;
+    }
+    document.documentElement.style.setProperty('--green', color);
+    document.documentElement.style.setProperty('--green-dark', dark);
+    document.documentElement.setAttribute('data-theme', id);
+  },
+
+  setCustomTheme(color) {
+    this.customThemeColor = color;
+    this.currentTheme = 'custom';
+    this.applyTheme();
+    this.save();
+    this.render();
   },
 
   // === PROFILE ===
@@ -265,10 +282,10 @@ const Settings = {
               `<button onclick="Settings.setBannerColor('${c}')"
                 style="width:24px;height:24px;border-radius:50%;background:${c};border:2px solid ${c===this.profile.bannerColor?'#fff':'transparent'};cursor:pointer;padding:0"></button>`
             ).join('')}
-            <label title="Custom color" style="width:24px;height:24px;border-radius:50%;border:2px solid ${this.bannerColors.includes(this.profile.bannerColor)?'#555':'#fff'};cursor:pointer;overflow:hidden;display:inline-block;flex-shrink:0">
+            <div title="Custom color" style="position:relative;width:24px;height:24px;border-radius:50%;overflow:hidden;border:2px solid ${this.bannerColors.includes(this.profile.bannerColor)?'#444':'#fff'};flex-shrink:0;cursor:pointer">
               <input type="color" value="${this.profile.bannerColor}" oninput="Settings.setBannerColor(this.value)"
-                style="width:32px;height:32px;border:none;padding:0;cursor:pointer;margin:-4px 0 0 -4px;opacity:${this.bannerColors.includes(this.profile.bannerColor)?'0.6':'1'}">
-            </label>
+                style="position:absolute;top:-4px;left:-4px;width:calc(100% + 8px);height:calc(100% + 8px);border:none;padding:0;cursor:pointer">
+            </div>
           </div>
         </div>
         <div class="settings-row" style="margin-top:4px">
@@ -286,12 +303,16 @@ const Settings = {
       <!-- Theme -->
       <div class="settings-section">
         <h3>Theme</h3>
-        <div class="theme-picker">
+        <div class="theme-picker" style="align-items:center">
           ${this.themes.map(t =>
             `<button class="theme-circle${t.id === this.currentTheme ? ' selected' : ''}" style="background:${t.color}" onclick="Settings.setTheme('${t.id}')" title="${t.name}"></button>`
           ).join('')}
+          <div title="Custom color" style="position:relative;width:28px;height:28px;border-radius:50%;overflow:hidden;border:2px solid ${this.currentTheme === 'custom' ? '#fff' : '#444'};flex-shrink:0;cursor:pointer">
+            <input type="color" value="${this.customThemeColor || '#00e676'}" oninput="Settings.setCustomTheme(this.value)"
+              style="position:absolute;top:-4px;left:-4px;width:calc(100% + 8px);height:calc(100% + 8px);border:none;padding:0;cursor:pointer">
+          </div>
         </div>
-        <div class="theme-name">${(this.themes.find(t => t.id === this.currentTheme) || this.themes[0]).name}</div>
+        <div class="theme-name">${this.currentTheme === 'custom' ? 'Custom' : (this.themes.find(t => t.id === this.currentTheme) || this.themes[0]).name}</div>
       </div>
 
       <!-- Account / Save Transfer -->
@@ -505,6 +526,7 @@ const Settings = {
   save() {
     const data = {
       theme: this.currentTheme,
+      customThemeColor: this.customThemeColor,
       profile: this.profile,
       options: this.options
     };
@@ -517,6 +539,7 @@ const Settings = {
     try {
       const data = JSON.parse(raw);
       if (data.theme) this.currentTheme = data.theme;
+      if (data.customThemeColor) this.customThemeColor = data.customThemeColor;
       if (data.profile) {
         this.profile.name        = data.profile.name || 'Player';
         this.profile.avatar      = data.profile.avatar || 0;
