@@ -4703,6 +4703,7 @@ html[data-platform="desktop"] #screen-pets .game-container {
   z-index: 500;
   transition: transform 0.3s;
   transform: translateX(-50%) translateY(100%);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .chat-panel.chat-open {
@@ -4745,7 +4746,7 @@ html[data-platform="desktop"] #screen-pets .game-container {
 .chat-open .chat-toggle { transform: rotate(180deg); }
 
 .chat-body {
-  padding: 0 12px max(12px, calc(8px + env(safe-area-inset-bottom)));
+  padding: 0 12px 12px;
 }
 
 .chat-messages {
