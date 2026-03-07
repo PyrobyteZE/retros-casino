@@ -430,7 +430,10 @@ const Firebase = {
     const name = typeof Settings !== 'undefined' ? Settings.profile.name : 'Player';
     const avatar = typeof Settings !== 'undefined' ? Settings.avatars[Settings.profile.avatar] : '';
     const prof = typeof Settings !== 'undefined' ? Settings.profile : {};
+    // Use account name as leaderboard key (stable across UID changes / devices)
+    const lbKey = this._accountName || this.uid;
     const data = {
+      uid: this.uid,   // actual session UID stored in data for social ops
       name,
       avatar,
       balance: App.balance,
@@ -450,8 +453,12 @@ const Firebase = {
       achTiers: typeof Achievements !== 'undefined' ? Achievements.getUnlockedTiers() : 0,
       timestamp: firebase.database.ServerValue.TIMESTAMP,
     };
-    this.db.ref('leaderboard/' + this.uid).set(data).then(() => {
-      console.log('Firebase: leaderboard pushed');
+    this.db.ref('leaderboard/' + lbKey).set(data).then(() => {
+      // If we switched from uid-keyed to name-keyed, remove the stale uid entry
+      if (this._accountName && this._accountName !== this.uid) {
+        this.db.ref('leaderboard/' + this.uid).remove().catch(() => {});
+      }
+      console.log('Firebase: leaderboard pushed as', lbKey);
     }).catch(err => {
       console.error('Firebase leaderboard write error:', err.code, err.message);
       this._updateChatStatus('DB write denied');
@@ -463,14 +470,15 @@ const Firebase = {
     const ref = this.db.ref('leaderboard').orderByChild('totalEarned').limitToLast(50);
     this.leaderboardListener = ref.on('value', snap => {
       const data = snap.val() || {};
-      const entries = Object.entries(data).map(([uid, d]) => ({ uid, ...d }));
-      // Dedup by name: keep highest totalEarned per name (stale UIDs from cache clears)
+      // _lbKey = Firebase node key; uid = actual session uid (stored in data for new entries)
+      const entries = Object.entries(data).map(([key, d]) => ({ _lbKey: key, uid: d.uid || key, ...d }));
+      // Dedup by name: keep highest totalEarned per name (handles leftover uid-keyed entries)
       const byName = {};
       entries.forEach(e => {
-        const key = (e.name || '').toLowerCase();
-        if (!key || key === 'player') { byName[e.uid] = e; return; }
-        if (!byName[key] || (e.totalEarned || 0) > (byName[key].totalEarned || 0)) {
-          byName[key] = e;
+        const nameKey = (e.name || '').toLowerCase();
+        if (!nameKey || nameKey === 'player') { byName[e._lbKey] = e; return; }
+        if (!byName[nameKey] || (e.totalEarned || 0) > (byName[nameKey].totalEarned || 0)) {
+          byName[nameKey] = e;
         }
       });
       this.leaderboardData = Object.values(byName)
@@ -685,12 +693,12 @@ const Firebase = {
 
     let html = tabHtml + '<div class="lb-list">';
     sorted.forEach((entry, i) => {
-      const isMe = entry.uid === this.uid;
+      const isMe = entry.uid === this.uid || entry._lbKey === this._accountName;
       const rank = i + 1;
       const medal = rank === 1 ? '\u{1F947}' : rank === 2 ? '\u{1F948}' : rank === 3 ? '\u{1F949}' : '#' + rank;
       const idBadge = entry.playerId !== null && entry.playerId !== undefined
         ? `<span class="lb-player-id">#${entry.playerId}</span>` : '';
-      html += `<div class="lb-row ${isMe ? 'lb-me' : ''}" onclick="Firebase.showProfile('${entry.uid}')">
+      html += `<div class="lb-row ${isMe ? 'lb-me' : ''}" onclick="Firebase.showProfile('${entry._lbKey}')">
         <span class="lb-rank">${medal}</span>
         <span class="lb-avatar">${entry.avatar || ''}</span>
         <span class="lb-name">${this._escapeHtml(entry.name || 'Player')}${idBadge}</span>
@@ -702,9 +710,11 @@ const Firebase = {
     container.innerHTML = html;
   },
 
-  showProfile(uid) {
-    const entry = this.leaderboardData.find(e => e.uid === uid);
+  showProfile(key) {
+    // key is _lbKey (account name or uid); also fall back to matching by actual uid
+    const entry = this.leaderboardData.find(e => e._lbKey === key || e.uid === key);
     if (!entry) return;
+    const uid = entry.uid; // actual uid for DM/gift/friend ops
 
     let modal = document.getElementById('profile-modal');
     if (!modal) {
@@ -715,7 +725,7 @@ const Firebase = {
     }
     modal.onclick = e => { if (e.target === modal) this.closeProfile(); };
 
-    const isMe = uid === this.uid;
+    const isMe = uid === this.uid || entry._lbKey === this._accountName;
     const isFriend = !!this._friends[uid];
     const banner = entry.bannerColor || '#00e676';
     const idStr  = (entry.playerId != null) ? `<span class="pcard-id">#${entry.playerId}</span>` : '';

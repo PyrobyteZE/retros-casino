@@ -72,7 +72,9 @@ const Settings = {
     this.currentTheme = 'custom';
     this.applyTheme();
     this.save();
-    this.render();
+    // Patch theme name label in-place (no full re-render needed)
+    const nameEl = document.querySelector('.theme-name');
+    if (nameEl) nameEl.textContent = 'Custom';
   },
 
   // === PROFILE ===
@@ -92,6 +94,13 @@ const Settings = {
     this.profile.bannerColor = color;
     this.save();
     this.render();
+  },
+
+  // Live preview without re-render (keeps color picker open)
+  _livePreviewBanner(color) {
+    this.profile.bannerColor = color;
+    const el = document.getElementById('settings-profile-banner');
+    if (el) el.style.background = `linear-gradient(135deg,${color}cc,${color}55)`;
   },
 
   setTitle(title) {
@@ -236,7 +245,7 @@ const Settings = {
       <div class="settings-section">
         <h3>Profile</h3>
         <div style="border-radius:10px;overflow:hidden;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
-          <div style="height:56px;background:linear-gradient(135deg,${this.profile.bannerColor}cc,${this.profile.bannerColor}55)"></div>
+          <div id="settings-profile-banner" style="height:56px;background:linear-gradient(135deg,${this.profile.bannerColor}cc,${this.profile.bannerColor}55)"></div>
           <div style="background:var(--bg);padding:0 12px 12px;display:flex;align-items:flex-start;gap:10px">
             <div style="margin-top:-22px;width:44px;height:44px;border-radius:50%;background:var(--bg2);border:3px solid var(--bg);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">${this.avatars[this.profile.avatar]}</div>
             <div style="flex:1;min-width:0;padding-top:4px">
@@ -283,7 +292,9 @@ const Settings = {
                 style="width:24px;height:24px;border-radius:50%;background:${c};border:2px solid ${c===this.profile.bannerColor?'#fff':'transparent'};cursor:pointer;padding:0"></button>`
             ).join('')}
             <div title="Custom color" style="position:relative;width:24px;height:24px;border-radius:50%;overflow:hidden;border:2px solid ${this.bannerColors.includes(this.profile.bannerColor)?'#444':'#fff'};flex-shrink:0;cursor:pointer">
-              <input type="color" value="${this.profile.bannerColor}" oninput="Settings.setBannerColor(this.value)"
+              <input type="color" value="${this.profile.bannerColor}"
+                oninput="Settings._livePreviewBanner(this.value)"
+                onchange="Settings.setBannerColor(this.value)"
                 style="position:absolute;top:-4px;left:-4px;width:calc(100% + 8px);height:calc(100% + 8px);border:none;padding:0;cursor:pointer">
             </div>
           </div>
@@ -308,7 +319,9 @@ const Settings = {
             `<button class="theme-circle${t.id === this.currentTheme ? ' selected' : ''}" style="background:${t.color}" onclick="Settings.setTheme('${t.id}')" title="${t.name}"></button>`
           ).join('')}
           <div title="Custom color" style="position:relative;width:28px;height:28px;border-radius:50%;overflow:hidden;border:2px solid ${this.currentTheme === 'custom' ? '#fff' : '#444'};flex-shrink:0;cursor:pointer">
-            <input type="color" value="${this.customThemeColor || '#00e676'}" oninput="Settings.setCustomTheme(this.value)"
+            <input type="color" value="${this.customThemeColor || '#00e676'}"
+              oninput="Settings.customThemeColor=this.value;Settings.currentTheme='custom';Settings.applyTheme()"
+              onchange="Settings.setCustomTheme(this.value)"
               style="position:absolute;top:-4px;left:-4px;width:calc(100% + 8px);height:calc(100% + 8px);border:none;padding:0;cursor:pointer">
           </div>
         </div>

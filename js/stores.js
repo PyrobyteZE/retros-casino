@@ -52,6 +52,16 @@ const Stores = {
     if (typeof App !== 'undefined' && App.currentScreen === 'stores') this.renderStoresScreen();
   },
 
+  // Ownership check — works even after UID changes (same player, new device)
+  _isOwner(store) {
+    if (!store) return false;
+    if (typeof Firebase !== 'undefined' && Firebase.uid && store.ownerUid === Firebase.uid) return true;
+    const myName = typeof Settings !== 'undefined' ? Settings.profile.name : null;
+    if (myName && myName !== 'Player' && store.ownerName &&
+        store.ownerName.toLowerCase() === myName.toLowerCase()) return true;
+    return false;
+  },
+
   setStoresTab(tab) {
     this._storesTab = tab;
     this.renderStoresScreen();
@@ -113,7 +123,7 @@ const Stores = {
   closeStore(storeId) {
     if (!Firebase || !Firebase.isOnline()) return;
     const store = this._stores[storeId];
-    if (!store || store.ownerUid !== Firebase.uid) return;
+    if (!store || !this._isOwner(store)) return;
     if (!confirm('Close this store? Inventory items return to your bag.')) return;
     if (typeof Crafting !== 'undefined' && store.inventory) {
       for (const e of Object.values(store.inventory)) {
@@ -131,7 +141,7 @@ const Stores = {
   collectCash(storeId) {
     if (!Firebase || !Firebase.isOnline()) return;
     const store = this._stores[storeId];
-    if (!store || store.ownerUid !== Firebase.uid) return;
+    if (!store || !this._isOwner(store)) return;
     const cash = store.cashRegister || 0;
     if (cash <= 0) { Toast.show('Nothing to collect', '#aaa', 2000); return; }
     App.addBalance(cash);
@@ -143,7 +153,7 @@ const Stores = {
   upgradeSecurity(storeId) {
     if (!Firebase || !Firebase.isOnline()) return;
     const store = this._stores[storeId];
-    if (!store || store.ownerUid !== Firebase.uid) return;
+    if (!store || !this._isOwner(store)) return;
     const cur = store.securityLevel || 0;
     if (cur >= 100) { Toast.show('Security maxed!', '#27ae60', 2000); return; }
     if (App.balance < this.SEC_UPGRADE_COST) { alert('Need ' + App.formatMoney(this.SEC_UPGRADE_COST)); return; }
@@ -227,7 +237,7 @@ const Stores = {
 
   delistItem(storeId, itemKey) {
     const store = this._stores[storeId];
-    if (!store || store.ownerUid !== Firebase.uid) return;
+    if (!store || !this._isOwner(store)) return;
     const entry = store.inventory?.[itemKey];
     if (!entry) return;
     if (typeof Crafting !== 'undefined' && entry.item) {
@@ -287,7 +297,7 @@ const Stores = {
     if (!Firebase || !Firebase.isOnline()) { alert('Must be online.'); return; }
     const store = this._stores[storeId];
     if (!store) return;
-    if (store.ownerUid === Firebase.uid) { alert("Can't rob your own store!"); return; }
+    if (this._isOwner(store)) { alert("Can't rob your own store!"); return; }
 
     const cdMs = 10 * 60 * 1000;
     const cdLeft = cdMs - (Date.now() - (this._robCooldowns[storeId] || 0));
@@ -342,7 +352,7 @@ const Stores = {
       alert('This store already has active protection.'); return;
     }
 
-    const sameOwner = target.ownerUid === Firebase.uid;
+    const sameOwner = this._isOwner(target);
     let fee = 0;
     if (!sameOwner) {
       const feeStr = prompt('One-time protection fee ($) charged to store owner (0 = free):');
@@ -373,7 +383,7 @@ const Stores = {
   acceptProtection(storeId) {
     if (!Firebase || !Firebase.isOnline()) return;
     const store = this._stores[storeId];
-    if (!store || store.ownerUid !== Firebase.uid) return;
+    if (!store || !this._isOwner(store)) return;
     const p = store.protectedBy;
     if (!p || !p.isPending) return;
     const isGod = typeof Admin !== 'undefined' && Admin.godMode;
@@ -404,7 +414,7 @@ const Stores = {
   listStoreForSale(storeId) {
     if (!Firebase || !Firebase.isOnline()) return;
     const store = this._stores[storeId];
-    if (!store || store.ownerUid !== Firebase.uid) return;
+    if (!store || !this._isOwner(store)) return;
     const priceStr = prompt('List this store for sale — asking price ($):');
     if (!priceStr) return;
     const price = parseInt(priceStr) || 0;
@@ -416,7 +426,7 @@ const Stores = {
   delistStore(storeId) {
     if (!Firebase || !Firebase.isOnline()) return;
     const store = this._stores[storeId];
-    if (!store || store.ownerUid !== Firebase.uid) return;
+    if (!store || !this._isOwner(store)) return;
     Firebase.updateStore(storeId, { forSale: null });
     Toast.show('Store sale listing removed.', '#aaa', 2000);
   },
@@ -425,7 +435,7 @@ const Stores = {
     if (!Firebase || !Firebase.isOnline()) { alert('Must be online.'); return; }
     const store = this._stores[storeId];
     if (!store?.forSale) { alert('Not for sale.'); return; }
-    if (store.ownerUid === Firebase.uid) { alert("Can't buy your own store."); return; }
+    if (this._isOwner(store)) { alert("Can't buy your own store."); return; }
     const price = store.forSale.price;
     const isGod = typeof Admin !== 'undefined' && Admin.godMode;
     if (!isGod && App.balance < price) { alert('Need ' + App.formatMoney(price)); return; }
@@ -449,7 +459,7 @@ const Stores = {
 
   toggleFranchiseOffer(storeId) {
     const store = this._stores[storeId];
-    if (!store || store.ownerUid !== Firebase.uid) return;
+    if (!store || !this._isOwner(store)) return;
     if (store.franchise?.isOffering) {
       Firebase.updateStore(storeId, { 'franchise/isOffering': false });
       Toast.show('Franchise offer removed', '#aaa', 2000);
@@ -504,7 +514,7 @@ const Stores = {
     if (!isGod && App.balance < fee) { alert('Need ' + App.formatMoney(fee)); return; }
     if (!isGod) App.addBalance(-fee);
     const myPlayerId2 = (typeof Firebase !== 'undefined' && Firebase._playerId !== null) ? Firebase._playerId : Date.now().toString(36);
-    const myStoreCount2 = Object.values(this._stores).filter(s => s.ownerUid === Firebase.uid).length;
+    const myStoreCount2 = Object.values(this._stores).filter(s => this._isOwner(s)).length;
     const storeId = myPlayerId2 + '-' + (myStoreCount2 + 1);
     if (fee > 0) Firebase.updateStore(parentStoreId, { cashRegister: (parent.cashRegister || 0) + fee });
     Firebase.createStore(storeId, {
@@ -530,7 +540,7 @@ const Stores = {
 
   openLogoEditor(storeId) {
     const store = this._stores[storeId];
-    if (!store || store.ownerUid !== Firebase.uid) return;
+    if (!store || !this._isOwner(store)) return;
     this._logoEditTarget = storeId;
     this._logoColors = [...(store.logoPixels || new Array(64).fill('#222222'))];
     this._buildLogoModal();

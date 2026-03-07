@@ -515,7 +515,7 @@ const Crafting = {
     // Get player's own stores
     const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
     const myStores = typeof Stores !== 'undefined'
-      ? Object.entries(Stores._stores).filter(([, s]) => s.ownerUid === myUid)
+      ? Object.entries(Stores._stores).filter(([, s]) => Stores._isOwner(s))
       : [];
 
     const storeOptions = myStores.length
@@ -1355,7 +1355,7 @@ const Crafting = {
     // Build store options for auto-list mode
     const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
     const myStores = typeof Stores !== 'undefined'
-      ? Object.entries(Stores._stores).filter(([, s]) => s.ownerUid === myUid)
+      ? Object.entries(Stores._stores).filter(([, s]) => Stores._isOwner(s))
       : [];
     const storeOptions = myStores.length
       ? myStores.map(([sid, s]) => `<option value="${sid}">${this._esc(s.storeName || sid)}</option>`).join('')
@@ -1429,7 +1429,7 @@ const Crafting = {
       if (!sel) return;
       const myUid = typeof Firebase !== 'undefined' ? Firebase.uid : null;
       const myStores = typeof Stores !== 'undefined'
-        ? Object.entries(Stores._stores).filter(([, s]) => s.ownerUid === myUid)
+        ? Object.entries(Stores._stores).filter(([, s]) => Stores._isOwner(s))
         : [];
       sel.innerHTML = myStores.length
         ? myStores.map(([sid, s]) => `<option value="${sid}">${this._esc(s.storeName || sid)}</option>`).join('')
