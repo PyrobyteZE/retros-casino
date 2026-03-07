@@ -1679,9 +1679,16 @@ const Firebase = {
       Toast.show('⚠️ No save found for this account yet.', '#ff9800', 4000);
     }
 
-    // Update account uid to this session so pushAccountSave works going forward
+    // Update account uid + registeredNames to this session so future saves/name ops work
     if (account.uid !== this.uid && nameLower) {
       this.db.ref('accounts/' + nameLower).update({ uid: this.uid }).catch(() => {});
+      this.db.ref('registeredNames/' + nameLower).once('value').then(snap => {
+        const reg = snap.val();
+        if (reg) {
+          this.db.ref('registeredNames/' + nameLower).update({ uid: this.uid }).catch(() => {});
+          this._registeredNames[nameLower] = { ...reg, uid: this.uid };
+        }
+      }).catch(() => {});
     }
 
     return { ok: true };

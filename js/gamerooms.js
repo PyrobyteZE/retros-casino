@@ -246,7 +246,11 @@ const MainRoom = {
     const seeded = this._seededRand(seed);
     const idx = Math.floor(seeded() * Roulette.wheelOrder.length);
     const resultNum = Roulette.wheelOrder[idx];
-    // Spin animation locally, then push result
+    // Lock out solo spin during MP animation
+    if (typeof Roulette !== 'undefined') {
+      Roulette.spinning = true;
+      Roulette.clearAutoCountdown();
+    }
     Roulette._doSpinAnimation(resultNum, () => {
       Roulette.finishSpin(resultNum);  // host resolves own bets
       Firebase.updateMainRoom('roulette', { status: 'done', result: { number: resultNum } });
@@ -298,8 +302,11 @@ const MainRoom = {
       }
 
     } else if (game === 'roulette') {
-      // Non-host: run animation then resolve own local bets
       if (!this._isHost(game) && data.result && data.result.number !== undefined) {
+        if (typeof Roulette !== 'undefined') {
+          Roulette.spinning = true;
+          Roulette.clearAutoCountdown();
+        }
         Roulette._doSpinAnimation(data.result.number, () => {
           Roulette.finishSpin(data.result.number);
         });
@@ -446,8 +453,9 @@ const MainRoom = {
       ${betUI}
     `;
 
-    // Disable solo spin button while MP round is active
+    // Disable solo spin and stop auto-countdown while MP round is active
     if (game === 'roulette') {
+      if (typeof Roulette !== 'undefined') Roulette.clearAutoCountdown();
       const spinBtn = document.getElementById('rl-spin-btn');
       if (spinBtn && !myJoined) { spinBtn.disabled = true; spinBtn.textContent = '🎮 MP Round Active — Lock In Above'; }
     }
