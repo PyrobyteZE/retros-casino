@@ -76,7 +76,7 @@ const MainRoom = {
 
   onScreenEnter(game) {
     this._autoSpinActive[game] = true;
-    this._scheduleAutoSpin(game, game === 'roulette' ? 2000 : 4000);
+    this._scheduleAutoSpin(game, ['roulette', 'crash'].includes(game) ? 2000 : 4000);
   },
 
   onScreenLeave(game) {
@@ -100,8 +100,8 @@ const MainRoom = {
     if (!this._autoSpinActive[game]) return;
     if (!Firebase.isOnline()) { this._scheduleAutoSpin(game, 10000); return; }
     if (this._rooms[game]) return; // room already active
-    // Roulette runs solo or multiplayer; horses/crash need 2+ players
-    if (game !== 'roulette' && (Firebase.onlineCount || 0) < 2) {
+    // Horses needs 2+ players; roulette and crash auto-start solo or multiplayer
+    if (game === 'horses' && (Firebase.onlineCount || 0) < 2) {
       this._scheduleAutoSpin(game, 10000);
       return;
     }
@@ -115,7 +115,7 @@ const MainRoom = {
         host: Firebase.uid,
         hostSession: Firebase._sessionId,
         hostName: name,
-        betWindowEnd: Date.now() + (game === 'roulette' ? 10 : 30) * 1000,
+        betWindowEnd: Date.now() + (['roulette', 'crash'].includes(game) ? 10 : 30) * 1000,
         startedAt: 0,
         seed: 0,
         result: null,
@@ -321,7 +321,7 @@ const MainRoom = {
 
     // Auto-spin: schedule next round if player is still on this screen
     if (this._autoSpinActive[game]) {
-      this._scheduleAutoSpin(game, game === 'roulette' ? 10000 : 15000);
+      this._scheduleAutoSpin(game, ['roulette', 'crash'].includes(game) ? 10000 : 15000);
     }
   },
 

@@ -249,7 +249,12 @@
     "newsPosts": {
       ".read": true,
       "$uid": {
-        ".write": "auth.uid === $uid"
+        ".write": "auth.uid === $uid",
+        "$postId": {
+          "comments": {
+            ".write": "auth !== null"
+          }
+        }
       }
     },
 

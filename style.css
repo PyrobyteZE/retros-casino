@@ -56,7 +56,6 @@ input, textarea, select {
   position: sticky;
   top: 0;
   z-index: 200;
-  overflow: hidden;
 }
 
 #back-btn {
