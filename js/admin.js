@@ -330,6 +330,13 @@ const Admin = {
       set('admin-earned', Math.floor(App.totalEarned));
       set('admin-clicks', App.totalClicks);
       this.renderOnlinePlayers();
+      if (typeof Achievements !== 'undefined') {
+        const s = Achievements._stats;
+        set('admin-ach-crash', s.crashHighest || 0);
+        set('admin-ach-bet', s.biggestBet || 0);
+        set('admin-ach-chat', s.chatMsgs || 0);
+        set('admin-ach-gifts', s.giftsSent || 0);
+      }
     } else if (tab === 'market') {
       this.renderPlayerStockControls();
       this.renderBankControls();
@@ -869,10 +876,85 @@ const Admin = {
         </div>
       </div>
       <div class="admin-section">
+        <h3>🏆 Achievements</h3>
+        ${typeof Achievements !== 'undefined' ? `
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">
+          Unlocked: <strong style="color:var(--gold)">${Achievements.getUnlockedTiers()} / ${Achievements.getTotalTiers()}</strong> tiers
+        </div>
+        <div class="admin-actions">
+          <button class="admin-btn win-btn" onclick="Achievements.checkAll();Admin.setTab('player')">Force Check All</button>
+          <button class="admin-btn win-btn" onclick="Admin._unlockAllAchievements('bronze')">Unlock Bronze</button>
+          <button class="admin-btn win-btn" onclick="Admin._unlockAllAchievements('silver')">Unlock Silver</button>
+          <button class="admin-btn win-btn" onclick="Admin._unlockAllAchievements('gold')">Unlock All Gold</button>
+          <button class="admin-btn danger" onclick="Admin._resetAchievements()">Reset Achievements</button>
+        </div>
+        <div class="admin-subsection-title" style="margin-top:10px">Override Tracked Stats</div>
+        <div class="admin-row">
+          <label>Crash Best:</label>
+          <input type="number" id="admin-ach-crash" min="0" step="0.1" placeholder="e.g. 50.5">
+          <button onclick="Admin._setAchStat('crashHighest', 'admin-ach-crash')">Set</button>
+        </div>
+        <div class="admin-row">
+          <label>Biggest Bet:</label>
+          <input type="number" id="admin-ach-bet" min="0" placeholder="e.g. 1000000">
+          <button onclick="Admin._setAchStat('biggestBet', 'admin-ach-bet')">Set</button>
+        </div>
+        <div class="admin-row">
+          <label>Chat Msgs:</label>
+          <input type="number" id="admin-ach-chat" min="0" placeholder="e.g. 100">
+          <button onclick="Admin._setAchStat('chatMsgs', 'admin-ach-chat')">Set</button>
+        </div>
+        <div class="admin-row">
+          <label>Gifts Sent:</label>
+          <input type="number" id="admin-ach-gifts" min="0" placeholder="e.g. 10">
+          <button onclick="Admin._setAchStat('giftsSent', 'admin-ach-gifts')">Set</button>
+        </div>
+        ` : '<div style="font-size:12px;color:var(--text-dim)">Achievements module not loaded.</div>'}
+      </div>
+      <div class="admin-section">
         <h3>Online Players</h3>
         <div id="admin-online-players"><span style="color:var(--text-dim);font-size:12px">Loading...</span></div>
       </div>
     `;
+  },
+
+  _unlockAllAchievements(tier) {
+    if (typeof Achievements === 'undefined' || typeof ACHIEVEMENT_DEFS === 'undefined') return;
+    const tierMap = { bronze: 0, silver: 1, gold: 2 };
+    const targetTier = tierMap[tier];
+    if (targetTier === undefined) return;
+    ACHIEVEMENT_DEFS.forEach(def => {
+      const current = Achievements._progress[def.id] !== undefined ? Achievements._progress[def.id] : -1;
+      if (current < targetTier && def.tiers[targetTier]) {
+        for (let i = current + 1; i <= targetTier; i++) {
+          Achievements._award(def, i);
+        }
+        Achievements._progress[def.id] = targetTier;
+      }
+    });
+    App.save();
+    this.setTab('player');
+  },
+
+  _resetAchievements() {
+    if (!confirm('Reset all achievement progress? This cannot be undone.')) return;
+    if (typeof Achievements !== 'undefined') {
+      Achievements._progress = {};
+      Achievements._stats = { crashHighest: 0, biggestBet: 0, chatMsgs: 0, giftsSent: 0, friendCount: 0 };
+    }
+    App.save();
+    Toast.show('Achievements reset.', '#aaa', 2000);
+    this.setTab('player');
+  },
+
+  _setAchStat(statKey, inputId) {
+    if (typeof Achievements === 'undefined') return;
+    const val = parseFloat(document.getElementById(inputId)?.value || '0');
+    if (isNaN(val) || val < 0) return;
+    Achievements._stats[statKey] = val;
+    Achievements.checkAll();
+    App.save();
+    Toast.show('Stat updated.', '#00e676', 2000);
   },
 
   renderOnlinePlayers() {
@@ -1129,6 +1211,20 @@ const Admin = {
           <button class="admin-btn danger" onclick="Admin.cleanDuplicateNames()">Clean Dupes</button>
         </div>
         <div id="admin-lb-list" class="admin-lb-list"></div>
+      </div>
+      <div class="admin-section">
+        <h3>🏅 Weekly Tournament</h3>
+        ${typeof Tournaments !== 'undefined' ? (() => {
+          const wid = Tournaments._weekId ? Tournaments._weekId() : '?';
+          const lb = Tournaments._lb || [];
+          const rows = lb.slice(0, 5).map((e, i) => `<div style="font-size:12px;padding:2px 0">#${i+1} ${e.name} — ${App.formatMoney(e.earned||0)} / ${e.wins||0}W</div>`).join('') || '<div style="font-size:12px;color:var(--text-dim)">No entries yet.</div>';
+          return `<div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">Week ID: ${wid}</div>
+          <div style="margin-bottom:8px">${rows}</div>
+          <div class="admin-actions">
+            <button class="admin-btn" onclick="Admin.setTab('data')">Refresh</button>
+            <button class="admin-btn danger" onclick="Admin._clearTournamentWeek()">Clear This Week</button>
+          </div>`;
+        })() : '<div style="font-size:12px;color:var(--text-dim)">Tournament module not loaded.</div>'}
       </div>
       <div class="admin-section">
         <h3>Game History</h3>
@@ -2219,6 +2315,17 @@ const Admin = {
     this.renderAdminLeaderboard();
     if (App.currentScreen === 'leaderboard') Firebase.renderLeaderboard();
     alert('Removed ' + toDelete.length + ' duplicate(s).');
+  },
+
+  _clearTournamentWeek() {
+    if (!confirm('Delete all tournament entries for this week? This affects all players.')) return;
+    if (typeof Firebase === 'undefined' || !Firebase.isOnline() || typeof Tournaments === 'undefined') return;
+    const wid = Tournaments._weekId();
+    Firebase.db.ref('weeklyTournament/' + wid).remove().then(() => {
+      if (typeof Tournaments !== 'undefined') Tournaments._lb = [];
+      Toast.show('Tournament week cleared.', '#aaa', 3000);
+      this.setTab('data');
+    }).catch(err => alert('Failed: ' + err.message));
   },
 };
 
