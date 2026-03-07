@@ -9219,3 +9219,144 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   border-radius: 4px;
   letter-spacing: .05em;
 }
+
+/* ===== Achievements Screen ===== */
+.ach-header {
+  padding: 12px 16px 8px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.ach-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.ach-title { font-size: 18px; font-weight: 700; color: var(--gold); }
+.ach-count { font-size: 12px; color: var(--text-dim); }
+.ach-bar-outer {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.ach-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold), #ffd740);
+  border-radius: 3px;
+  transition: width .4s;
+}
+.ach-cat-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  overflow-x: auto;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.ach-cat-btn {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 16px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ach-cat-btn.active {
+  background: var(--gold);
+  color: #000;
+  border-color: var(--gold);
+  font-weight: 700;
+}
+.ach-list {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ach-card {
+  display: flex;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  opacity: .7;
+}
+.ach-card.ach-unlocked { opacity: 1; border-color: var(--gold); }
+.ach-icon-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 36px;
+}
+.ach-icon { font-size: 24px; line-height: 1; }
+.ach-tiers-row { display: flex; gap: 3px; }
+.ach-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--border);
+}
+.ach-dot.done { background: var(--gold); }
+.ach-body { flex: 1; min-width: 0; }
+.ach-name { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+.ach-next-desc { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
+.ach-prog-bar {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 3px;
+}
+.ach-prog-fill {
+  height: 100%;
+  background: var(--green);
+  border-radius: 2px;
+}
+.ach-prog-label { font-size: 11px; color: var(--text-dim); }
+.ach-maxed { font-size: 12px; color: var(--gold); font-style: italic; }
+
+/* ===== Weekly Tournament ===== */
+.tourney-wrap {
+  margin: 8px 12px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.tourney-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: rgba(255,215,64,.08);
+  border-bottom: 1px solid var(--border);
+  font-weight: 700;
+  font-size: 14px;
+}
+.tourney-reset { font-size: 11px; color: var(--text-dim); font-weight: 400; }
+.tourney-mystats {
+  padding: 7px 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+}
+.tourney-lb { display: flex; flex-direction: column; }
+.tourney-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.tourney-row:last-child { border-bottom: none; }
+.tourney-row.mine { background: rgba(0,230,118,.06); }
+.tourney-rank { min-width: 28px; font-size: 16px; }
+.tourney-name { flex: 1; font-weight: 600; }
+.tourney-score { color: var(--green); font-size: 12px; }
+.tourney-wins { color: var(--text-dim); font-size: 11px; min-width: 30px; text-align: right; }
+.tourney-empty { padding: 12px; font-size: 12px; color: var(--text-dim); text-align: center; }

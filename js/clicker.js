@@ -194,6 +194,7 @@ const Clicker = {
     )) return;
 
     App.rebirth = (App.rebirth || 0) + 1;
+    if (typeof Achievements !== 'undefined') Achievements.checkAll();
 
     // Preserve coinLuck through rebirth
     const savedCoinLuck = App.upgrades.coinLuck || 0;

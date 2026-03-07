@@ -32,6 +32,7 @@ const Crash = {
     }
 
     if (!Admin.godMode) App.addBalance(-bet);
+    if (typeof Achievements !== 'undefined') Achievements.trackBet(bet);
     this.currentBet = bet;
     this.betPlaced = true;
     this.running = true;
@@ -134,6 +135,7 @@ const Crash = {
     this.showResult('Cashed out at ' + cashoutMult + 'x \u2014 Won ' + App.formatMoney(winnings), 'win');
     GameStats.record('crash', 'win', winnings - this.currentBet);
     App.recordWin();
+    if (typeof Achievements !== 'undefined') Achievements.trackCrash(this.multiplier);
 
     this.history.unshift({ mult: parseFloat(cashoutMult), crashed: false });
     if (this.history.length > 20) this.history.length = 20;

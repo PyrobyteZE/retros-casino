@@ -271,6 +271,7 @@ const Firebase = {
       Loans._startCounterLoanTimer();
     }
     if (typeof MainRoom !== 'undefined') MainRoom.init();
+    if (typeof Tournaments !== 'undefined') Tournaments.listen();
     // Private room invites
     this.listenInvites(this.uid, invites => this._onInvites(invites));
     // Admin player commands (targeted at this specific player)
@@ -506,6 +507,7 @@ const Firebase = {
     };
     this.db.ref('chat').push(msg).then(() => {
       console.log('Firebase: chat message sent');
+      if (typeof Achievements !== 'undefined') Achievements.trackChatMsg();
     }).catch(err => {
       console.error('Firebase chat write error:', err.code, err.message);
     });
@@ -752,6 +754,7 @@ const Firebase = {
     if (typeof App !== 'undefined') App.addBalance(-amount);
     this.sendGift(toUid, amount, note).then(() => {
       Toast.show('🎁 Gift sent to ' + toName + '!', '#00e676', 3000);
+      if (typeof Achievements !== 'undefined') Achievements.trackGift();
       if (typeof App !== 'undefined') App.save();
     }).catch(() => {
       if (typeof App !== 'undefined') App.addBalance(amount); // refund on fail
@@ -2029,6 +2032,9 @@ const Firebase = {
     if (!this.isOnline()) return;
     this.db.ref('friends/' + this.uid).on('value', snap => {
       this._friends = snap.val() || {};
+      if (typeof Achievements !== 'undefined') {
+        Achievements.trackFriends(Object.keys(this._friends).length);
+      }
       this._renderDmPanel();
       this._updateDmBadge();
     });

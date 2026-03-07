@@ -151,11 +151,18 @@ const App = {
       amount = amount * (1 + (boosts.earningsMult || 0)) * eventMult;
     }
     this.balance = this.safeAdd(this.balance, amount);
-    if (amount > 0) this.totalEarned = this.safeAdd(this.totalEarned, amount);
+    if (amount > 0) {
+      this.totalEarned = this.safeAdd(this.totalEarned, amount);
+      if (typeof Tournaments !== 'undefined') Tournaments.trackEarned(amount);
+    }
     this.updateBalance();
   },
 
-  recordWin() { this.stats.gamesWon++; },
+  recordWin() {
+    this.stats.gamesWon++;
+    if (typeof Achievements !== 'undefined') Achievements.checkAll();
+    if (typeof Tournaments !== 'undefined') Tournaments.trackWin();
+  },
   recordLoss() { this.stats.gamesLost++; },
 
   // Rounds to 2 decimal places to prevent floating point accumulation
@@ -206,6 +213,7 @@ const App = {
       cars: 'Car Garage',
       settings: 'Settings',
       stores: 'Shops',
+      achievements: 'Achievements',
     };
 
     if (this.currentScreen !== name) {
@@ -246,6 +254,10 @@ const App = {
     if (name === 'stores') { if (typeof Stores !== 'undefined') Stores.renderStoresScreen(); }
     if (name === 'cars') { if (typeof Cars !== 'undefined') Cars.render(); }
     if (name === 'settings') Settings.render();
+    if (name === 'achievements') {
+      if (typeof Achievements !== 'undefined') { Achievements.checkAll(); Achievements.render(); }
+      if (typeof Tournaments !== 'undefined') Tournaments.push();
+    }
     // Refresh drawer nav highlight if drawer is open
     if (document.getElementById('side-drawer')?.classList.contains('open')) this._renderDrawerNav();
   },
@@ -349,6 +361,7 @@ const App = {
     { label: '📈 Markets',       screens: ['stocks','crypto'] },
     { label: '🎒 Inventory',     screens: ['inventory', 'stores'] },
     { label: '🐾 Social',        screens: ['pets','leaderboard'] },
+    { label: '🏆 Progress',      screens: ['achievements'] },
     { label: '⚙️ System',        screens: ['settings'] },
   ],
 
@@ -371,8 +384,9 @@ const App = {
     inventory:  { icon: '🎒', label: 'Inventory' },
     stores:     { icon: '🏪', label: 'Shops' },
     pets:       { icon: '🐾', label: 'Pets' },
-    leaderboard:{ icon: '🏆', label: 'Leaderboard' },
-    settings:   { icon: '⚙️', label: 'Settings' },
+    leaderboard:  { icon: '🏆', label: 'Leaderboard' },
+    achievements: { icon: '🏅', label: 'Achievements' },
+    settings:     { icon: '⚙️', label: 'Settings' },
   },
 
   renderCasinoGrid() {
@@ -457,6 +471,8 @@ const App = {
       crafting: typeof Crafting !== 'undefined' ? Crafting.getSaveData() : null,
       cars: typeof Cars !== 'undefined' ? Cars.getSaveData() : null,
       favorites: this.favorites,
+      achievements: typeof Achievements !== 'undefined' ? Achievements.getSaveData() : null,
+      tournament: typeof Tournaments !== 'undefined' ? Tournaments.getSaveData() : null,
       version: 7,
       savedAt: Date.now(),
     };
@@ -466,6 +482,7 @@ const App = {
       Firebase.pushCloudSave();
       Firebase.pushAccountSave();
     }
+    if (typeof Tournaments !== 'undefined') Tournaments.push();
   },
 
   load() {
@@ -516,6 +533,12 @@ const App = {
       }
       if (typeof Cars !== 'undefined' && data.cars) {
         Cars.loadSaveData(data.cars);
+      }
+      if (typeof Achievements !== 'undefined' && data.achievements) {
+        Achievements.loadSaveData(data.achievements);
+      }
+      if (typeof Tournaments !== 'undefined' && data.tournament) {
+        Tournaments.loadSaveData(data.tournament);
       }
     } catch (e) {}
   },

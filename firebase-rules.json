@@ -439,6 +439,17 @@
     "privateRooms": {
       ".read": "auth !== null",
       ".write": "auth !== null"
+    },
+
+    "weeklyTournament": {
+      ".read": "auth !== null",
+      "$weekId": {
+        "entries": {
+          "$uid": {
+            ".write": "auth.uid === $uid"
+          }
+        }
+      }
     }
   }
 }
