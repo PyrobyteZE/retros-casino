@@ -61,6 +61,9 @@ const Firebase = {
   // Player ID (sequential numeric ID)
   _playerId: null,
 
+  // Currently logged-in account name (nameLower) — set on login/account-create
+  _accountName: null,
+
   // Pending gifts
   _pendingGifts: {},
   _giftBuffer: [],
@@ -362,8 +365,17 @@ const Firebase = {
   _listenPresence() {
     this.db.ref('presence').on('value', snap => {
       const data = snap.val() || {};
-      this.onlinePlayers = data;
-      this.onlineCount = Object.keys(data).length;
+      // Deduplicate by name: same player on APK + browser shows as 1 entry
+      const byName = {};
+      for (const uid in data) {
+        const p = data[uid];
+        const key = (p.name && p.name !== 'Player') ? p.name.toLowerCase() : uid;
+        if (!byName[key] || (p.timestamp || 0) > (byName[key].timestamp || 0)) {
+          byName[key] = p;
+        }
+      }
+      this.onlinePlayers = byName;
+      this.onlineCount = Object.keys(byName).length;
       this._updateOnlineCount();
     });
   },
@@ -1536,6 +1548,8 @@ const Firebase = {
       }
       // Update local cache
       this._registeredNames[newNameLower] = { uid: this.uid, displayName: newName, claimedAt: Date.now() };
+      // Track as logged-in account so pushAccountSave works
+      this._accountName = newNameLower;
       callback({ ok: true });
     });
   },
@@ -1597,6 +1611,8 @@ const Firebase = {
       lockedUntil: 0,
       updatedAt: Date.now(),
     });
+    // Track logged-in account so pushAccountSave works immediately
+    this._accountName = nameLower;
     return { ok: true, recoveryCode };
   },
 
@@ -1679,7 +1695,15 @@ const Firebase = {
       Toast.show('⚠️ No save found for this account yet.', '#ff9800', 4000);
     }
 
-    // Update account uid + registeredNames to this session so future saves/name ops work
+    // Track logged-in account for pushAccountSave (no uid check needed)
+    this._accountName = nameLower;
+    // Reset save rate limit so next App.save() pushes immediately
+    this._lastAccountSave = 0;
+
+    // Re-assign player ID now that the name is known (ensures correct cross-device ID)
+    setTimeout(() => this._assignPlayerId(), 300);
+
+    // Update account uid + registeredNames to this session so future name ops work
     if (account.uid !== this.uid && nameLower) {
       this.db.ref('accounts/' + nameLower).update({ uid: this.uid }).catch(() => {});
       this.db.ref('registeredNames/' + nameLower).once('value').then(snap => {
@@ -1694,22 +1718,16 @@ const Firebase = {
     return { ok: true };
   },
 
-  // Push save to account on every App.save() (called from settings.js)
+  // Push save to account on every App.save() — uses _accountName set at login/account-create
   pushAccountSave() {
     if (!this.isOnline()) return;
     const now = Date.now();
     if (now - (this._lastAccountSave || 0) < 55000) return; // max once per 55s
     this._lastAccountSave = now;
-    const name = typeof Settings !== 'undefined' ? Settings.profile.name : null;
-    if (!name || name === 'Player') return;
-    const nameLower = name.toLowerCase();
+    const nameLower = this._accountName;
+    if (!nameLower) return; // no logged-in account
     const save = localStorage.getItem('retros_casino_save') || '{}';
-    this.db.ref('accounts/' + nameLower).once('value', snap => {
-      const account = snap.val();
-      if (account && account.uid === this.uid) {
-        this.db.ref('accounts/' + nameLower + '/save').set(save).catch(() => {});
-      }
-    }).catch(() => {});
+    this.db.ref('accounts/' + nameLower + '/save').set(save).catch(() => {});
   },
 
   // === CLOUD SAVE ===
@@ -1747,8 +1765,8 @@ const Firebase = {
         try { localSaved = JSON.parse(localRaw).savedAt || 0; } catch (e) {}
         const cloudSaved = cloud.savedAt || 0;
         if (!firstLoad) {
-          // Real-time update from another device: only prompt if 5+ min newer
-          if (cloudSaved > localSaved + 5 * 60_000 && !document.querySelector('.cloud-restore-overlay')) {
+          // Real-time update from another device: prompt if 60s+ newer
+          if (cloudSaved > localSaved + 60_000 && !document.querySelector('.cloud-restore-overlay')) {
             this._offerCloudRestore(cloud.data, cloudSaved, localSaved);
           }
         } else if (cloudSaved > localSaved + 30_000) {
@@ -1857,34 +1875,65 @@ const Firebase = {
 
   _assignPlayerId() {
     if (!this.isOnline()) return;
-    this.db.ref('playerIds/' + this.uid).once('value', snap => {
-      if (snap.val() !== null) {
-        // Already assigned
-        this._playerId = snap.val();
-        this._updatePlayerIdDisplay();
-        return;
-      }
-      const playerName = typeof Settings !== 'undefined' ? Settings.profile.name : 'Player';
-      // Owner always gets #0
-      if (playerName === this.OWNER_NAME) {
-        this.db.ref('playerIds/' + this.uid).set(0).catch(() => {});
-        this.db.ref('playerIdToUid/0').set(this.uid).catch(() => {});
-        this._playerId = 0;
-        this._updatePlayerIdDisplay();
-        return;
-      }
-      // Assign next sequential ID (1-999999) via transaction
-      this.db.ref('playerIdCounter').transaction(current => {
-        return Math.min((current || 0) + 1, 999999);
-      }).then(result => {
-        if (result.committed) {
-          const newId = result.snapshot.val();
-          this.db.ref('playerIds/' + this.uid).set(newId).catch(() => {});
-          this.db.ref('playerIdToUid/' + newId).set(this.uid).catch(() => {});
-          this._playerId = newId;
+    const playerName = typeof Settings !== 'undefined' ? Settings.profile.name : 'Player';
+    const nameLower = (playerName && playerName !== 'Player') ? playerName.toLowerCase() : null;
+
+    // Owner always gets #0
+    if (playerName === this.OWNER_NAME) {
+      this.db.ref('playerIds/' + this.uid).set(0).catch(() => {});
+      this.db.ref('playerIdToUid/0').set(this.uid).catch(() => {});
+      this.db.ref('playerIdsByName/retrobyte').set(0).catch(() => {});
+      this._playerId = 0;
+      this._updatePlayerIdDisplay();
+      return;
+    }
+
+    if (nameLower) {
+      // Named player: check by name first so same account keeps same ID on any device
+      this.db.ref('playerIdsByName/' + nameLower).once('value', nameSnap => {
+        if (nameSnap.val() !== null) {
+          this._playerId = nameSnap.val();
+          // Sync id to this uid too for legacy lookups
+          this.db.ref('playerIds/' + this.uid).set(this._playerId).catch(() => {});
           this._updatePlayerIdDisplay();
+          return;
         }
+        // No name-based id yet — check legacy uid-based (migration)
+        this.db.ref('playerIds/' + this.uid).once('value', uidSnap => {
+          if (uidSnap.val() !== null) {
+            this._playerId = uidSnap.val();
+            this.db.ref('playerIdsByName/' + nameLower).set(this._playerId).catch(() => {});
+            this._updatePlayerIdDisplay();
+            return;
+          }
+          this._mintNewPlayerId(nameLower);
+        }).catch(() => {});
       }).catch(() => {});
+    } else {
+      // Guest (no name): uid-based id
+      this.db.ref('playerIds/' + this.uid).once('value', snap => {
+        if (snap.val() !== null) {
+          this._playerId = snap.val();
+          this._updatePlayerIdDisplay();
+          return;
+        }
+        this._mintNewPlayerId(null);
+      }).catch(() => {});
+    }
+  },
+
+  _mintNewPlayerId(nameLower) {
+    this.db.ref('playerIdCounter').transaction(current => {
+      return Math.min((current || 0) + 1, 999999);
+    }).then(result => {
+      if (result.committed) {
+        const newId = result.snapshot.val();
+        this.db.ref('playerIds/' + this.uid).set(newId).catch(() => {});
+        this.db.ref('playerIdToUid/' + newId).set(this.uid).catch(() => {});
+        if (nameLower) this.db.ref('playerIdsByName/' + nameLower).set(newId).catch(() => {});
+        this._playerId = newId;
+        this._updatePlayerIdDisplay();
+      }
     }).catch(() => {});
   },
 

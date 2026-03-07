@@ -181,21 +181,181 @@
   - Always decays back toward $150 (effectiveBase × 1.5); never stays permanently high
 - [x] **Rename Blaze → Goose** — system stock BLAZE/Blaze Foods and horse Blaze both renamed
 
-## v3.0 - Full Multiplayer
-- [ ] Real-time multiplayer poker tables
-- [ ] Live dealer blackjack
-- [ ] Spectate other players' games
-- [ ] Crew system — form crews for group heists
-- [ ] Crew headquarters with shared upgrades
+## v2.1 - Multiplayer Rooms & Platform Fixes (DONE)
+- [x] **Multiplayer Roulette** — auto-start room loops; 10s betting window; lock-in bets overlay showing all players; full MP spin with payout sync; solo SPIN disabled during MP round
+- [x] **Multiplayer Crash** — same auto-start system as roulette; solo play still works between MP rounds
+- [x] **MP Horses** — unchanged; still requires 2+ players to open; 30s betting window
+- [x] **Player comments on news posts** — Firebase rules child override allows any authed player to comment; fixed broken comment flow
+- [x] **Online players panel** — panel no longer stuck behind stock ticker; removed `overflow:hidden` from top bar that was clipping the dropdown
+- [x] **APK v3.0** — loads GitHub Pages URL instead of local assets; auto-updates on every push; added INTERNET permission to manifest
+- [x] **Safe area / notch support** — top bar uses `env(safe-area-inset-*)` padding; admin overlay header also safe-area-aware; viewport `viewport-fit=cover`
+- [x] **Bottom spacer** — `body` padding-bottom uses `env(safe-area-inset-bottom)` for Android gesture nav
+- [x] **Name-based cloud saves** — `cloudSaves/[nameLower]` instead of UID-keyed; eliminates cross-device duplication and lets any device load the same save by account name
+- [x] **Save transfer fix** — inventory, companies, houses, coins now transfer correctly on login/recovery; fixed 3 compounding root causes (Firebase rules blocked reads, `pushAccountSave` never called, UID-keyed saves inaccessible cross-device)
+- [x] **Recovery code on start screen** — recover account from welcome modal without needing to log in first
+- [x] **Stock sync banner fix** — removed false-positive out-of-sync alert that fired for all non-authority clients; banner now only shows after 2+ minutes of no price updates
+- [x] **Top bar polish** — chat button moved left of balance; settings button removed from top bar; gap/padding tightened for narrow screens
 
-## Ideas / Maybe
-- [ ] NFT-style collectible cards (fake, in-game only)
-- [ ] Mini-games: lockpicking, safe cracking, getaway driver
-- [ ] Story mode with missions
-- [ ] Seasonal events (Halloween heist, Christmas jackpot)
-- [ ] More casino games: Poker, Baccarat, Keno, Wheel of Fortune
-- [ ] Sound effects & music
-- [ ] Company wars — rival companies can sabotage each other's stock prices
-- [ ] Stock options / derivatives trading
-- [ ] Company mergers — two players merge companies into one
-- [ ] IPO events — company goes public with a splash, players rush to buy in
+## v2.2 - Achievements & Weekly Tournaments
+
+### Achievements
+- [ ] **Achievement system** — unlockable badges shown on profile and leaderboard
+  - Categories: 🎰 Gambler, 🕵️ Criminal, 🏭 Tycoon, 👥 Social, 🌍 Explorer
+  - Tiers: Bronze → Silver → Gold → Platinum (each tier raises the bar)
+  - Rewards: in-game cash bonus + cosmetic badge displayed on profile card
+  - Example achievements:
+    - *First Million* — earn $1M total
+    - *High Roller* — place a single bet of $1M+
+    - *Crash Survivor* — cash out at 10×+ multiplier
+    - *To The Moon* — cash out at 50×+
+    - *Crime Lord* — complete 50 crimes
+    - *Social Butterfly* — have 10 friends
+    - *Founder* — found a company
+    - *Market Maker* — issue a dividend to 5+ shareholders
+    - *Bankrupt & Back* — go bankrupt and reclaim your company
+    - *Rebirth I–X* — reach each rebirth milestone
+  - Tracked in save; displayed in a new Achievements screen under profile
+
+### Weekly Tournaments
+- [ ] **Weekly Tournaments** — resets every Monday at midnight
+  - Categories (players pick one to compete in):
+    - 💰 Most $ earned in the week
+    - 🎰 Most casino game wins
+    - 📈 Best single stock return (% gain on a sell)
+    - 💥 Highest crash cash-out multiplier
+  - Optional entry fee ($100K default) goes to prize pool; admin can seed pool
+  - Prizes: 1st gets 60% of pool, 2nd 25%, 3rd 15%
+  - Winners get a trophy badge on their profile until next tournament
+  - Tracked in Firebase `weeklyTournament/[weekId]/entries/[uid]`; authority client resolves at reset
+
+---
+
+## v2.3 - Black Market & Auction House
+
+### Black Market
+- [ ] **Black Market** — hidden shop unlocked at rebirth 5+
+  - Accessible from Crime screen; costs *dirty money* (separate currency earned only via crime)
+  - Inventory rotates every 24h; limited stock (3–10 units per item)
+  - Item types:
+    - 🔫 Stolen goods — crafting items with boosted stats, untraceable
+    - 🚗 Hot cars — rare car categories not available in the NPC garage
+    - 💊 Performance stims — temporary crime/income multipliers (4–12 hr)
+    - 📄 Forged docs — permanently boosts credit score or reduces crime detection
+    - 🐾 Exotic pets — rare pets not in the standard gacha pool
+  - Risk: each purchase has a 5–15% police audit chance based on item tier
+    - Audit: pay fine (20% of purchase price) OR lose the item
+  - Firebase path: `blackMarket/listings` — authority client rotates inventory on timer
+
+### Auction House
+- [ ] **Auction House** — list and bid on rare items, cards, cars, pets
+  - Any player can list: set starting bid + optional buy-now price + duration (6/12/24/48 hr)
+  - Anti-sniping: bid placed in last 5 min extends auction by 5 min (max 3 extensions)
+  - Seller gets funds automatically on auction end via sale receipt system
+  - Loser bids are refunded instantly
+  - Categories: Items, Cars, Pets, Cards, Houses (filterable)
+  - Featured slot: admin can pin 1–3 auctions to the top (exclusive drops, events)
+  - Firebase path: `auctionHouse/[auctionId]` with `endsAt`, `highBid`, `highBidderUid`, `bids[]`
+
+---
+
+## v2.4 - Collectible Cards & Seasonal Events
+
+### NFT-style Collectible Cards (fake, in-game only)
+- [ ] **Casino Cards** — pixel-art collectible cards, no real value, fully in-game
+  - Rarities: Common (grey), Rare (blue), Epic (purple), Legendary (gold), Mythic (holographic)
+  - Each card has: pixel art face, flavor text, unique serial # (e.g. #0042/1000), stat bonus
+  - Stat bonuses (passive while card is equipped in a loadout slot):
+    - +% crime income, +% casino luck, +% stock dividends, etc.
+  - Sources:
+    - 🎴 Card Packs — buy with in-game cash; 5 cards per pack, weighted by rarity
+    - 🏆 Achievement rewards — specific achievements drop specific cards
+    - 🎃 Seasonal drops — exclusive cards available only during that season
+    - 🔨 Auction House — trade with other players
+  - Card binder UI — flip through owned cards, view serial/rarity/bonus
+  - Sets — complete a full set for a bonus card + cash reward
+  - Admin can mint new card types with custom pixel art
+
+### Seasonal Events
+- [ ] **Seasonal Events** — time-limited world events with exclusive rewards
+  - Each season lasts 2–4 weeks with a themed aesthetic overlay
+  - 🎃 **Halloween** — Ghost Heist (crime pays 2× but haunted), spooky slot symbols, skeleton pet, pumpkin coin currency
+  - 🎄 **Christmas** — Santa gift drops (random balance bonus every hour), gift exchange with friends, winter leaderboard
+  - 🎆 **New Year** — Fireworks Jackpot (slots max payout doubled for 24 hr), year-end bonus based on total earned
+  - ☀️ **Summer** — Beach Casino (roulette plays as a surf-themed variant), exclusive car: surfboard van
+  - Each season drops 3–5 exclusive cards unavailable outside the event
+  - Seasonal leaderboard: highest earnings during the event window; exclusive trophy for top 3
+
+---
+
+## v3.0 - Full Multiplayer Casino
+- [ ] **Multiplayer Poker** — Texas Hold'em tables, 2–6 players, real-time card reveal
+- [ ] **Live Dealer Blackjack** — shared table, each player acts in turn, dealer plays after all
+- [ ] **Spectate** — watch any active multiplayer game from a read-only view
+- [ ] **Private Game Rooms** — invite-only tables with custom stakes
+
+---
+
+## v3.1 - Crew System
+
+### Crew Basics
+- [ ] **Form/Join a Crew** — player creates a crew (name, tag, emblem); others apply/are invited
+  - Max 10 members per crew; crew leader can promote officers and kick members
+  - Crew tag shown next to name in chat and leaderboard (e.g. `[YOLO] RetroByte`)
+
+### Crew Treasury & HQ
+- [ ] **Crew Treasury** — shared pool funded by member deposits; used to buy HQ upgrades
+- [ ] **Crew HQ tiers** — 4 tiers, each unlocking more upgrade slots
+  - 🏚️ Hideout → 🏠 Compound → 🏰 Fortress → 🛸 Sky Base
+
+### Crew Shared Upgrades
+- [ ] **Shared upgrades** — all crew members benefit passively
+  - 💰 Crime Ring — +% crime income for all members
+  - 📈 Stock Cartel — shared insider tips on 1 stock per day
+  - 🛡️ Security Detail — reduces bounty income from hunters, reduces police raid chance
+  - 🎰 House Edge Hack — +% casino win rate (small, like 1–3%)
+  - 🚀 Crew Rocket Fund — passive treasury growth from shared stock auto-reinvest
+
+### Crew Heists
+- [ ] **Crew Heists** — 24-hour cooperative events
+  - All members contribute cash/items to a shared "heist plan"
+  - Progress bar fills as members contribute; on completion everyone gets a cut
+  - Heist types: Bank Vault, Casino Safe, Government Reserve
+  - Bigger heist = higher risk: if a member gets raided mid-heist, plan is set back 20%
+
+### Crew Wars
+- [ ] **Crew vs Crew** — declare war on another crew
+  - 7-day war; objectives: earn more combined crime income, sabotage their companies, complete more heists
+  - War score tallied daily; winner at end gets a % of the losing crew's treasury
+
+---
+
+## v3.2 - Corporate Endgame (Company Mergers, IPO Events, Company Wars)
+
+### Company Mergers
+- [ ] **Company Mergers** — two players agree to merge their companies into one
+  - Merger offer: Player A sends offer to Player B with proposed terms
+  - Terms: which company name/ticker survives (or new name), profit split % (e.g. 60/40), share exchange ratio
+  - Both owners retain their split % of profits; shown on company page as co-owners
+  - Combined company gets all properties from both (duplicates stack income)
+  - All stocks from both companies exchanged for shares in merged entity at agreed ratio
+  - Shareholders of both companies are notified and converted automatically
+  - Advanced: hostile takeover — buy >50% of shares to force merger offer; target can use buyback to defend
+
+### IPO Events
+- [ ] **IPO Events** — going public becomes a server-wide event, not a quiet toggle
+  - Pre-IPO phase (24 hr): players can register interest; owner sets opening price and share count
+  - IPO broadcast: news post auto-generated; stock appears in ticker with "📢 IPO" badge
+  - Opening bell: all pre-registered players fill first at opening price; remaining shares go to open market
+  - Day-1 FOMO surge: price automatically trends up 20–50% in first hour, then corrects
+  - IPO lockup: owner cannot sell shares for 48 hr after IPO (prevents pump and dump)
+  - Admin can trigger a "hot IPO" modifier that doubles day-1 surge
+
+### Company Wars (Full Update)
+- [ ] **Formal war declaration** — replace current silent sabotage with an opt-in war system
+  - Either: mutual agreement (both declare war on each other) OR unilateral attack (costs $500K deposit)
+  - War lasts 7 days; tracked on a war leaderboard visible to all
+  - War score: points from sabotage hits, property captures, ally boosts, stock manipulation
+  - Property capture: targeted sabotage on a specific property; if it hits, you "capture" the income from it for 24 hr
+  - Ceasefire: either side can pay to end war early; cost = current war score deficit × $100K
+  - Victory: winner takes 10–25% of loser's treasury (negotiated at war start) OR a chosen property
+  - Alliance battles: bring allied companies to your side; ally score adds to your war total

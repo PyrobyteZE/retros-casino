@@ -714,6 +714,7 @@ const Admin = {
 
   _renderRoomsTab() {
     const gameLabels = { horses: '🏇 Horses', crash: '💥 Crash', roulette: '🎡 Roulette' };
+    const autoGames = ['roulette', 'crash'];
     const rows = ['horses', 'crash', 'roulette'].map(g => {
       const room = typeof MainRoom !== 'undefined' ? MainRoom._rooms[g] : null;
       const status = room ? room.status : 'idle';
@@ -726,24 +727,31 @@ const Admin = {
           : status === 'running'
             ? '<span class="mp-status-live">LIVE</span>'
             : `<span class="mp-status-done">done</span>`;
+      const autoNote = autoGames.includes(g)
+        ? '<div style="font-size:10px;color:var(--green);margin:2px 0 4px">Auto-starts every round (10s bet window)</div>'
+        : '<div style="font-size:10px;color:var(--text-dim);margin:2px 0 4px">Requires 2+ players to start</div>';
       return `<div class="admin-room-card">
         <div class="admin-room-header">
           <span class="admin-room-game">${gameLabels[g]}</span>
           ${statusBadge}
         </div>
+        ${autoNote}
         ${players > 0 ? `<div class="admin-room-players">${playerNames}</div>` : ''}
         <div class="admin-room-btns">
-          <button onclick="MainRoom.adminOpen('${g}',30)">30s</button>
-          <button onclick="MainRoom.adminOpen('${g}',60)">60s</button>
-          <button onclick="MainRoom.adminForceStart('${g}')" style="background:#ff9100;color:#000;font-weight:700">▶ Start</button>
-          <button onclick="MainRoom.adminClose('${g}')" class="danger">✕ Close</button>
+          <button onclick="MainRoom.adminOpen('${g}',30)" title="Override: open 30s betting window">30s</button>
+          <button onclick="MainRoom.adminOpen('${g}',60)" title="Override: open 60s betting window">60s</button>
+          <button onclick="MainRoom.adminForceStart('${g}')" style="background:#ff9100;color:#000;font-weight:700" title="Force start immediately">▶ Start</button>
+          <button onclick="MainRoom.adminClose('${g}')" class="danger" title="Close room and end round">✕ Close</button>
         </div>
       </div>`;
     }).join('');
     return `
       <div class="admin-section">
         <h3>Multiplayer Rooms</h3>
-        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Tap Refresh or reopen this tab to update status.</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">
+          Roulette &amp; Crash auto-loop when any player is on that screen. Buttons below are override/emergency controls.
+          <br>Tap Refresh to update status.
+        </div>
         <div class="admin-rooms-grid">${rows}</div>
         <button class="admin-btn" style="margin-top:10px;width:100%" onclick="Admin.setTab('rooms')">Refresh</button>
       </div>

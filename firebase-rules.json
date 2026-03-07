@@ -211,6 +211,11 @@
       ".write": "auth !== null"
     },
 
+    "playerIdsByName": {
+      ".read": true,
+      ".write": "auth !== null"
+    },
+
     "gifts": {
       "$uid": {
         ".read": "auth.uid === $uid",
