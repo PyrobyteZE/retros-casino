@@ -1630,7 +1630,7 @@ const Firebase = {
 
     // Success — clear rate limit, load save
     await this.db.ref('accounts/' + nameLower).update({ loginAttempts: 0, lockedUntil: 0 }).catch(() => {});
-    return this._loadAccountSave(account);
+    return this._loadAccountSave(account, nameLower);
   },
 
   async recoverAccount(name, recoveryCode) {
@@ -1641,10 +1641,6 @@ const Firebase = {
     if (!account) { return { ok: false, error: 'No account found for that name.' }; }
     if (!account.recoveryHash) { return { ok: false, error: 'This account has no recovery code. Contact an admin.' }; }
 
-    const hash = await this._hashPassword(recoveryCode.replace(/-/g, '').toUpperCase()
-      // normalize: allow with or without dashes
-      .replace(/(.{4})(.{4})(.{4})/, '$1-$2-$3'));
-    // just hash the code as-is after normalizing dashes
     const codeNorm = recoveryCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
     const codeFormatted = codeNorm.slice(0,4) + '-' + codeNorm.slice(4,8) + '-' + codeNorm.slice(8,12);
     const codeHash = await this._hashPassword(codeFormatted);
@@ -1652,16 +1648,48 @@ const Firebase = {
       return { ok: false, error: 'Invalid recovery code.' };
     }
 
-    return this._loadAccountSave(account);
+    return this._loadAccountSave(account, nameLower);
   },
 
-  _loadAccountSave(account) {
-    if (account.save) {
-      localStorage.setItem('retros_casino_save', account.save);
-      App.load();
-      App.updateBalance();
-      if (typeof Clicker !== 'undefined') { Clicker.startAutoClicker(); Clicker.updateStats(); Clicker.renderUpgrades(); }
+  async _loadAccountSave(account, nameLower) {
+    // Find the freshest save: compare account.save vs cloudSaves/[account.uid]
+    let bestSave = account.save || null;
+    let bestSavedAt = 0;
+    try { bestSavedAt = JSON.parse(bestSave || '{}').savedAt || 0; } catch(e) {}
+
+    const oldUid = account.uid;
+    if (oldUid) {
+      try {
+        const cloudSnap = await this.db.ref('cloudSaves/' + oldUid).once('value');
+        const cloud = cloudSnap.val();
+        if (cloud && cloud.data && (cloud.savedAt || 0) > bestSavedAt) {
+          bestSave = cloud.data;
+          bestSavedAt = cloud.savedAt || 0;
+        }
+      } catch(e) {}
     }
+
+    if (bestSave) {
+      localStorage.setItem('retros_casino_save', bestSave);
+      if (typeof App !== 'undefined') {
+        App.load();
+        App.updateBalance();
+        if (typeof Clicker !== 'undefined') { Clicker.startAutoClicker(); Clicker.updateStats(); Clicker.renderUpgrades(); }
+      }
+    }
+
+    // Migrate: update account uid to current session so pushAccountSave works
+    // and copy cloud save to new uid path so _initCloudSave tracks the right path
+    if (oldUid !== this.uid && nameLower) {
+      this.db.ref('accounts/' + nameLower).update({ uid: this.uid }).catch(() => {});
+      if (bestSave) {
+        this.db.ref('cloudSaves/' + this.uid).set({ data: bestSave, savedAt: bestSavedAt || Date.now() }).catch(() => {});
+      }
+      // Restart cloud save listener on the correct uid path
+      if (this._cloudSaveRef) { this._cloudSaveRef.off(); }
+      this._initCloudSave();
+    }
+
     return { ok: true };
   },
 
