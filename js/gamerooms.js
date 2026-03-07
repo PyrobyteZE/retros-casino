@@ -76,7 +76,7 @@ const MainRoom = {
 
   onScreenEnter(game) {
     this._autoSpinActive[game] = true;
-    this._scheduleAutoSpin(game, 4000);
+    this._scheduleAutoSpin(game, game === 'roulette' ? 2000 : 4000);
   },
 
   onScreenLeave(game) {
@@ -115,7 +115,7 @@ const MainRoom = {
         host: Firebase.uid,
         hostSession: Firebase._sessionId,
         hostName: name,
-        betWindowEnd: Date.now() + 30 * 1000,
+        betWindowEnd: Date.now() + (game === 'roulette' ? 10 : 30) * 1000,
         startedAt: 0,
         seed: 0,
         result: null,
@@ -314,7 +314,7 @@ const MainRoom = {
 
     // Auto-spin: schedule next round if player is still on this screen
     if (this._autoSpinActive[game]) {
-      this._scheduleAutoSpin(game, 15000); // 15s break between rounds
+      this._scheduleAutoSpin(game, game === 'roulette' ? 10000 : 15000);
     }
   },
 
