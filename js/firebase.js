@@ -1686,7 +1686,10 @@ const Firebase = {
 
   _initCloudSave() {
     if (!this.isOnline()) return;
-    this.db.ref('cloudSaves/' + this.uid).once('value', snap => {
+    this._cloudSaveRef = this.db.ref('cloudSaves/' + this.uid);
+    let firstLoad = true;
+
+    this._cloudSaveRef.on('value', snap => {
       const cloud = snap.val();
       const localRaw = localStorage.getItem('retros_casino_save');
 
@@ -1699,25 +1702,44 @@ const Firebase = {
           if (typeof Clicker !== 'undefined') { Clicker.startAutoClicker(); Clicker.updateStats(); Clicker.renderUpgrades(); }
         }
         Toast.show('\u2601\uFE0F Save restored from cloud!');
-        console.log('Firebase: cloud save restored (no local existed)');
-        setTimeout(() => this.pushCloudSave(), 2000);
+        firstLoad = false;
       } else if (localRaw && cloud && cloud.data) {
-        // Both exist — compare savedAt timestamps
         let localSaved = 0;
         try { localSaved = JSON.parse(localRaw).savedAt || 0; } catch (e) {}
         const cloudSaved = cloud.savedAt || 0;
-        if (cloudSaved > localSaved + 5 * 60_000) {
-          // Cloud is meaningfully newer (5+ min) — offer restore
-          this._offerCloudRestore(cloud.data, cloudSaved, localSaved);
-        } else {
-          // Local is current — push it
+        // Offer restore if cloud is 30+ seconds newer (catches cross-device switches)
+        if (cloudSaved > localSaved + 30_000) {
+          // Don't spam the dialog — only show if not already visible
+          if (!document.querySelector('.cloud-restore-overlay')) {
+            this._offerCloudRestore(cloud.data, cloudSaved, localSaved);
+          }
+        } else if (firstLoad) {
           setTimeout(() => this.pushCloudSave(), 5000);
         }
-      } else {
-        // No cloud save — just push local
+        firstLoad = false;
+      } else if (firstLoad) {
         setTimeout(() => this.pushCloudSave(), 5000);
+        firstLoad = false;
       }
-    }).catch(() => { setTimeout(() => this.pushCloudSave(), 5000); });
+    }, () => { setTimeout(() => this.pushCloudSave(), 5000); });
+
+    // Re-check cloud save whenever the app comes back into focus
+    // (handles switching between APK and browser mid-session)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && this.isOnline()) {
+        this._cloudSaveRef.once('value', snap => {
+          const cloud = snap.val();
+          if (!cloud || !cloud.data) return;
+          const localRaw = localStorage.getItem('retros_casino_save');
+          let localSaved = 0;
+          try { localSaved = JSON.parse(localRaw || '{}').savedAt || 0; } catch (e) {}
+          const cloudSaved = cloud.savedAt || 0;
+          if (cloudSaved > localSaved + 30_000 && !document.querySelector('.cloud-restore-overlay')) {
+            this._offerCloudRestore(cloud.data, cloudSaved, localSaved);
+          }
+        }).catch(() => {});
+      }
+    });
   },
 
   _offerCloudRestore(cloudData, cloudTs, localTs) {
