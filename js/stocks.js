@@ -100,20 +100,22 @@ const Stocks = {
     const isAuthority = typeof Firebase !== 'undefined' && Firebase.isOnline() && Firebase._isStockAuthority;
     const isFollower  = typeof Firebase !== 'undefined' && Firebase.isOnline() && !Firebase._isStockAuthority;
 
-    if (isFollower && !this._hasActiveTargets()) {
-      // If the authority has gone stale (no price update in 50s), try to take over
+    if (isFollower) {
+      // If the authority has gone stale (no price update in 2 min), try to take over
       const msSinceUpdate = Date.now() - (this._lastServerUpdate || 0);
-      if (msSinceUpdate > 50000) {
-        if (typeof Firebase !== 'undefined') Firebase._tryClaimStockAuthority();
-        this._showOutOfSyncBanner(true);
+      if (msSinceUpdate > 120000) {
+        const msSinceClaim = Date.now() - (this._lastClaimAttempt || 0);
+        if (msSinceClaim > 30000) { // don't spam claim attempts
+          this._lastClaimAttempt = Date.now();
+          if (typeof Firebase !== 'undefined') Firebase._tryClaimStockAuthority();
+        }
+        if (!this._hasActiveTargets()) this._showOutOfSyncBanner(true);
       } else {
         this._showOutOfSyncBanner(false);
       }
-      return;
+      if (!this._hasActiveTargets()) return;
     }
-    if (!isAuthority && typeof Firebase !== 'undefined' && Firebase._hasConfig()) {
-      this._showOutOfSyncBanner(true);
-    } else {
+    if (!isAuthority && !isFollower) {
       this._showOutOfSyncBanner(false);
     }
 

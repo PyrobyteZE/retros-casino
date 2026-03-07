@@ -29,7 +29,7 @@
 
     "accounts": {
       "$name": {
-        ".read": false,
+        ".read": "auth !== null",
         ".write": "auth !== null"
       }
     },

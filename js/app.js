@@ -464,6 +464,7 @@ const App = {
     if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
       Firebase.pushLeaderboard();
       Firebase.pushCloudSave();
+      Firebase.pushAccountSave();
     }
   },
 

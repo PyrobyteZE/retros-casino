@@ -1652,22 +1652,21 @@ const Firebase = {
   },
 
   async _loadAccountSave(account, nameLower) {
-    // Find the freshest save: compare account.save vs cloudSaves/[account.uid]
+    // account.save is the authoritative save (pushed every 55s by pushAccountSave)
+    // cloudSaves/[this.uid] may have a newer copy if already on this device
     let bestSave = account.save || null;
     let bestSavedAt = 0;
     try { bestSavedAt = JSON.parse(bestSave || '{}').savedAt || 0; } catch(e) {}
 
-    const oldUid = account.uid;
-    if (oldUid) {
-      try {
-        const cloudSnap = await this.db.ref('cloudSaves/' + oldUid).once('value');
-        const cloud = cloudSnap.val();
-        if (cloud && cloud.data && (cloud.savedAt || 0) > bestSavedAt) {
-          bestSave = cloud.data;
-          bestSavedAt = cloud.savedAt || 0;
-        }
-      } catch(e) {}
-    }
+    // Also check this session's own cloud save (same uid, so rules allow it)
+    try {
+      const cloudSnap = await this.db.ref('cloudSaves/' + this.uid).once('value');
+      const cloud = cloudSnap.val();
+      if (cloud && cloud.data && (cloud.savedAt || 0) > bestSavedAt) {
+        bestSave = cloud.data;
+        bestSavedAt = cloud.savedAt || 0;
+      }
+    } catch(e) {}
 
     if (bestSave) {
       localStorage.setItem('retros_casino_save', bestSave);
@@ -1676,18 +1675,14 @@ const Firebase = {
         App.updateBalance();
         if (typeof Clicker !== 'undefined') { Clicker.startAutoClicker(); Clicker.updateStats(); Clicker.renderUpgrades(); }
       }
+      Toast.show('✅ Save restored!', '#27ae60', 3000);
+    } else {
+      Toast.show('⚠️ No save found for this account yet.', '#ff9800', 4000);
     }
 
-    // Migrate: update account uid to current session so pushAccountSave works
-    // and copy cloud save to new uid path so _initCloudSave tracks the right path
-    if (oldUid !== this.uid && nameLower) {
+    // Update account uid to this session so pushAccountSave works going forward
+    if (account.uid !== this.uid && nameLower) {
       this.db.ref('accounts/' + nameLower).update({ uid: this.uid }).catch(() => {});
-      if (bestSave) {
-        this.db.ref('cloudSaves/' + this.uid).set({ data: bestSave, savedAt: bestSavedAt || Date.now() }).catch(() => {});
-      }
-      // Restart cloud save listener on the correct uid path
-      if (this._cloudSaveRef) { this._cloudSaveRef.off(); }
-      this._initCloudSave();
     }
 
     return { ok: true };
@@ -1696,11 +1691,13 @@ const Firebase = {
   // Push save to account on every App.save() (called from settings.js)
   pushAccountSave() {
     if (!this.isOnline()) return;
+    const now = Date.now();
+    if (now - (this._lastAccountSave || 0) < 55000) return; // max once per 55s
+    this._lastAccountSave = now;
     const name = typeof Settings !== 'undefined' ? Settings.profile.name : null;
     if (!name || name === 'Player') return;
     const nameLower = name.toLowerCase();
     const save = localStorage.getItem('retros_casino_save') || '{}';
-    // Only push if account exists for this uid
     this.db.ref('accounts/' + nameLower).once('value', snap => {
       const account = snap.val();
       if (account && account.uid === this.uid) {
