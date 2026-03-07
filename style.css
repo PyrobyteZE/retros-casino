@@ -45,16 +45,17 @@ input, textarea, select {
 #top-bar {
   display: flex;
   align-items: center;
-  padding: 12px 16px;
+  padding: 12px 12px;
   padding-top: max(12px, env(safe-area-inset-top));
-  padding-right: max(16px, env(safe-area-inset-right));
-  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(12px, env(safe-area-inset-right));
+  padding-left: max(12px, env(safe-area-inset-left));
   background: var(--bg2);
   border-bottom: 1px solid var(--bg3);
-  gap: 12px;
+  gap: 7px;
   position: sticky;
   top: 0;
   z-index: 200;
+  overflow: hidden;
 }
 
 #back-btn {
