@@ -45,18 +45,36 @@ input, textarea, select {
 /* Top Bar */
 #top-bar {
   display: flex;
-  align-items: center;
-  padding: 12px 12px;
-  padding-top: max(12px, env(safe-area-inset-top));
-  padding-right: max(12px, env(safe-area-inset-right));
-  padding-left: max(12px, env(safe-area-inset-left));
+  flex-direction: column;
+  padding: 0;
+  padding-top: env(safe-area-inset-top);
   background: var(--bg2);
   border-bottom: 1px solid var(--bg3);
-  gap: 7px;
   position: sticky;
   top: 0;
   z-index: 200;
 }
+.top-bar-row1 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  padding-right: max(12px, env(safe-area-inset-right));
+  padding-left: max(12px, env(safe-area-inset-left));
+}
+.top-bar-row2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 6px;
+  padding-right: max(12px, env(safe-area-inset-right));
+  padding-left: max(12px, env(safe-area-inset-left));
+  border-top: 1px solid var(--bg3);
+  flex-wrap: wrap;
+  min-height: 0;
+}
+/* Hide row2 entirely when all children are hidden */
+.top-bar-row2:empty { display: none; }
 
 #back-btn {
   background: none;
@@ -128,8 +146,8 @@ input, textarea, select {
 #streak-banner.lose-streak { color: var(--red); }
 
 /* Screens */
-#screens { flex: 1; overflow-y: auto; }
-.screen { display: none; padding: 16px; }
+#screens { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.screen { display: none; padding: 16px; padding-bottom: max(32px, calc(16px + env(safe-area-inset-bottom))); }
 .screen.active { display: block; }
 
 /* Game HUD (house edge, w/l, profit) */
@@ -2711,8 +2729,12 @@ html.fast-animations @keyframes rebirthPulse { 0%, 100% { box-shadow: none; } }
 
 /* ====== MOBILE COMPACT TOP BAR (≤ 430px) ====== */
 @media (max-width: 430px) {
-  #top-bar {
+  .top-bar-row1 {
     padding: 7px 8px;
+    gap: 5px;
+  }
+  .top-bar-row2 {
+    padding: 3px 8px 5px;
     gap: 5px;
   }
 
@@ -2814,8 +2836,13 @@ html[data-platform="desktop"] #app {
 }
 
 html[data-platform="desktop"] #top-bar {
-  padding: 14px 24px;
   border-radius: 0 0 12px 12px;
+}
+html[data-platform="desktop"] .top-bar-row1 {
+  padding: 12px 24px;
+}
+html[data-platform="desktop"] .top-bar-row2 {
+  padding: 4px 24px 8px;
 }
 
 html[data-platform="desktop"] #page-title {
@@ -4718,7 +4745,7 @@ html[data-platform="desktop"] #screen-pets .game-container {
 .chat-open .chat-toggle { transform: rotate(180deg); }
 
 .chat-body {
-  padding: 0 12px 12px;
+  padding: 0 12px max(12px, calc(8px + env(safe-area-inset-bottom)));
 }
 
 .chat-messages {
@@ -9436,3 +9463,236 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
 .tourney-score { color: var(--green); font-size: 12px; }
 .tourney-wins { color: var(--text-dim); font-size: 11px; min-width: 30px; text-align: right; }
 .tourney-empty { padding: 12px; font-size: 12px; color: var(--text-dim); text-align: center; }
+
+/* ===== CRIME TABS + BLACK MARKET ===== */
+.crime-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 12px 12px 0;
+}
+.crime-tab-btn {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.crime-tab-btn.active {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+.bm-header { padding: 16px 12px 8px; }
+.bm-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.bm-dirty-balance { font-size: 14px; color: var(--green); font-weight: 600; margin-bottom: 4px; }
+.bm-dirty-hint { font-size: 11px; color: var(--text-dim); }
+.bm-active-header { padding: 4px 12px; font-size: 12px; font-weight: 700; color: var(--accent); }
+.bm-active-boosts { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 12px 8px; }
+.bm-active-boost { background: rgba(187,134,252,.15); border: 1px solid var(--accent); border-radius: 12px; padding: 3px 10px; font-size: 11px; color: var(--accent); }
+.bm-items { display: flex; flex-direction: column; gap: 8px; padding: 8px 12px; }
+.bm-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+.bm-item-active { border-color: var(--green); }
+.bm-item-icon { font-size: 24px; flex-shrink: 0; }
+.bm-item-info { flex: 1; }
+.bm-item-name { font-weight: 700; font-size: 13px; margin-bottom: 2px; }
+.bm-item-desc { font-size: 11px; color: var(--text-dim); }
+.bm-item-action { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.bm-item-cost { font-size: 12px; color: #f39c12; font-weight: 600; }
+.bm-buy-btn { padding: 6px 14px; border-radius: 8px; background: var(--accent); color: #000; font-size: 12px; font-weight: 700; border: none; cursor: pointer; }
+.bm-buy-btn.unaffordable { background: var(--border); color: var(--text-dim); cursor: default; }
+.bm-buy-btn[disabled] { background: var(--green); color: #000; }
+.bm-refresh-note { text-align: center; font-size: 11px; color: var(--text-dim); padding: 8px 0 16px; }
+
+/* ===== DONATION / FOUNDATION ===== */
+.donation-prize-banner {
+  display: flex; align-items: center; gap: 12px; justify-content: space-between;
+  background: linear-gradient(135deg, #00e67622, #00e67611);
+  border: 2px solid var(--green);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin: 12px;
+}
+.donation-prize-text { font-size: 16px; font-weight: 700; color: var(--green); }
+.donation-claim-btn { padding: 8px 20px; background: var(--green); color: #000; font-weight: 700; font-size: 13px; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.donation-hero { text-align: center; padding: 24px 12px 12px; }
+.donation-hero-logo { font-size: 48px; margin-bottom: 8px; }
+.donation-hero-title { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+.donation-hero-tagline { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+.donation-pool-card {
+  margin: 12px;
+  background: linear-gradient(135deg, var(--card), var(--bg-secondary, var(--card)));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: center;
+}
+.donation-pool-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin-bottom: 4px; }
+.donation-pool-amount { font-size: 32px; font-weight: 700; color: #f1c40f; margin-bottom: 6px; }
+.donation-pool-draw { font-size: 13px; color: var(--text-dim); }
+.donation-last-winner { margin-top: 8px; font-size: 12px; color: var(--text-dim); }
+.donation-stats-row { display: flex; gap: 8px; padding: 8px 12px; }
+.donation-stat { flex: 1; text-align: center; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 8px; }
+.donation-stat-v { font-size: 16px; font-weight: 700; color: var(--accent); }
+.donation-stat-l { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+.donation-form { margin: 8px 12px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.donation-form-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.donation-disclaimer { font-size: 10px; color: var(--text-dim); font-style: italic; margin-bottom: 12px; }
+.donation-input-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.donation-input-row .sh-input { flex: 1; }
+.donation-quick-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.donation-quick-btn { padding: 5px 12px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text); font-size: 12px; cursor: pointer; }
+.donation-donate-btn {
+  width: 100%; padding: 14px; font-size: 15px; font-weight: 700;
+  background: linear-gradient(135deg, #f1c40f, #f39c12);
+  color: #000; border: none; border-radius: var(--radius); cursor: pointer;
+}
+.donation-warning { font-size: 10px; color: var(--text-dim); text-align: center; margin-top: 10px; line-height: 1.4; }
+.donation-leaderboard { margin: 8px 12px 16px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.donation-lb-title { padding: 10px 14px; font-size: 13px; font-weight: 700; border-bottom: 1px solid var(--border); }
+.donation-donor { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.donation-donor:last-child { border-bottom: none; }
+.donation-donor-rank { min-width: 28px; font-size: 14px; }
+.donation-donor-name { flex: 1; font-weight: 600; }
+.donation-donor-amt { color: var(--green); font-size: 12px; }
+
+/* ===== AUCTION HOUSE ===== */
+.auction-tabs { display: flex; gap: 6px; padding: 12px 12px 0; flex-wrap: wrap; }
+.auction-tab-btn {
+  flex: 1; min-width: 70px; padding: 8px 6px; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--card); color: var(--text);
+  font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.auction-tab-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+.auction-tab-prizes { border-color: var(--green) !important; color: var(--green) !important; }
+.auction-tab-prizes.active { background: var(--green); color: #000; }
+.auction-list { display: flex; flex-direction: column; gap: 10px; padding: 12px; }
+.auction-empty { padding: 32px; text-align: center; color: var(--text-dim); font-size: 14px; }
+.auction-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.auction-card.auction-ended { opacity: 0.55; }
+.auction-card.auction-winning { border-color: var(--green); }
+.auction-card-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary, var(--card));
+}
+.auction-type-icon { font-size: 18px; flex-shrink: 0; }
+.auction-title { flex: 1; font-weight: 700; font-size: 14px; }
+.auction-time { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+.auction-time-ended { color: var(--red); }
+.auction-card-body { padding: 10px 12px; }
+.auction-bid-info { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.auction-label { font-size: 11px; color: var(--text-dim); }
+.auction-bid-val { font-size: 18px; font-weight: 700; color: var(--green); }
+.auction-bidder { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
+.auction-seller { font-size: 11px; color: var(--text-dim); }
+.auction-bid-row { display: flex; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--border); }
+.auction-bid-row .sh-input { flex: 1; font-size: 13px; }
+.auction-bid-btn { padding: 8px 18px; background: var(--accent); color: #000; font-weight: 700; font-size: 13px; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.auction-cancel-btn { width: calc(100% - 24px); margin: 0 12px 10px; padding: 7px; font-size: 12px; background: transparent; border: 1px solid var(--red); color: var(--red); border-radius: 8px; cursor: pointer; }
+.auction-list-type-tabs { display: flex; gap: 8px; padding: 12px; }
+.auction-list-type { flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); color: var(--text); font-size: 13px; cursor: pointer; }
+.auction-list-type.active { background: var(--accent); color: #000; border-color: var(--accent); }
+.auction-list-form { padding: 0 12px 16px; display: flex; flex-direction: column; gap: 12px; }
+.auction-list-field { display: flex; flex-direction: column; gap: 4px; }
+.auction-list-field label { font-size: 12px; color: var(--text-dim); }
+.auction-list-field .sh-input { width: 100%; }
+.auction-list-btn { padding: 12px; background: var(--accent); color: #000; font-weight: 700; font-size: 14px; border: none; border-radius: var(--radius); cursor: pointer; }
+.auction-prizes-list { display: flex; flex-direction: column; gap: 10px; padding: 12px; }
+.auction-prize-card { display: flex; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--green); border-radius: var(--radius); padding: 12px; }
+.auction-prize-icon { font-size: 28px; flex-shrink: 0; }
+.auction-prize-info { flex: 1; }
+.auction-prize-desc { font-size: 13px; color: var(--text-dim); }
+.auction-prize-amount { font-size: 16px; font-weight: 700; color: var(--green); }
+.auction-claim-btn { padding: 8px 18px; background: var(--green); color: #000; font-weight: 700; font-size: 13px; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.auction-claim-all-btn { width: 100%; padding: 10px; background: var(--accent); color: #000; font-weight: 700; font-size: 13px; border: none; border-radius: var(--radius); cursor: pointer; }
+
+/* ===== COLLECTIBLE CARDS ===== */
+.cards-tabs { display: flex; gap: 8px; padding: 12px 12px 0; }
+.cards-tab { flex: 1; padding: 9px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer; }
+.cards-tab.active { background: var(--accent); color: #000; border-color: var(--accent); }
+.cards-empty { padding: 48px 16px; text-align: center; color: var(--text-dim); font-size: 14px; line-height: 1.6; }
+/* Loadout */
+.cards-loadout { margin: 12px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; }
+.cards-loadout-title { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+.cards-loadout-slots { display: flex; gap: 8px; }
+.cards-slot {
+  flex: 1; min-height: 70px; border: 2px dashed var(--border); border-radius: var(--radius);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 6px; font-size: 11px; color: var(--text-dim); cursor: pointer; text-align: center; position: relative;
+}
+.cards-slot.equipped { border-style: solid; }
+.cards-slot-art { font-size: 22px; }
+.cards-slot-name { font-size: 10px; font-weight: 700; margin-top: 2px; }
+.cards-slot-stat { font-size: 10px; font-weight: 600; }
+.cards-slot-remove { position: absolute; top: 2px; right: 4px; background: none; border: none; color: var(--text-dim); font-size: 11px; cursor: pointer; padding: 0; line-height: 1; }
+.cards-loadout-summary { margin-top: 8px; font-size: 11px; color: var(--accent); }
+/* Card grid */
+.cards-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 12px; }
+.cards-card {
+  border: 2px solid var(--border); border-radius: 10px; padding: 10px 6px 8px;
+  text-align: center; cursor: pointer; position: relative; transition: transform 0.1s;
+  background: var(--card);
+}
+.cards-card:active { transform: scale(0.95); }
+.cards-card.selected { box-shadow: 0 0 0 2px var(--accent); }
+.cards-card.large { padding: 16px 10px 12px; }
+.cards-card-rarity {
+  position: absolute; top: 4px; left: 4px; width: 16px; height: 16px;
+  border-radius: 50%; font-size: 9px; font-weight: 800; color: #000;
+  display: flex; align-items: center; justify-content: center;
+}
+.cards-card-art { font-size: 28px; margin: 4px 0; }
+.cards-card-name { font-size: 10px; font-weight: 700; margin-bottom: 3px; line-height: 1.2; }
+.cards-card-stat { font-size: 13px; font-weight: 800; }
+.cards-card-type { font-size: 9px; color: var(--text-dim); }
+.cards-card-equipped-badge { position: absolute; top: 4px; right: 4px; background: var(--green); color: #000; font-size: 9px; font-weight: 800; width: 14px; height: 14px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+/* Card detail */
+.cards-detail {
+  margin: 8px 12px; background: var(--card); border: 2px solid var(--border);
+  border-radius: var(--radius); padding: 14px; display: flex; gap: 12px; align-items: flex-start;
+}
+.cards-detail-art { font-size: 40px; flex-shrink: 0; }
+.cards-detail-info { flex: 1; }
+.cards-detail-name { font-size: 16px; font-weight: 700; margin-bottom: 2px; }
+.cards-detail-rarity { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+.cards-detail-stat { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+.cards-detail-flavor { font-size: 11px; color: var(--text-dim); font-style: italic; }
+.cards-detail-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.cards-equip-btn { padding: 7px 14px; background: var(--accent); color: #000; font-weight: 700; font-size: 12px; border: none; border-radius: 8px; cursor: pointer; }
+.cards-unequip-btn { padding: 6px 10px; background: transparent; border: 1px solid var(--red); color: var(--red); font-size: 11px; border-radius: 8px; cursor: pointer; }
+/* Pack shop */
+.cards-shop { padding: 8px 12px 16px; }
+.cards-shop-title { font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+.cards-pack-card { display: flex; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; }
+.cards-pack-icon { font-size: 32px; flex-shrink: 0; }
+.cards-pack-info { flex: 1; }
+.cards-pack-name { font-size: 15px; font-weight: 700; }
+.cards-pack-desc { font-size: 11px; color: var(--text-dim); margin: 2px 0; }
+.cards-pack-count { font-size: 11px; color: var(--accent); }
+.cards-pack-buy { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+.cards-pack-cost { font-size: 13px; font-weight: 700; color: #f1c40f; }
+.cards-pack-btn { padding: 8px 18px; background: var(--accent); color: #000; font-weight: 700; font-size: 13px; border: none; border-radius: 8px; cursor: pointer; }
+.cards-pack-btn.unaffordable { background: var(--border); color: var(--text-dim); cursor: default; }
+.cards-rates { font-size: 11px; color: var(--text-dim); text-align: center; margin-top: 4px; }
+/* Pack result */
+.cards-pack-result { padding: 16px 12px; }
+.cards-pack-result-title { font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 12px; }
+.cards-pack-result-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.cards-pack-close-btn { width: 100%; margin-top: 16px; padding: 12px; background: var(--accent); color: #000; font-weight: 700; font-size: 14px; border: none; border-radius: var(--radius); cursor: pointer; }
