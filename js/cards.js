@@ -197,6 +197,15 @@ const Cards = {
     this._render();
   },
 
+  listOnAuction(cardId) {
+    if (typeof Auction === 'undefined') { Toast.show('Auction House not available', '#f44336', 3000); return; }
+    if (!Auction._db) { Toast.show('Sign in online to use the Auction House', '#f44336', 3000); return; }
+    // Navigate to auction list tab pre-set to card type
+    Auction._listType = 'card';
+    Auction._tab = 'list';
+    App.showScreen('auction');
+  },
+
   sellCard(cardId) {
     const card = this._cards[cardId];
     if (!card) return;
@@ -368,6 +377,7 @@ const Cards = {
           </button>
           ${isEquipped ? `<button class="cards-unequip-btn" onclick="Cards.equip('${card.id}',${this._equipped.indexOf(card.id)});Cards.unequip(${this._equipped.indexOf(card.id)})">Unequip</button>` : ''}
           <button class="cards-sell-btn" onclick="Cards.sellCard('${card.id}')" style="background:#b71c1c;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer">💰 Sell (${App.formatMoney(this.SELL_PRICES[card.rarity] || 50000)})</button>
+          <button class="cards-auction-btn" onclick="Cards.listOnAuction('${card.id}')" style="background:#6a1b9a;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer">🔨 Auction</button>
         </div>
       </div>`;
   },

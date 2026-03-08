@@ -6,7 +6,7 @@ const Auction = {
   _auctionsListener: null,
   _prizesListener: null,
   _tab: 'browse',      // 'browse' | 'mine' | 'list'
-  _listType: 'cash',   // 'cash' | 'item' | 'car'
+  _listType: 'cash',   // 'cash' | 'item' | 'car' | 'card'
   _endCheckTimer: null,
 
   get _db() { return typeof Firebase !== 'undefined' && Firebase.isOnline() ? Firebase.db : null; },
@@ -72,6 +72,7 @@ const Auction = {
       if (auction.type === 'cash') winnerPrize.amount = auction.amount;
       else if (auction.type === 'item') winnerPrize.itemData = auction.itemData;
       else if (auction.type === 'car') winnerPrize.carData = auction.carData;
+      else if (auction.type === 'card') winnerPrize.cardData = auction.cardData;
       await this._db.ref('auctionPrizes/' + auction.currentBidderUid + '/' + id).set(winnerPrize);
 
       // Seller gets the bid amount
@@ -90,6 +91,7 @@ const Auction = {
       if (auction.type === 'cash') returnPrize.amount = auction.amount;
       else if (auction.type === 'item') returnPrize.itemData = auction.itemData;
       else if (auction.type === 'car') returnPrize.carData = auction.carData;
+      else if (auction.type === 'card') returnPrize.cardData = auction.cardData;
       await this._db.ref('auctionPrizes/' + auction.sellerUid + '/' + id + '_return').set(returnPrize);
     }
   },
@@ -116,6 +118,17 @@ const Auction = {
         Cars._garage.push({ ...prize.carData, id: Date.now() + Math.random() });
         App.save();
         Toast.show('🔨 Car received: ' + prize.carData.name, '#03dac6', 6000);
+      }
+    } else if (prize.type === 'card' && prize.cardData) {
+      if (typeof Cards !== 'undefined') {
+        const card = { ...prize.cardData };
+        Cards._cards[card.id] = card;
+        if (Cards._db && Cards._uid) {
+          Cards._db.ref('playerCards/' + Cards._uid + '/' + card.id).set(card);
+        }
+        App.save();
+        if (App.currentScreen === 'cards') Cards._render();
+        Toast.show('🃏 Card received: ' + card.name + ' (' + card.rarity + ')!', Cards.RARITY_COLORS[card.rarity] || '#bb86fc', 6000);
       }
     }
   },
@@ -275,6 +288,42 @@ const Auction = {
     this._render();
   },
 
+  listCard(cardId) {
+    const priceEl = document.getElementById('list-card-start-bid');
+    const durEl = document.getElementById('list-card-duration');
+    if (!priceEl || !durEl) return;
+    const startBid = App.parseAmount(priceEl.value);
+    const duration = parseInt(durEl.value) || 1;
+    if (isNaN(startBid) || startBid < 1) { Toast.show('Enter a valid starting bid', '#f44336', 3000); return; }
+    if (!this._db) return;
+
+    const card = typeof Cards !== 'undefined' ? Cards._cards[cardId] : null;
+    if (!card) { Toast.show('Card not found', '#f44336', 3000); return; }
+
+    // Unequip if equipped
+    if (typeof Cards !== 'undefined' && Cards._equipped) {
+      Cards._equipped = Cards._equipped.map(id => id === cardId ? null : id);
+    }
+    delete Cards._cards[cardId];
+    Cards._db.ref('playerCards/' + Cards._uid + '/' + cardId).remove();
+    App.save();
+
+    const id = 'a_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    this._db.ref('auctionHouse/' + id).set({
+      id, type: 'card', title: card.name + ' (' + card.rarity + ')',
+      sellerUid: this._uid, sellerName: this._name,
+      startBid, currentBid: startBid,
+      currentBidderUid: null, currentBidderName: null,
+      endsAt: Date.now() + duration * 3600000,
+      createdAt: Date.now(), claimed: false,
+      cardData: { ...card },
+    });
+    this._tab = 'mine';
+    if (typeof Cards !== 'undefined') Cards._render();
+    Toast.show('🃏 Card listed for auction!', '#bb86fc', 3000);
+    this._render();
+  },
+
   cancelAuction(id) {
     const a = this._auctions[id];
     if (!a || a.sellerUid !== this._uid) return;
@@ -286,6 +335,7 @@ const Auction = {
     if (a.type === 'cash') returnPrize.amount = a.amount;
     else if (a.type === 'item') returnPrize.itemData = a.itemData;
     else if (a.type === 'car') returnPrize.carData = a.carData;
+    else if (a.type === 'card') returnPrize.cardData = a.cardData;
     this._db.ref('auctionPrizes/' + this._uid + '/' + id + '_cancel').set(returnPrize);
     Toast.show('Auction cancelled', '#f39c12', 3000);
   },
@@ -346,12 +396,13 @@ const Auction = {
     if (!prizes.length) return '<div class="auction-empty">No pending prizes.</div>';
     const html = prizes.map(([key, p]) => `
       <div class="auction-prize-card">
-        <div class="auction-prize-icon">${p.type === 'car' ? '🚗' : p.type === 'item' ? '🎒' : '💵'}</div>
+        <div class="auction-prize-icon">${p.type === 'car' ? '🚗' : p.type === 'item' ? '🎒' : p.type === 'card' ? '🃏' : '💵'}</div>
         <div class="auction-prize-info">
           <div class="auction-prize-desc">${this._esc(p.description || 'Prize')}</div>
           ${p.amount ? '<div class="auction-prize-amount">' + App.formatMoney(p.amount) + '</div>' : ''}
           ${p.itemData ? '<div class="auction-prize-amount">' + this._esc(p.itemData.name || 'Item') + '</div>' : ''}
           ${p.carData ? '<div class="auction-prize-amount">' + this._esc(p.carData.name || 'Car') + '</div>' : ''}
+          ${p.cardData ? '<div class="auction-prize-amount">' + this._esc(p.cardData.name || 'Card') + ' (' + this._esc(p.cardData.rarity || '') + ')</div>' : ''}
         </div>
         <button class="auction-claim-btn" onclick="Auction.claimPrize('${this._esc(key)}')">CLAIM</button>
       </div>`).join('');
@@ -362,7 +413,7 @@ const Auction = {
     const now = Date.now();
     const ended = a.claimed || a.endsAt <= now;
     const timeLeft = ended ? 'Ended' : this._msToHuman(a.endsAt - now);
-    const typeIcon = a.type === 'car' ? '🚗' : a.type === 'item' ? '🎒' : '💵';
+    const typeIcon = a.type === 'car' ? '🚗' : a.type === 'item' ? '🎒' : a.type === 'card' ? '🃏' : '💵';
     const isMyBid = a.currentBidderUid === this._uid;
     const canBid = !ended && !isMine && !isMyBid;
 
@@ -384,6 +435,11 @@ const Auction = {
           <span class="auction-time${ended ? ' auction-time-ended' : ''}">${timeLeft}</span>
         </div>
         <div class="auction-card-body">
+          ${a.type === 'card' && a.cardData ? `<div class="auction-card-preview" style="font-size:13px;margin-bottom:4px">
+            <span style="font-size:20px;margin-right:6px">${a.cardData.art || '🃏'}</span>
+            <span style="color:${(typeof Cards !== 'undefined' && Cards.RARITY_COLORS[a.cardData.rarity]) || '#bb86fc'};font-weight:700">${this._esc(a.cardData.rarity?.toUpperCase() || '')} #${a.cardData.serial || ''}</span>
+            <span style="color:var(--text-dim);margin-left:6px">+${Math.round((a.cardData.statValue || 0) * 100)}% ${(typeof Cards !== 'undefined' && Cards.STAT_LABELS[a.cardData.statType]) || a.cardData.statType || ''}</span>
+          </div>` : ''}
           <div class="auction-bid-info">
             <span class="auction-label">Current bid</span>
             <span class="auction-bid-val">${App.formatMoney(a.currentBid)}</span>
@@ -404,6 +460,7 @@ const Auction = {
         <button class="auction-list-type${this._listType === 'cash' ? ' active' : ''}" onclick="Auction._listType='cash';Auction._render()">💵 Cash</button>
         <button class="auction-list-type${this._listType === 'item' ? ' active' : ''}" onclick="Auction._listType='item';Auction._render()">🎒 Item</button>
         <button class="auction-list-type${this._listType === 'car' ? ' active' : ''}" onclick="Auction._listType='car';Auction._render()">🚗 Car</button>
+        <button class="auction-list-type${this._listType === 'card' ? ' active' : ''}" onclick="Auction._listType='card';Auction._render()">🃏 Card</button>
       </div>`;
 
     if (this._listType === 'cash') {
@@ -440,6 +497,24 @@ const Auction = {
           <div class="auction-list-field"><label>Starting Bid</label><input id="list-car-start-bid" type="text" class="sh-input" placeholder="e.g. 1b"><span class="sh-preview" style="display:none"></span></div>
           <div class="auction-list-field"><label>Duration</label><select id="list-car-duration" class="sh-input">${durOptions}</select></div>
           <button class="auction-list-btn" onclick="Auction.listCar(document.getElementById('list-car-select').value)">List Car</button>
+        </div>`;
+    }
+
+    if (this._listType === 'card') {
+      const allCards = typeof Cards !== 'undefined' ? Object.values(Cards._cards) : [];
+      if (!allCards.length) return typeTabs + '<div class="auction-empty">No cards in collection to list.</div>';
+      const rarityColor = c => (typeof Cards !== 'undefined' && Cards.RARITY_COLORS[c]) || '#9e9e9e';
+      const statLabel = s => (typeof Cards !== 'undefined' && Cards.STAT_LABELS[s]) || s;
+      const cardOpts = allCards
+        .sort((a, b) => (Cards.RARITIES.indexOf(b.rarity) - Cards.RARITIES.indexOf(a.rarity)))
+        .map(c => `<option value="${c.id}">${c.art} ${this._esc(c.name)} — ${c.rarity} +${Math.round(c.statValue * 100)}% ${statLabel(c.statType)}</option>`)
+        .join('');
+      return typeTabs + `
+        <div class="auction-list-form">
+          <div class="auction-list-field"><label>Select Card</label><select id="list-card-select" class="sh-input">${cardOpts}</select></div>
+          <div class="auction-list-field"><label>Starting Bid</label><input id="list-card-start-bid" type="text" class="sh-input" placeholder="e.g. 5m"><span class="sh-preview" style="display:none"></span></div>
+          <div class="auction-list-field"><label>Duration</label><select id="list-card-duration" class="sh-input">${durOptions}</select></div>
+          <button class="auction-list-btn" onclick="Auction.listCard(document.getElementById('list-card-select').value)">List Card</button>
         </div>`;
     }
 
