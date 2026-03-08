@@ -65,13 +65,15 @@ input, textarea, select {
 .top-bar-row2 {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 12px 6px;
-  padding-right: max(12px, env(safe-area-inset-right));
-  padding-left: max(12px, env(safe-area-inset-left));
-  border-top: 1px solid var(--bg3);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  gap: 5px;
+  padding: 3px max(12px, env(safe-area-inset-right)) 5px max(12px, env(safe-area-inset-left));
+  border-top: 1px solid rgba(255,255,255,0.06);
+  overflow: hidden;
   min-height: 0;
+}
+.top-bar-row2 > * {
+  flex-shrink: 0; /* individual items opt-in to shrinking via their own rules */
 }
 /* Hide row2 entirely when all children are hidden */
 .top-bar-row2:empty { display: none; }
@@ -99,12 +101,14 @@ input, textarea, select {
 #admin-indicator {
   background: var(--red);
   color: #fff;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
-  padding: 2px 6px;
+  padding: 2px 5px;
   border-radius: 4px;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 #admin-indicator:active { opacity: 0.7; }
 
@@ -801,11 +805,13 @@ input, textarea, select {
 #vip-level {
   background: linear-gradient(135deg, #ffd740, #ff9100);
   color: #000;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
-  padding: 2px 8px;
+  padding: 2px 6px;
   border-radius: 4px;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* Rebirth */
@@ -2023,10 +2029,12 @@ input, textarea, select {
 #debt-badge {
   background: var(--red);
   color: #fff;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
-  padding: 2px 8px;
+  padding: 2px 5px;
   border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
   letter-spacing: 0.5px;
   animation: debtPulse 2s ease-in-out infinite;
 }
@@ -2557,19 +2565,23 @@ input, textarea, select {
 .profile-display {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 13px;
+  gap: 3px;
+  font-size: 12px;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .profile-avatar {
-  font-size: 18px;
+  font-size: 15px;
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .profile-name {
   font-weight: 700;
   color: var(--text);
-  max-width: 80px;
+  max-width: 90px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2735,79 +2747,26 @@ html.fast-animations @keyframes rebirthPulse { 0%, 100% { box-shadow: none; } }
   }
   .top-bar-row2 {
     padding: 3px 8px 5px;
-    gap: 5px;
+    gap: 4px;
   }
 
   #page-title {
-    font-size: 13px;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  #admin-indicator {
-    font-size: 9px;
-    padding: 2px 4px;
-    flex-shrink: 0;
-  }
-
-  .profile-display {
-    gap: 3px;
-    font-size: 11px;
-    flex-shrink: 1;
-    min-width: 0;
-  }
-
-  .profile-avatar {
     font-size: 14px;
-    flex-shrink: 0;
   }
 
   .profile-name {
-    max-width: 50px;
+    max-width: 60px;
     font-size: 11px;
-  }
-
-  #vip-level {
-    font-size: 9px;
-    padding: 2px 5px;
-    flex-shrink: 0;
-  }
-
-  #debt-badge {
-    font-size: 9px;
-    padding: 2px 4px;
-    flex-shrink: 0;
-  }
-
-  /* Hide hunger percentage text on mobile — keep icon + bar only */
-  #hunger-pct {
-    display: none;
-  }
-
-  .hunger-hud {
-    padding: 2px 3px;
-    gap: 2px;
-    min-width: unset;
-    flex-shrink: 0;
-  }
-
-  .hunger-bar-wrap {
-    width: 26px;
   }
 
   #balance-display {
     font-size: 13px;
-    padding: 4px 8px;
-    white-space: nowrap;
-    flex-shrink: 0;
+    padding: 4px 9px;
   }
 
-  #online-badge.online-badge {
-    font-size: 10px;
-    padding: 1px 5px;
-    flex-shrink: 0;
+  /* Hide hunger % text on narrow screens — icon + bar is enough */
+  #hunger-pct {
+    display: none;
   }
 
   .chat-toggle-btn-bar {
@@ -6754,18 +6713,19 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
   align-items: center;
   gap: 3px;
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 2px 5px;
   border-radius: 6px;
-  background: var(--bg2);
-  font-size: 11px;
-  min-width: 72px;
+  background: var(--bg3);
+  font-size: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 .hunger-bar-wrap {
-  width: 36px;
-  height: 5px;
-  background: var(--bg3);
+  width: 28px;
+  height: 4px;
+  background: rgba(255,255,255,0.15);
   border-radius: 3px;
   overflow: hidden;
   flex-shrink: 0;
