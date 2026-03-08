@@ -134,6 +134,7 @@ const Admin = {
   adminName: 'RetroByte',
   _consoleUnlocked: false,
   _adminsList: {},   // { [uid]: { name, grantedAt } } — from Firebase
+  chatColor: null,   // null | 'rainbow' | 'gold_gradient' | 'fire' | 'ice' | 'neon' | hex string
 
   activeTab: 'cheats',
 
@@ -381,6 +382,40 @@ const Admin = {
           <button class="admin-btn win-btn" onclick="Admin.setStartBal()">Set Start $</button>
           <input type="number" id="admin-start-bal" value="0.02" style="width:80px">
         </div>
+      </div>
+      <div class="admin-section">
+        <h3>💬 Admin Chat Color</h3>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Exclusive gradient styles — free for admins, not purchasable by players.</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+          ${[
+            { id: null,            label: 'Default',      preview: 'var(--text,#eee)' },
+            { id: 'fire',          label: '🔥 Fire',      preview: 'linear-gradient(90deg,#ff6d00,#ff1744,#ffd740)' },
+            { id: 'ice',           label: '❄️ Ice',        preview: 'linear-gradient(90deg,#00e5ff,#448aff,#b2ebf2)' },
+            { id: 'gold_gradient', label: '✨ Gold',       preview: 'linear-gradient(90deg,#ffd740,#ffe57f,#ff9800)' },
+            { id: 'neon',          label: '⚡ Neon',       preview: 'linear-gradient(90deg,#76ff03,#00e5ff,#e040fb)' },
+            { id: 'royal',         label: '👑 Royal',      preview: 'linear-gradient(90deg,#9c27b0,#e040fb,#ffd740)' },
+            { id: 'blood',         label: '🩸 Blood',      preview: 'linear-gradient(90deg,#b71c1c,#ff1744,#ff8a80)' },
+            { id: 'midnight',      label: '🌌 Midnight',   preview: 'linear-gradient(90deg,#1a237e,#7b1fa2,#00e5ff)' },
+            { id: 'rainbow',       label: '🌈 Rainbow',    preview: 'linear-gradient(90deg,#ff0,#f0f,#0ff,#0f0,#f80)' },
+            { id: 'custom',        label: '🎨 Custom',     preview: 'var(--green,#00e676)' },
+          ].map(c => {
+            const isActive = this.chatColor === c.id;
+            const isGradient = c.preview.startsWith('linear-gradient');
+            const btnStyle = isGradient
+              ? `background:${c.preview};color:#fff;border:2px solid ${isActive ? '#fff' : 'transparent'}`
+              : `background:var(--bg3,#252540);color:var(--text,#eee);border:2px solid ${isActive ? 'var(--green,#00e676)' : 'transparent'}`;
+            return `<button onclick="Admin.setChatColor('${c.id}')" style="padding:5px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;${btnStyle}">${c.label}</button>`;
+          }).join('')}
+        </div>
+        <div id="admin-chat-color-custom" style="${this.chatColor === 'custom' ? '' : 'display:none'}">
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="color" id="admin-custom-color-a" value="#ff0080" style="width:40px;height:32px;border:none;background:none;cursor:pointer">
+            <span style="font-size:11px;color:var(--text-dim)">→</span>
+            <input type="color" id="admin-custom-color-b" value="#0080ff" style="width:40px;height:32px;border:none;background:none;cursor:pointer">
+            <button onclick="Admin.applyCustomGradient()" style="padding:5px 10px;border-radius:6px;background:var(--green,#00e676);color:#000;font-weight:700;font-size:11px;border:none;cursor:pointer">Apply</button>
+          </div>
+        </div>
+        ${this.chatColor ? `<div style="margin-top:8px;font-size:12px">Preview: <span id="admin-chat-preview" style="font-weight:700">${this._adminChatColorStyle(this.chatColor, 'Admin message preview')}</span></div>` : ''}
       </div>
       <div class="admin-section">
         <h3>🏪 Store Testing</h3>
@@ -1320,6 +1355,48 @@ const Admin = {
     this.godMode = document.getElementById('admin-godmode').checked;
     document.getElementById('balance-display').classList.toggle('godmode', this.godMode);
     if (typeof App !== 'undefined') App.updateBalance();
+  },
+
+  setChatColor(id) {
+    this.chatColor = id === 'null' || id === null ? null : id;
+    this.setTab('cheats'); // re-render to show preview + toggle custom inputs
+  },
+
+  applyCustomGradient() {
+    const a = document.getElementById('admin-custom-color-a')?.value || '#ff0080';
+    const b = document.getElementById('admin-custom-color-b')?.value || '#0080ff';
+    this.chatColor = 'custom:' + a + ':' + b;
+    this.setTab('cheats');
+  },
+
+  // Returns an HTML span with the correct gradient/color style applied to text
+  _adminChatColorStyle(colorId, text) {
+    if (!colorId) return text;
+    const GRADIENTS = {
+      fire:          'linear-gradient(90deg,#ff6d00,#ff1744,#ffd740)',
+      ice:           'linear-gradient(90deg,#00e5ff,#448aff,#b2ebf2)',
+      gold_gradient: 'linear-gradient(90deg,#ffd740,#ffe57f,#ff9800)',
+      neon:          'linear-gradient(90deg,#76ff03,#00e5ff,#e040fb)',
+      royal:         'linear-gradient(90deg,#9c27b0,#e040fb,#ffd740)',
+      blood:         'linear-gradient(90deg,#b71c1c,#ff1744,#ff8a80)',
+      midnight:      'linear-gradient(90deg,#1a237e,#7b1fa2,#00e5ff)',
+      rainbow:       'linear-gradient(90deg,#ff0,#f0f,#0ff,#0f0,#f80)',
+    };
+    if (colorId.startsWith('custom:')) {
+      const [, a, b] = colorId.split(':');
+      const grad = `linear-gradient(90deg,${a},${b})`;
+      return `<span style="background:${grad};-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:700">${text}</span>`;
+    }
+    const grad = GRADIENTS[colorId];
+    if (grad) {
+      return `<span style="background:${grad};-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:700">${text}</span>`;
+    }
+    // Fallback: plain hex
+    return `<span style="color:${colorId};font-weight:700">${text}</span>`;
+  },
+
+  getAdminChatColor() {
+    return this.isAdmin() ? this.chatColor : null;
   },
 
   // Revoke admin if name changes away from RetroByte

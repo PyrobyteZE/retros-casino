@@ -526,9 +526,12 @@ const Firebase = {
 
     const name = typeof Settings !== 'undefined' ? Settings.profile.name : 'Player';
     const avatar = typeof Settings !== 'undefined' ? Settings.avatars[Settings.profile.avatar] : '';
-    const chatColor = (typeof Vanity !== 'undefined' && Vanity._activeChatColor && Vanity._activeChatColor.expiresAt > Date.now())
+    // Admin color takes priority over vanity color
+    const adminColor = typeof Admin !== 'undefined' ? Admin.getAdminChatColor() : null;
+    const vanityColor = (typeof Vanity !== 'undefined' && Vanity._activeChatColor && Vanity._activeChatColor.expiresAt > Date.now())
       ? Vanity._activeChatColor.hex
       : null;
+    const chatColor = adminColor || vanityColor || null;
     const msg = {
       uid: this.uid,
       name,
@@ -889,10 +892,26 @@ const Firebase = {
         : '';
       let chatTextHtml;
       if (m.chatColor) {
-        if (m.chatColor === 'rainbow') {
-          chatTextHtml = `<span style="background:linear-gradient(90deg,#ff0,#f0f,#0ff,#0f0,#f80);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${this._escapeHtml(m.text || '')}</span>`;
+        const CHAT_GRADIENTS = {
+          rainbow:       'linear-gradient(90deg,#ff0,#f0f,#0ff,#0f0,#f80)',
+          fire:          'linear-gradient(90deg,#ff6d00,#ff1744,#ffd740)',
+          ice:           'linear-gradient(90deg,#00e5ff,#448aff,#b2ebf2)',
+          gold_gradient: 'linear-gradient(90deg,#ffd740,#ffe57f,#ff9800)',
+          neon:          'linear-gradient(90deg,#76ff03,#00e5ff,#e040fb)',
+          royal:         'linear-gradient(90deg,#9c27b0,#e040fb,#ffd740)',
+          blood:         'linear-gradient(90deg,#b71c1c,#ff1744,#ff8a80)',
+          midnight:      'linear-gradient(90deg,#1a237e,#7b1fa2,#00e5ff)',
+        };
+        const safeText = this._escapeHtml(m.text || '');
+        let grad = CHAT_GRADIENTS[m.chatColor];
+        if (!grad && m.chatColor.startsWith('custom:')) {
+          const parts = m.chatColor.split(':');
+          if (parts[1] && parts[2]) grad = `linear-gradient(90deg,${parts[1]},${parts[2]})`;
+        }
+        if (grad) {
+          chatTextHtml = `<span style="background:${grad};-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:700">${safeText}</span>`;
         } else {
-          chatTextHtml = `<span style="color:${m.chatColor}">${this._escapeHtml(m.text || '')}</span>`;
+          chatTextHtml = `<span style="color:${m.chatColor}">${safeText}</span>`;
         }
       } else {
         chatTextHtml = this._escapeHtml(m.text || '');
