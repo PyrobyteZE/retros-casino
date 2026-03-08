@@ -49,7 +49,7 @@ public class MainActivity extends Activity {
         webView.setWebChromeClient(new WebChromeClient());
         webView.setBackgroundColor(0xFF0f0f1a);
 
-        webView.loadUrl("file:///android_asset/index.html");
+        webView.loadUrl("https://pyrobyteze.github.io/retros-casino/");
     }
 
     @Override

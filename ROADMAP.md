@@ -33,10 +33,10 @@
 - [x] **Crypto Mining** — passive income with GPU rigs
 - [x] **Player-Influenced Economy** — large buy/sell orders move prices
 - [x] **Stock Insider Knowledge** — VIP 10+ tips with accuracy/cost
-- [x] **Wealth Tax** — 0.1% every 60s on balances over $1T
+- [x] **Wealth Tax** — 0.5–5%/day progressive on balances $1B+; rebirth discount; god mode immune
 - [x] **Admin price control** — gradual stock/crypto price manipulation
-- [ ] **Black Market** — buy/sell rare items
-- [ ] **Auction House** — bid on exclusive upgrades
+- [x] **Black Market** — crime tab with dirty money currency, rotating daily items, temp boosts
+- [x] **Auction House** — bid on items/cars/cash; anti-snipe; auto prize delivery
 
 ## v1.4 - Progression (DONE)
 - [x] **Rebirth system** — VIP levels, multiplier (linear +0.5x, cap 5x)
@@ -230,38 +230,16 @@
 
 ---
 
-## v2.3 - Black Market & Auction House
-
-### Black Market
-- [ ] **Black Market** — hidden shop unlocked at rebirth 5+
-  - Accessible from Crime screen; costs *dirty money* (separate currency earned only via crime)
-  - Inventory rotates every 24h; limited stock (3–10 units per item)
-  - Item types:
-    - 🔫 Stolen goods — crafting items with boosted stats, untraceable
-    - 🚗 Hot cars — rare car categories not available in the NPC garage
-    - 💊 Performance stims — temporary crime/income multipliers (4–12 hr)
-    - 📄 Forged docs — permanently boosts credit score or reduces crime detection
-    - 🐾 Exotic pets — rare pets not in the standard gacha pool
-  - Risk: each purchase has a 5–15% police audit chance based on item tier
-    - Audit: pay fine (20% of purchase price) OR lose the item
-  - Firebase path: `blackMarket/listings` — authority client rotates inventory on timer
-
-### Auction House
-- [ ] **Auction House** — list and bid on rare items, cards, cars, pets
-  - Any player can list: set starting bid + optional buy-now price + duration (6/12/24/48 hr)
-  - Anti-sniping: bid placed in last 5 min extends auction by 5 min (max 3 extensions)
-  - Seller gets funds automatically on auction end via sale receipt system
-  - Loser bids are refunded instantly
-  - Categories: Items, Cars, Pets, Cards, Houses (filterable)
-  - Featured slot: admin can pin 1–3 auctions to the top (exclusive drops, events)
-  - Firebase path: `auctionHouse/[auctionId]` with `endsAt`, `highBid`, `highBidderUid`, `bids[]`
+## v2.3 - Black Market & Auction House (DONE)
+- [x] **Black Market** — crime tab, dirty money currency (10% of crime income), 5 rotating daily items with temp boosts
+- [x] **Auction House** — list items/cars/cash, atomic bidding, anti-snipe extension, auto prize delivery via Firebase
 
 ---
 
 ## v2.4 - Collectible Cards & Seasonal Events
 
 ### NFT-style Collectible Cards (fake, in-game only)
-- [ ] **Casino Cards** — pixel-art collectible cards, no real value, fully in-game
+- [x] **Casino Cards** — collectible cards, no real value, fully in-game
   - Rarities: Common (grey), Rare (blue), Epic (purple), Legendary (gold), Mythic (holographic)
   - Each card has: pixel art face, flavor text, unique serial # (e.g. #0042/1000), stat bonus
   - Stat bonuses (passive while card is equipped in a loadout slot):

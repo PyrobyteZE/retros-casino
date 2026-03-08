@@ -7,6 +7,20 @@ const Crime = {
   raidTimer: null,
   tickInterval: null,
   initialized: false,
+  _dirtyMoney: 0,
+  _bmTab: false,      // showing black market tab
+  _bmBoosts: {},      // { [effect]: { exp, value } }
+
+  _BM_ITEMS: [
+    { id: 'bm_luck',    name: 'Lucky Horseshoe',  icon: '🍀', cost: 5000,   desc: '+25% gambling luck for 1 hour',    effect: 'luckBoost',   value: 0.25, dur: 3600000 },
+    { id: 'bm_crime',   name: 'Police Scanner',   icon: '📡', cost: 10000,  desc: '+50% crime income for 30 min',     effect: 'crimeBoost',  value: 0.50, dur: 1800000 },
+    { id: 'bm_income',  name: 'Money Printer',    icon: '🖨️', cost: 15000,  desc: '+20% all income for 45 min',      effect: 'incomeBoost', value: 0.20, dur: 2700000 },
+    { id: 'bm_raid',    name: 'Police Bribe',     icon: '💵', cost: 8000,   desc: 'Instantly dismisses active raid',  effect: 'clearRaid',   value: 0,    dur: 0 },
+    { id: 'bm_shield',  name: 'Firewall Kit',     icon: '🛡️', cost: 7000,   desc: 'No raids for 30 minutes',         effect: 'raidShield',  value: 1,    dur: 1800000 },
+    { id: 'bm_slots',   name: 'Rigged Dice',      icon: '🎲', cost: 12000,  desc: '+30% slots bonus for 1 hour',     effect: 'slotsBoost',  value: 0.30, dur: 3600000 },
+    { id: 'bm_stock',   name: 'Inside Info',      icon: '📊', cost: 20000,  desc: '+15% stock returns for 2 hours',  effect: 'stocksBoost', value: 0.15, dur: 7200000 },
+    { id: 'bm_rebirth', name: 'Shadow Chip',      icon: '♻️', cost: 50000,  desc: '+10% rebirth mult for 2 hours',   effect: 'rebirthBoost',value: 0.10, dur: 7200000 },
+  ],
 
   paths: {
     counterfeiting: {
@@ -86,7 +100,10 @@ const Crime = {
     }
 
     const income = this.getTotalIncome();
-    if (income > 0) App.addBalance(income);
+    if (income > 0) {
+      App.addBalance(income);
+      this._dirtyMoney += income * 0.10; // 10% of crime income becomes dirty money
+    }
 
     const el = document.getElementById('crime-total-income');
     if (el) el.textContent = App.formatMoney(income) + '/s';
@@ -148,6 +165,10 @@ const Crime = {
     path.upgrades.forEach(upg => {
       if (this._upgrades[upg.id]) total += upg.income;
     });
+    // Black market crime boost
+    if (this._bmBoosts.crimeBoost && Date.now() < this._bmBoosts.crimeBoost.exp) {
+      total *= (1 + this._bmBoosts.crimeBoost.value);
+    }
     const rebirthMult = typeof Clicker !== 'undefined' ? Clicker.getEarningsMultiplier() : 1;
     const petsMult = typeof Pets !== 'undefined' ? Pets.getBoosts().incomeMult : 1;
     const boosts = typeof App !== 'undefined' ? App.getAllBoosts() : {};
@@ -174,6 +195,8 @@ const Crime = {
 
   getRaidMult() {
     if (!this._path) return 1;
+    // Black market raid shield
+    if (this._bmBoosts.raidShield && Date.now() < this._bmBoosts.raidShield.exp) return 100; // effectively no raids
     let mult = 1;
     this.paths[this._path].upgrades.forEach(upg => {
       if (this._upgrades[upg.id] && upg.raidMult) mult *= upg.raidMult;
@@ -282,6 +305,94 @@ const Crime = {
     }
   },
 
+  // ── Black Market ──────────────────────────────────────────────────────────
+
+  getBmBoosts() {
+    const now = Date.now();
+    const out = {};
+    const b = this._bmBoosts;
+    let em = 0;
+    if (b.incomeBoost && now < b.incomeBoost.exp)   em += b.incomeBoost.value;
+    if (b.rebirthBoost && now < b.rebirthBoost.exp) em += b.rebirthBoost.value;
+    if (em > 0) out.earningsMult = em;
+    if (b.luckBoost && now < b.luckBoost.exp)     out.luckBoost = b.luckBoost.value;
+    if (b.slotsBoost && now < b.slotsBoost.exp)   out.slotsBonus = b.slotsBoost.value;
+    if (b.stocksBoost && now < b.stocksBoost.exp) out.stocksBonus = b.stocksBoost.value;
+    return out;
+  },
+
+  _hash(str) {
+    let h = 5381;
+    for (let i = 0; i < str.length; i++) h = ((h << 5) + h) ^ str.charCodeAt(i);
+    return h >>> 0;
+  },
+
+  _getBlackMarketItems() {
+    const day = Math.floor(Date.now() / 86400000);
+    return [...this._BM_ITEMS].sort((a, b) => this._hash(a.id + day) - this._hash(b.id + day)).slice(0, 5);
+  },
+
+  buyBlackMarketItem(idx) {
+    const items = this._getBlackMarketItems();
+    const item = items[idx];
+    if (!item) return;
+    if (this._dirtyMoney < item.cost) {
+      if (typeof Toast !== 'undefined') Toast.show('Not enough dirty money!', '#f44336', 3000);
+      return;
+    }
+    this._dirtyMoney -= item.cost;
+
+    if (item.effect === 'clearRaid') {
+      if (this.raid) this.raid.active = false;
+      if (typeof Toast !== 'undefined') Toast.show('🛡️ Raid dismissed!', '#4caf50', 3000);
+    } else {
+      this._bmBoosts[item.effect] = { exp: Date.now() + item.dur, value: item.value };
+      if (typeof Toast !== 'undefined') Toast.show('🛒 ' + item.name + ' activated!', '#bb86fc', 3000);
+    }
+    App.save();
+    this.render();
+  },
+
+  _renderBlackMarket() {
+    const items = this._getBlackMarketItems();
+    const now = Date.now();
+    const activeBoosts = Object.entries(this._bmBoosts)
+      .filter(([, v]) => now < v.exp)
+      .map(([k, v]) => {
+        const remaining = Math.ceil((v.exp - now) / 60000);
+        return `<div class="bm-active-boost">${k}: ${remaining}m left</div>`;
+      }).join('');
+
+    const itemsHtml = items.map((item, idx) => {
+      const canAfford = this._dirtyMoney >= item.cost;
+      const isActive = item.effect !== 'clearRaid' && this._bmBoosts[item.effect] && now < this._bmBoosts[item.effect].exp;
+      return `
+        <div class="bm-item${isActive ? ' bm-item-active' : ''}">
+          <div class="bm-item-icon">${item.icon}</div>
+          <div class="bm-item-info">
+            <div class="bm-item-name">${item.name}</div>
+            <div class="bm-item-desc">${item.desc}</div>
+          </div>
+          <div class="bm-item-action">
+            <div class="bm-item-cost">🤑 ${App.formatMoney(item.cost)}</div>
+            <button class="bm-buy-btn${canAfford ? '' : ' unaffordable'}" ${isActive ? 'disabled' : ''} onclick="Crime.buyBlackMarketItem(${idx})">
+              ${isActive ? 'Active' : 'Buy'}
+            </button>
+          </div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="bm-header">
+        <div class="bm-title">🕵️ Black Market</div>
+        <div class="bm-dirty-balance">Dirty Money: <strong>${App.formatMoney(this._dirtyMoney)}</strong></div>
+        <div class="bm-dirty-hint">Earn dirty money from your crime empire (10% of income). Resets daily.</div>
+      </div>
+      ${activeBoosts ? '<div class="bm-active-header">Active Boosts:</div><div class="bm-active-boosts">' + activeBoosts + '</div>' : ''}
+      <div class="bm-items">${itemsHtml}</div>
+      <div class="bm-refresh-note">Inventory refreshes daily</div>`;
+  },
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   render() {
@@ -299,7 +410,12 @@ const Crime = {
     if (!this._path) {
       grid.innerHTML = this._confirmPath ? this._renderConfirm() : this._renderPathSelect();
     } else {
-      grid.innerHTML = this._renderUpgradeTree();
+      const tabs = `
+        <div class="crime-tabs">
+          <button class="crime-tab-btn${!this._bmTab ? ' active' : ''}" onclick="Crime._bmTab=false;Crime.render()">🏴‍☠️ Empire</button>
+          <button class="crime-tab-btn${this._bmTab ? ' active' : ''}" onclick="Crime._bmTab=true;Crime.render()">🕵️ Black Market</button>
+        </div>`;
+      grid.innerHTML = tabs + (this._bmTab ? this._renderBlackMarket() : this._renderUpgradeTree());
     }
   },
 
@@ -430,13 +546,15 @@ const Crime = {
   // ── Save / Load ─────────────────────────────────────────────────────────────
 
   getSaveData() {
-    return { path: this._path, upgrades: { ...this._upgrades } };
+    return { path: this._path, upgrades: { ...this._upgrades }, dirtyMoney: this._dirtyMoney, bmBoosts: { ...this._bmBoosts } };
   },
 
   loadSaveData(data) {
     if (!data) return;
     if (data.path && this.paths[data.path]) this._path = data.path;
     if (data.upgrades && typeof data.upgrades === 'object') this._upgrades = { ...data.upgrades };
+    if (typeof data.dirtyMoney === 'number') this._dirtyMoney = data.dirtyMoney;
+    if (data.bmBoosts && typeof data.bmBoosts === 'object') this._bmBoosts = { ...data.bmBoosts };
   },
 
   // ── Admin ────────────────────────────────────────────────────────────────────

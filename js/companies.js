@@ -2124,10 +2124,17 @@ const Companies = {
                 html += `<button class="add-stock-btn" style="color:var(--accent);border-color:var(--accent)" onclick="Companies.enableSubStockNewsOrg(${cIdx},${drillSIdx})">Enable News Org — Free</button>`;
               } else {
                 const rep = subOrg.reputation || 50;
-                html += `<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">Reputation: <strong style="color:${rep>=50?'var(--green)':'var(--red)'}">${Math.round(rep)}/100</strong></div>
+                const nudgeInfo = rep<=25?'±2% nudge, 40% backfire':rep<=50?'±4% nudge, 20% backfire':rep<=75?'±6% nudge, 10% backfire':'±8% nudge, 3% backfire';
+                html += `<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">Reputation: <strong style="color:${rep>=50?'var(--green)':'var(--red)'}">${Math.round(rep)}/100</strong> <span style="font-size:10px">(${nudgeInfo})</span></div>
                   <input id="news-headline-sub-${cIdx}-${drillSIdx}" maxlength="100" placeholder="Headline (required)" style="width:100%;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);padding:8px;font-size:14px;font-weight:600;box-sizing:border-box;margin-bottom:6px">
                   <textarea id="news-body-sub-${cIdx}-${drillSIdx}" maxlength="300" placeholder="Body text (optional)" style="width:100%;height:58px;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);padding:8px;font-size:13px;resize:none;box-sizing:border-box"></textarea>
-                  <button class="company-found-btn" style="margin-top:6px;padding:8px 20px" onclick="Companies.postSubStockNews(${cIdx},${drillSIdx})">\u{1F4E2} Publish</button>`;
+                  <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+                    <select id="news-dir-sub-${cIdx}-${drillSIdx}" style="background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);padding:6px 8px;font-size:12px">
+                      <option value="boost">📈 Boost</option>
+                      <option value="hit">📉 Hit Piece</option>
+                    </select>
+                    <button class="company-found-btn" style="flex:1;padding:8px 12px" onclick="Companies.postSubStockNews(${cIdx},${drillSIdx})">\u{1F4E2} Publish</button>
+                  </div>`;
               }
               html += `</div>`;
             }
@@ -2624,6 +2631,12 @@ const Companies = {
     if (!headline) { Toast.show('Enter a headline', '#ff5252'); return; }
     const bodyEl = document.getElementById(bodyInputId);
     const body = bodyEl ? bodyEl.value.trim().slice(0, 300) : '';
+
+    // Read boost/hitpiece direction if toggle present
+    const dirToggleId = headlineInputId.replace('news-headline-', 'news-dir-');
+    const dirEl = document.getElementById(dirToggleId);
+    const direction = dirEl ? (dirEl.value === 'hit' ? -1 : 1) : 1;
+
     Firebase.postNewsArticle(myUid, {
       headline, body, ts: Date.now(), upvotes: 0, downvotes: 0,
       authorName: typeof Settings !== 'undefined' ? Settings.profile.name : 'Player',
@@ -2632,7 +2645,53 @@ const Companies = {
       headlineEl.value = '';
       if (bodyEl) bodyEl.value = '';
       Toast.show('\u{1F4F0} Published!', '#27ae60', 3000);
+      // Apply stock price nudge for any ticker-specific entityKey
+      const isPlayerTicker = Object.values(this._allPlayerStocks || {}).some(s => s.symbol === entityKey);
+      const isSystemTicker = (typeof Stocks !== 'undefined') && Stocks.stocks && Stocks.stocks.some(s => s.symbol === entityKey);
+      if (isPlayerTicker || isSystemTicker) {
+        this._applyNewsNudge(entityKey, direction, myUid);
+      }
     });
+  },
+
+  _applyNewsNudge(symbol, direction, posterUid) {
+    // Get poster's news org reputation for this symbol or any of their symbols
+    const myUid = posterUid || (typeof Firebase !== 'undefined' ? Firebase.uid : null);
+    const myOrgs = myUid && this._newsOrgs ? (this._newsOrgs[myUid] || {}) : {};
+    const org = myOrgs[symbol] || Object.values(myOrgs).find(o => o.enabled);
+    const rep = org ? (org.reputation || 50) : 30;
+
+    // Reputation → magnitude + backfire chance
+    let maxPct, backfireChance;
+    if (rep <= 25)      { maxPct = 0.02; backfireChance = 0.40; }
+    else if (rep <= 50) { maxPct = 0.04; backfireChance = 0.20; }
+    else if (rep <= 75) { maxPct = 0.06; backfireChance = 0.10; }
+    else                { maxPct = 0.08; backfireChance = 0.03; }
+
+    const magnitude = (rep / 100) * maxPct;
+    const backfires = Math.random() < backfireChance;
+    const effectDir = backfires ? -direction : direction;
+    const targetSymbol = backfires ? this._mainCompanyTicker || symbol : symbol;
+
+    // Apply to in-memory stock
+    const stock = this._allPlayerStocks[targetSymbol];
+    if (stock) {
+      stock.price = Math.max(0.01, stock.price * (1 + magnitude * effectDir));
+      if (typeof Firebase !== 'undefined' && Firebase.isOnline()) {
+        Firebase.pushTradeInfluence(targetSymbol, effectDir, magnitude);
+      }
+    } else if (typeof Stocks !== 'undefined') {
+      // System stock nudge
+      const sysStock = Stocks.stocks.find(s => s.symbol === targetSymbol);
+      if (sysStock) sysStock.price = Math.max(0.01, sysStock.price * (1 + magnitude * effectDir * 0.3)); // weaker on system stocks
+    }
+
+    if (backfires) {
+      Toast.show('📰 Backfire! Low credibility turned the story against you.', '#f44336', 5000);
+    } else {
+      const pct = (magnitude * Math.abs(effectDir) * 100).toFixed(1);
+      Toast.show(`📰 News ${direction > 0 ? 'boosted' : 'hit'} ${targetSymbol} by ${pct}%`, '#27ae60', 4000);
+    }
   },
 
   postNews(cIdx) {
@@ -2653,6 +2712,7 @@ const Companies = {
     const myOrg = this._getMyOrg(s.symbol);
     if (!myOrg || !myOrg.enabled) { Toast.show('Enable News Org first', '#ff5252'); return; }
     this._doPostNews(Firebase.uid, s.symbol, 'news-headline-sub-' + cIdx + '-' + sIdx, 'news-body-sub-' + cIdx + '-' + sIdx);
+    // Note: direction is read from news-dir-sub-${cIdx}-${sIdx} inside _doPostNews
   },
 
   setNewsOrgLogo(entityKey, logo) {

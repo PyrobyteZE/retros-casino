@@ -24,20 +24,24 @@
   <div id="app">
     <!-- Top Bar -->
     <header id="top-bar">
-      <button id="hamburger-btn" class="hamburger-btn" onclick="App.toggleDrawer()">&#9776;</button>
-      <button id="back-btn" class="hidden" onclick="App.goBack()">&larr;</button>
-      <h1 id="page-title" onclick="Admin.tapTitle()">Retro's Casino</h1>
-      <div id="admin-indicator" class="hidden" onclick="Admin.open()">ADM</div>
-      <div id="profile-display" class="profile-display"></div>
-      <div id="vip-level" class="hidden">VIP 0</div>
-      <div id="debt-badge" class="hidden">-$0</div>
-      <div id="hunger-hud" class="hunger-hud" onclick="Food.openShop()" title="Hunger — tap to eat">
-        &#x1F357; <div class="hunger-bar-wrap"><div id="hunger-bar"></div></div>
-        <span id="hunger-pct">100%</span>
+      <div class="top-bar-row1">
+        <button id="hamburger-btn" class="hamburger-btn" onclick="App.toggleDrawer()">&#9776;</button>
+        <button id="back-btn" class="hidden" onclick="App.goBack()">&larr;</button>
+        <h1 id="page-title" onclick="Admin.tapTitle()">Retro's Casino</h1>
+        <div id="balance-display">$<span id="balance">0</span></div>
       </div>
-      <div id="online-badge" class="online-badge" onclick="Firebase.toggleOnlinePanel()"></div>
-      <button id="chat-toggle-btn-bar" class="chat-toggle-btn-bar" onclick="Firebase.toggleChat()" title="Chat">&#x1F4AC;<span id="chat-unread-bar"></span></button>
-      <div id="balance-display">$<span id="balance">0</span></div>
+      <div class="top-bar-row2">
+        <div id="admin-indicator" class="hidden" onclick="Admin.open()">ADM</div>
+        <div id="profile-display" class="profile-display"></div>
+        <div id="vip-level" class="hidden">VIP 0</div>
+        <div id="debt-badge" class="hidden">-$0</div>
+        <div id="hunger-hud" class="hunger-hud" onclick="Food.openShop()" title="Hunger — tap to eat">
+          &#x1F357; <div class="hunger-bar-wrap"><div id="hunger-bar"></div></div>
+          <span id="hunger-pct">100%</span>
+        </div>
+        <div id="online-badge" class="online-badge" onclick="Firebase.toggleOnlinePanel()"></div>
+        <button id="chat-toggle-btn-bar" class="chat-toggle-btn-bar" onclick="Firebase.toggleChat()" title="Chat">&#x1F4AC;<span id="chat-unread-bar"></span></button>
+      </div>
     </header>
 
     <!-- Stock Ticker -->
@@ -591,6 +595,27 @@
         </div>
       </section>
 
+      <!-- Card Collection -->
+      <section id="screen-cards" class="screen">
+        <div class="game-container">
+          <div id="cards-content"></div>
+        </div>
+      </section>
+
+      <!-- Foundation / Donation Lottery -->
+      <section id="screen-donation" class="screen">
+        <div class="game-container">
+          <div id="donation-content"></div>
+        </div>
+      </section>
+
+      <!-- Auction House -->
+      <section id="screen-auction" class="screen">
+        <div class="game-container">
+          <div id="auction-content"></div>
+        </div>
+      </section>
+
       <!-- Shops -->
       <section id="screen-stores" class="screen">
         <div class="game-container">
@@ -759,6 +784,9 @@
   <script src="js/cars.js"></script>
   <script src="js/banking.js"></script>
   <script src="js/stores.js"></script>
+  <script src="js/cards.js"></script>
+  <script src="js/donation.js"></script>
+  <script src="js/auction.js"></script>
   <script src="js/events.js"></script>
   <script src="js/gamerooms.js"></script>
   <script src="js/firebase.js"></script>
