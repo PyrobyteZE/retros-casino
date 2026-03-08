@@ -49,6 +49,17 @@ const Cards = {
   CARD_ARTS: ['🎲', '🃏', '🎰', '💎', '🍀', '⚡', '🚀', '🌙', '🦈', '🔮',
               '💰', '🎯', '🕵️', '💻', '🏆', '🎭', '🌟', '🔑', '🎪', '🌊'],
 
+  CARD_SETS: [
+    { id: 'casino',  name: '🎰 Casino Royale',  cards: ['The Ace', 'Wild Card', 'Royal Flush', 'Loaded Dice', 'House Edge'],   reward: 10_000_000,  rewardCard: { name: 'Dealer\'s Crown', art: '👑', rarity: 'legendary' } },
+    { id: 'crime',   name: '🕵️ Crime Empire',   cards: ['Crime Lord', 'The Hacker', 'Shadow Broker', 'The Syndicate', 'Vault Key'], reward: 15_000_000, rewardCard: { name: 'Master Criminal', art: '🗡️', rarity: 'legendary' } },
+    { id: 'market',  name: '📈 Market Masters',  cards: ['Market Bull', 'Black Swan', 'Moonshot', 'Phantom Trade', 'The Algorithm'], reward: 20_000_000, rewardCard: { name: 'Market Oracle', art: '🔮', rarity: 'legendary' } },
+    { id: 'street',  name: '🌃 Street Legends',  cards: ['Night Owl', 'Dark Horse', 'Lucky Break', 'Fortune Cookie', 'One Time'], reward: 8_000_000, rewardCard: { name: 'Street King', art: '🌃', rarity: 'legendary' } },
+    { id: 'chaos',   name: '💥 Chaos Theory',    cards: ['Chaos Theory', 'Rug Pull', 'Glitch God', 'All In', 'Golden Ticket'], reward: 25_000_000, rewardCard: { name: 'Chaos God', art: '💥', rarity: 'mythic' } },
+    { id: 'cosmos',  name: '🌌 Cosmic Whales',   cards: ['The Oracle', 'Neon Ghost', 'Whale Watch', 'Jackpot', 'Iron Will'], reward: 30_000_000, rewardCard: { name: 'Cosmic Whale', art: '🌌', rarity: 'mythic' } },
+  ],
+
+  _completedSets: [],   // array of set ids already completed
+
   FLAVOR_TEXT: [
     'Fortune favors the bold.',          'The house always wins... usually.',
     'In chaos lies opportunity.',         'One bet changes everything.',
@@ -79,9 +90,10 @@ const Cards = {
   _cards: {},        // { [cardId]: cardData } — local mirror of Firebase
   _equipped: [],     // Array of 3 cardIds or nulls [ null, null, null ]
   _initialized: false,
-  _tab: 'collection', // 'collection' | 'shop'
+  _tab: 'collection', // 'collection' | 'shop' | 'binder'
   _selectedCard: null,
   _packResult: null, // last pack open result
+  _binderIdx: 0,
 
   get _db() { return typeof Firebase !== 'undefined' && Firebase.isOnline() ? Firebase.db : null; },
   get _uid() { return typeof Firebase !== 'undefined' ? Firebase.uid : null; },
@@ -148,6 +160,7 @@ const Cards = {
       }
     }
 
+    this._checkSets();
     App.save();
     this._tab = 'collection';
     this._render();
@@ -161,7 +174,7 @@ const Cards = {
     const name = this.CARD_NAMES[Math.floor(Math.random() * this.CARD_NAMES.length)];
     const art = this.CARD_ARTS[Math.floor(Math.random() * this.CARD_ARTS.length)];
     const flavor = this.FLAVOR_TEXT[Math.floor(Math.random() * this.FLAVOR_TEXT.length)];
-    const serial = Math.floor(Math.random() * 9999) + 1;
+    const serial = Math.floor(Math.random() * 999) + 1;
     const id = 'card_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
     return { id, name, art, flavor, rarity, statType, statValue, serial, obtainedAt: Date.now() };
   },
@@ -239,13 +252,19 @@ const Cards = {
   },
 
   getSaveData() {
-    return { equipped: [...(this._equipped || [null, null, null])] };
+    return {
+      equipped: [...(this._equipped || [null, null, null])],
+      completedSets: [...(this._completedSets || [])],
+      binderIdx: this._binderIdx || 0,
+    };
   },
 
   loadSaveData(data) {
     if (!data) return;
     if (Array.isArray(data.equipped)) this._equipped = data.equipped.slice(0, 3);
     while (this._equipped.length < 3) this._equipped.push(null);
+    if (Array.isArray(data.completedSets)) this._completedSets = data.completedSets;
+    if (typeof data.binderIdx === 'number') this._binderIdx = data.binderIdx;
   },
 
   _render() {
@@ -253,6 +272,25 @@ const Cards = {
     if (!el) return;
     const focused = document.activeElement;
     if (focused && el.contains(focused) && focused.tagName === 'INPUT') return;
+    // Inject binder CSS once
+    if (!document.querySelector('style[data-cards-binder]')) {
+      const style = document.createElement('style');
+      style.setAttribute('data-cards-binder', '1');
+      style.textContent = `
+.cards-binder { padding: 8px; }
+.cards-binder-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.cards-binder-nav button { padding: 6px 14px; background: var(--bg3, #252540); color: var(--text); border: 1px solid var(--border, #252540); border-radius: 6px; cursor: pointer; font-size: 13px; }
+.cards-binder-nav button:disabled { opacity: 0.3; cursor: default; }
+.cards-binder-card { border-radius: 12px; padding: 16px; text-align: center; background: var(--card, #1a1a2e); margin: 0 auto; max-width: 260px; min-height: 300px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.cards-binder-art { font-size: 64px; margin: 8px 0; }
+.cards-binder-name { font-size: 18px; font-weight: 800; }
+.cards-binder-serial { font-size: 11px; }
+.cards-binder-stat { font-size: 14px; font-weight: 700; color: var(--green); }
+.cards-binder-flavor { font-size: 11px; color: var(--text-dim); font-style: italic; margin-top: 4px; }
+.cards-binder-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 12px; }
+      `;
+      document.head.appendChild(style);
+    }
     el.innerHTML = this._buildHtml();
   },
 
@@ -261,6 +299,7 @@ const Cards = {
       <div class="cards-tabs">
         <button class="cards-tab${this._tab === 'collection' ? ' active' : ''}" onclick="Cards._tab='collection';Cards._render()">🃏 Collection (${Object.keys(this._cards).length})</button>
         <button class="cards-tab${this._tab === 'shop' ? ' active' : ''}" onclick="Cards._tab='shop';Cards._render()">📦 Pack Shop</button>
+        <button class="cards-tab${this._tab === 'binder' ? ' active' : ''}" onclick="Cards._tab='binder';Cards._binderIdx=0;Cards._render()">📖 Binder</button>
       </div>`;
 
     if (this._packResult) {
@@ -269,6 +308,7 @@ const Cards = {
     }
 
     if (this._tab === 'shop') return tabs + this._renderShop();
+    if (this._tab === 'binder') return tabs + this._renderBinder();
     return tabs + this._renderCollection();
   },
 
@@ -366,7 +406,7 @@ const Cards = {
         <div class="cards-detail-art">${card.art}</div>
         <div class="cards-detail-info">
           <div class="cards-detail-name" style="color:${this.RARITY_COLORS[card.rarity]}">${this._esc(card.name)}</div>
-          <div class="cards-detail-rarity">${card.rarity.toUpperCase()} #${card.serial}</div>
+          <div class="cards-detail-rarity">${card.rarity.toUpperCase()} · #${String(card.serial).padStart(3,'0')}/1000</div>
           <div class="cards-detail-stat">+${Math.round(card.statValue * 100)}% ${this.STAT_LABELS[card.statType]}</div>
           <div class="cards-detail-flavor">${this._esc(card.flavor)}</div>
         </div>
@@ -388,6 +428,7 @@ const Cards = {
     return `
       <div class="cards-card${selected ? ' selected' : ''}${large ? ' large' : ''}${isEquipped ? ' equipped' : ''}"
            style="border-color:${col}"
+           title="#${String(card.serial).padStart(3,'0')}/1000"
            onclick="Cards.selectCard('${card.id}')">
         <div class="cards-card-rarity" style="background:${col}">${card.rarity[0].toUpperCase()}</div>
         <div class="cards-card-art">${card.art}</div>
@@ -396,6 +437,123 @@ const Cards = {
         <div class="cards-card-type">${this.STAT_LABELS[card.statType]}</div>
         ${isEquipped ? '<div class="cards-card-equipped-badge">E</div>' : ''}
       </div>`;
+  },
+
+  _checkSets() {
+    const ownedNames = new Set(Object.values(this._cards).map(c => c.name));
+    for (const set of this.CARD_SETS) {
+      if (this._completedSets.includes(set.id)) continue;
+      const complete = set.cards.every(name => ownedNames.has(name));
+      if (!complete) continue;
+      this._completedSets.push(set.id);
+      // Grant cash reward
+      App.addBalance(set.reward);
+      // Grant the reward card
+      const bonus = this._generateCard(null);
+      bonus.rarity = set.rewardCard.rarity;
+      bonus.name = set.rewardCard.name;
+      bonus.art = set.rewardCard.art;
+      const [minV, maxV] = this.STAT_RANGES[bonus.rarity];
+      bonus.statValue = Math.round((minV + Math.random() * (maxV - minV)) * 1000) / 1000;
+      bonus.id = 'set_reward_' + set.id + '_' + Date.now().toString(36);
+      bonus.setReward = true;
+      bonus.flavor = 'Awarded for completing the ' + set.name + ' set.';
+      this._cards[bonus.id] = bonus;
+      if (this._db && this._uid) this._db.ref('playerCards/' + this._uid + '/' + bonus.id).set(bonus);
+      Toast.show('🃏 Set Complete! ' + set.name + ' — +' + App.formatMoney(set.reward) + ' + Bonus Card!', '#ffd740', 7000);
+      App.save();
+    }
+  },
+
+  _renderBinder() {
+    const cards = Object.values(this._cards).sort((a, b) => {
+      return this.RARITIES.indexOf(b.rarity) - this.RARITIES.indexOf(a.rarity) || b.obtainedAt - a.obtainedAt;
+    });
+    if (!cards.length) return '<div class="cards-empty">No cards in binder yet.</div>';
+
+    const idx = Math.max(0, Math.min(this._binderIdx, cards.length - 1));
+    this._binderIdx = idx;
+    const card = cards[idx];
+    const col = this.RARITY_COLORS[card.rarity];
+    const isEquipped = this._equipped && this._equipped.includes(card.id);
+
+    // Find which set this card belongs to
+    const cardSet = this.CARD_SETS.find(s => s.cards.includes(card.name));
+    const setOwnedCount = cardSet ? cardSet.cards.filter(n => Object.values(this._cards).some(c => c.name === n)).length : 0;
+
+    // Set progress bars
+    const setsHtml = this.CARD_SETS.map(s => {
+      const owned = s.cards.filter(n => Object.values(this._cards).some(c => c.name === n)).length;
+      const done = this._completedSets.includes(s.id);
+      const pct = Math.round(owned / s.cards.length * 100);
+      return `<div style="margin-bottom:4px">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim)">${s.name}${done ? ' ✅' : ''} <span>${owned}/${s.cards.length}</span></div>
+        <div style="background:var(--bg3);border-radius:3px;height:4px"><div style="background:${done ? '#4caf50' : col};width:${pct}%;height:4px;border-radius:3px;transition:width 0.3s"></div></div>
+      </div>`;
+    }).join('');
+
+    const mythicStyle = card.rarity === 'mythic' ? 'background:linear-gradient(135deg,#0a0a15 0%,#1a0030 50%,#0a0a15 100%);animation:holo-shimmer 3s linear infinite;' : '';
+
+    return `
+      <style>
+      @keyframes holo-shimmer {
+        0%{box-shadow:0 0 15px ${col},inset 0 0 15px rgba(233,30,99,0.1)}
+        50%{box-shadow:0 0 30px ${col},inset 0 0 30px rgba(187,134,252,0.2)}
+        100%{box-shadow:0 0 15px ${col},inset 0 0 15px rgba(233,30,99,0.1)}
+      }
+      </style>
+      <div class="cards-binder">
+        <div class="cards-binder-nav">
+          <button onclick="Cards._binderIdx=Math.max(0,Cards._binderIdx-1);Cards._render()" ${idx===0?'disabled':''}>◀ Prev</button>
+          <span style="font-size:12px;color:var(--text-dim)">${idx+1} / ${cards.length}</span>
+          <button onclick="Cards._binderIdx=Math.min(${cards.length-1},Cards._binderIdx+1);Cards._render()" ${idx===cards.length-1?'disabled':''}>Next ▶</button>
+        </div>
+
+        <div class="cards-binder-card" style="border:2px solid ${col};${mythicStyle}">
+          <div class="cards-binder-rarity-bar" style="background:${col};color:#fff;font-size:10px;font-weight:700;text-align:center;padding:3px;letter-spacing:1px;width:100%;border-radius:8px 8px 0 0;margin:-16px -16px 0 -16px;box-sizing:content-box">${card.rarity.toUpperCase()}${card.setReward ? ' · SET REWARD' : ''}${card.seasonal ? ' · '+card.seasonal.toUpperCase() : ''}</div>
+          <div class="cards-binder-art">${card.art}</div>
+          <div class="cards-binder-name" style="color:${col}">${this._esc(card.name)}</div>
+          <div class="cards-binder-serial" style="color:var(--text-dim)">#${String(card.serial).padStart(3,'0')}/1000</div>
+          <div class="cards-binder-stat">+${Math.round(card.statValue*100)}% ${this.STAT_LABELS[card.statType]}</div>
+          <div class="cards-binder-flavor">${this._esc(card.flavor)}</div>
+          ${cardSet ? `<div style="font-size:10px;color:${col};margin-top:6px">Part of: ${cardSet.name} (${setOwnedCount}/${cardSet.cards.length})</div>` : ''}
+        </div>
+
+        <div class="cards-binder-actions">
+          ${!isEquipped ? `<select id="binder-equip-slot" style="padding:5px;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
+            <option value="0">Slot 1${this._equipped[0]?' (replace)':''}</option>
+            <option value="1">Slot 2${this._equipped[1]?' (replace)':''}</option>
+            <option value="2">Slot 3${this._equipped[2]?' (replace)':''}</option>
+          </select>
+          <button onclick="Cards.equip('${card.id}',+document.getElementById('binder-equip-slot').value)" style="padding:6px 12px;background:var(--green);color:#000;border:none;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer">Equip</button>` :
+          `<button onclick="Cards.unequip(${this._equipped.indexOf(card.id)})" style="padding:6px 12px;background:var(--bg3);color:var(--text);border:none;border-radius:6px;font-size:12px;cursor:pointer">Unequip</button>`}
+          <button onclick="Cards.sellCard('${card.id}')" style="padding:6px 12px;background:#b71c1c;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">💰 ${App.formatMoney(this.SELL_PRICES[card.rarity]||50000)}</button>
+          <button onclick="Cards.listOnAuction('${card.id}')" style="padding:6px 12px;background:#6a1b9a;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">🔨 Auction</button>
+        </div>
+
+        <div style="margin-top:16px">
+          <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--text-dim)">📚 Set Progress</div>
+          ${setsHtml}
+        </div>
+      </div>`;
+  },
+
+  grantAchievementCard(tier) {
+    // tier: 0=Bronze(common), 1=Silver(rare), 2=Gold(legendary)
+    const rarityMap = ['common', 'rare', 'legendary'];
+    const rarity = rarityMap[Math.min(tier, 2)];
+    const card = this._generateCard(null);
+    card.rarity = rarity;
+    const [minV, maxV] = this.STAT_RANGES[rarity];
+    card.statValue = Math.round((minV + Math.random() * (maxV - minV)) * 1000) / 1000;
+    card.id = 'ach_card_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,6);
+    card.achievementReward = true;
+    this._cards[card.id] = card;
+    if (this._db && this._uid) this._db.ref('playerCards/' + this._uid + '/' + card.id).set(card);
+    App.save();
+    Toast.show('🃏 Achievement Card Unlocked: ' + card.name + ' (' + rarity + ')!', this.RARITY_COLORS[rarity], 5000);
+    this._checkSets();
+    if (App.currentScreen === 'cards') this._render();
   },
 
   _esc(str) {

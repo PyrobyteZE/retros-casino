@@ -130,6 +130,10 @@ const Auction = {
         if (App.currentScreen === 'cards') Cards._render();
         Toast.show('🃏 Card received: ' + card.name + ' (' + card.rarity + ')!', Cards.RARITY_COLORS[card.rarity] || '#bb86fc', 6000);
       }
+    } else if (prize.type === 'season_trophy') {
+      if (typeof Vanity !== 'undefined' && prize.trophyRarity) Vanity.grantTrophy(prize.trophyRarity);
+      App.save();
+      Toast.show('🏆 Season trophy claimed: ' + (prize.description || 'Trophy') + '!', '#ffd740', 6000);
     }
   },
 

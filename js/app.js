@@ -159,6 +159,8 @@ const App = {
     if (amount > 0) {
       this.totalEarned = this.safeAdd(this.totalEarned, amount);
       if (typeof Tournaments !== 'undefined') Tournaments.trackEarned(amount);
+      // Track seasonal earnings
+      if (typeof Seasonal !== 'undefined') Seasonal.trackEarning(amount);
     }
     this.updateBalance();
   },
@@ -225,6 +227,7 @@ const App = {
       wheel: 'Wheel of Fortune',
       vanity: 'Vanity Shop',
       social: 'Social',
+      seasonal: 'Seasonal Events',
     };
 
     if (this.currentScreen !== name) {
@@ -275,6 +278,7 @@ const App = {
     if (name === 'wheel' && typeof Wheel !== 'undefined') Wheel.init();
     if (name === 'vanity' && typeof Vanity !== 'undefined') Vanity.init();
     if (name === 'social' && typeof Social !== 'undefined') Social.init();
+    if (name === 'seasonal' && typeof Seasonal !== 'undefined') Seasonal.init();
     // Refresh drawer nav highlight if drawer is open
     if (document.getElementById('side-drawer')?.classList.contains('open')) this._renderDrawerNav();
   },
@@ -348,6 +352,7 @@ const App = {
         { id: 'wheel', icon: '🎡', label: 'Wheel of Fortune' },
         { id: 'vanity', icon: '🎭', label: 'Vanity Shop' },
         { id: 'social', icon: '🎉', label: 'Social' },
+        { id: 'seasonal', icon: '🎃', label: 'Seasonal Events' },
         { id: 'leaderboard', icon: '🏆', label: 'Leaderboard' },
         { id: 'settings', icon: '⚙️', label: 'Settings' },
       ]},
@@ -384,7 +389,7 @@ const App = {
     { label: '📈 Markets',       screens: ['stocks','crypto','auction'] },
     { label: '🎒 Inventory',     screens: ['inventory', 'stores', 'cards'] },
     { label: '🐾 Social',        screens: ['pets','leaderboard','social'] },
-    { label: '🎡 Specials',      screens: ['wheel','vanity'] },
+    { label: '🎡 Specials',      screens: ['wheel','vanity','seasonal'] },
     { label: '🏆 Progress',      screens: ['achievements'] },
     { label: '⚙️ System',        screens: ['settings'] },
   ],
@@ -417,6 +422,7 @@ const App = {
     wheel:        { icon: '🎡', label: 'Wheel of Fortune' },
     vanity:       { icon: '🎭', label: 'Vanity Shop' },
     social:       { icon: '🎉', label: 'Social' },
+    seasonal:     { icon: '🎃', label: 'Seasonal Events' },
   },
 
   renderCasinoGrid() {
@@ -508,6 +514,7 @@ const App = {
       wheel: typeof Wheel !== 'undefined' ? Wheel.getSaveData() : null,
       vanity: typeof Vanity !== 'undefined' ? Vanity.getSaveData() : null,
       social: typeof Social !== 'undefined' ? Social.getSaveData() : null,
+      seasonal: typeof Seasonal !== 'undefined' ? Seasonal.getSaveData() : null,
       settings: typeof Settings !== 'undefined' ? {
         theme: Settings.currentTheme,
         customThemeColor: Settings.customThemeColor,
@@ -588,6 +595,7 @@ const App = {
       if (typeof Wheel !== 'undefined' && data.wheel) Wheel.loadSaveData(data.wheel);
       if (typeof Vanity !== 'undefined' && data.vanity) Vanity.loadSaveData(data.vanity);
       if (typeof Social !== 'undefined' && data.social) Social.loadSaveData(data.social);
+      if (typeof Seasonal !== 'undefined' && data.seasonal) Seasonal.loadSaveData(data.seasonal);
       // Restore settings (profile name, avatar, theme) — also mirror to settings localStorage
       // so Settings.load() stays consistent on next page load.
       if (typeof Settings !== 'undefined' && data.settings) {

@@ -9668,3 +9668,17 @@ html[data-platform="desktop"] #screen-leaderboard .game-container {
 .cards-pack-result-title { font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 12px; }
 .cards-pack-result-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .cards-pack-close-btn { width: 100%; margin-top: 16px; padding: 12px; background: var(--accent); color: #000; font-weight: 700; font-size: 14px; border: none; border-radius: var(--radius); cursor: pointer; }
+
+/* ── Seasonal Events ── */
+.season-halloween { --green: #ff6d00; --green-dark: #e65100; }
+.season-halloween #top-bar { background: linear-gradient(135deg, #1a0a00, #2d1500) !important; }
+.season-halloween .balance-display { color: #ff6d00 !important; }
+
+.season-christmas { --green: #00c853; --green-dark: #00a040; }
+.season-christmas #top-bar { background: linear-gradient(135deg, #001a0d, #003320) !important; }
+
+.season-newyear { --green: #ffd740; --green-dark: #ffc400; }
+.season-newyear #top-bar { background: linear-gradient(135deg, #1a1500, #2d2500) !important; }
+
+.season-summer { --green: #ff9800; --green-dark: #f57c00; }
+.season-summer #top-bar { background: linear-gradient(135deg, #1a0d00, #2d1a00) !important; }

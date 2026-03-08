@@ -176,7 +176,8 @@ const Crime = {
     // Hacking path gets hackingBonus on top
     const hackMult = (this._path === 'hacking') ? 1 + (boosts.hackingBonus || 0) : 1;
     // World event crime multiplier
-    const eventMult = typeof Events !== 'undefined' ? Events.getCrimeMultiplier() : 1;
+    const eventMult = (typeof Events !== 'undefined' ? Events.getCrimeMultiplier() : 1)
+      * (typeof Seasonal !== 'undefined' ? Seasonal.getCrimeMultiplier() : 1);
     return total * rebirthMult * petsMult * crimeMult * hackMult * eventMult;
   },
 

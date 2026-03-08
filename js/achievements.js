@@ -199,6 +199,8 @@ const Achievements = {
       `🏆 Achievement: ${def.icon} ${def.name} — ${tier.label}!  +${App.formatMoney(tier.reward)}`,
       '#ffd740', 5000
     );
+    // Grant a card as achievement reward
+    if (typeof Cards !== 'undefined') Cards.grantAchievementCard(tierIdx);
     // Push to leaderboard so badge count updates
     if (typeof Firebase !== 'undefined') setTimeout(() => Firebase.pushLeaderboard(), 1000);
   },

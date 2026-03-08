@@ -197,6 +197,8 @@ const Slots = {
       if (typeof App !== 'undefined' && payout > 0) {
         payout = Math.floor(payout * (1 - App.getHungerPenalty()));
       }
+      // Seasonal jackpot multiplier
+      if (typeof Seasonal !== 'undefined' && payout > 0) payout = Math.floor(payout * Seasonal.getSlotsJackpotMult());
       if (payout > 0) {
         App.addBalance(payout);
         this.showResult('Won ' + App.formatMoney(payout) + '!', 'win');

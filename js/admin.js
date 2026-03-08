@@ -591,6 +591,7 @@ const Admin = {
   },
 
   _forgeItem: null,
+  _lastMintedCard: null,
 
   _renderForgeTab() {
     const CRAFT_TYPES = typeof Crafting !== 'undefined' ? Crafting.CRAFT_TYPES : {};
@@ -700,6 +701,56 @@ const Admin = {
           <button class="admin-btn win-btn" onclick="Admin.adminGrantCardToSelf()" style="white-space:nowrap">Grant</button>
         </div>
       </div>
+      <div class="admin-section">
+        <h3>🪄 Mint Custom Card</h3>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Create a one-of-a-kind card and add to your collection or send to a player.</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <input id="af-mint-name" placeholder="Card name" style="padding:6px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:13px">
+          <div style="display:flex;gap:6px">
+            <input id="af-mint-art" placeholder="Art emoji (e.g. 🃏)" maxlength="4" style="width:80px;padding:6px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:20px;text-align:center">
+            <select id="af-mint-rarity" style="flex:1;padding:6px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:13px">
+              <option value="common">Common</option>
+              <option value="rare">Rare</option>
+              <option value="epic">Epic</option>
+              <option value="legendary">Legendary</option>
+              <option value="mythic">Mythic</option>
+            </select>
+          </div>
+          <select id="af-mint-stat" style="padding:6px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:13px">
+            <option value="earningsMult">+% Earnings</option>
+            <option value="crimeBonus">+% Crime</option>
+            <option value="slotsBonus">+% Slots</option>
+            <option value="gamblingBonus">+% Gambling</option>
+            <option value="stocksBonus">+% Stocks</option>
+            <option value="luckBoost">+% Luck</option>
+            <option value="hackingBonus">+% Hacking</option>
+            <option value="passiveIncome">+% Passive Income</option>
+          </select>
+          <input id="af-mint-stat-val" type="number" placeholder="Stat % (e.g. 50 for +50%)" step="1" min="1" max="500" style="padding:6px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:13px">
+          <input id="af-mint-flavor" placeholder="Flavor text" style="padding:6px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:13px">
+          <button class="admin-btn win-btn" onclick="Admin.adminMintCard()" style="font-size:13px">🪄 Mint to My Collection</button>
+        </div>
+      </div>
+      <div class="admin-section">
+        <h3>🎃 Seasonal Events</h3>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <select id="af-season-id" style="padding:6px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:13px">
+            <option value="halloween">🎃 Halloween</option>
+            <option value="christmas">🎄 Christmas</option>
+            <option value="newyear">🎆 New Year</option>
+            <option value="summer">☀️ Summer</option>
+          </select>
+          <div style="display:flex;gap:6px;align-items:center">
+            <label style="font-size:12px;color:var(--text-dim)">Duration (hours):</label>
+            <input id="af-season-hours" type="number" value="336" min="1" style="width:80px;padding:5px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:13px">
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="admin-btn win-btn" onclick="Admin.adminStartSeason()" style="flex:1;font-size:12px">🌍 Start Season</button>
+            <button class="admin-btn danger" onclick="Admin.adminEndSeason()" style="flex:1;font-size:12px">✖ End Season</button>
+            <button class="admin-btn" onclick="Admin.adminResolveSeason()" style="flex:1;font-size:12px">🏆 Resolve LB</button>
+          </div>
+        </div>
+      </div>
     `;
   },
 
@@ -778,8 +829,51 @@ const Admin = {
       Cards._db.ref('playerCards/' + Cards._uid + '/' + card.id).set(card);
     }
     App.save();
+    Cards._checkSets();
     Cards._render();
     Toast.show('🃏 Card granted: ' + card.name + ' (' + rarity + ')!', '#00e676', 3000);
+  },
+
+  adminMintCard() {
+    if (typeof Cards === 'undefined') return;
+    const name = document.getElementById('af-mint-name')?.value.trim() || 'Admin Card';
+    const art  = document.getElementById('af-mint-art')?.value.trim() || '🃏';
+    const rarity = document.getElementById('af-mint-rarity')?.value || 'legendary';
+    const statType = document.getElementById('af-mint-stat')?.value || 'earningsMult';
+    const statPct = parseFloat(document.getElementById('af-mint-stat-val')?.value) || 10;
+    const flavor = document.getElementById('af-mint-flavor')?.value.trim() || 'A card forged by the admin.';
+
+    const card = {
+      id: 'mint_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,6),
+      name, art, rarity, statType,
+      statValue: Math.round(statPct * 10) / 1000,  // convert % to decimal
+      serial: Math.floor(Math.random() * 999) + 1,
+      flavor,
+      obtainedAt: Date.now(),
+      adminMinted: true,
+    };
+
+    this._lastMintedCard = card;
+    Cards._cards[card.id] = card;
+    if (Cards._db && Cards._uid) Cards._db.ref('playerCards/' + Cards._uid + '/' + card.id).set(card);
+    App.save();
+    Cards._checkSets();
+    Cards._render();
+    Toast.show('🪄 Custom card minted: ' + name + '!', '#ffd740', 3000);
+  },
+
+  adminStartSeason() {
+    const seasonId = document.getElementById('af-season-id')?.value;
+    const hours = parseInt(document.getElementById('af-season-hours')?.value) || 336;
+    if (typeof Seasonal !== 'undefined') Seasonal.adminStartSeason(seasonId, hours);
+  },
+
+  adminEndSeason() {
+    if (typeof Seasonal !== 'undefined') Seasonal.adminEndSeason();
+  },
+
+  adminResolveSeason() {
+    if (typeof Seasonal !== 'undefined') Seasonal.resolveLeaderboard();
   },
 
   _renderTrollTab() {
@@ -1188,6 +1282,9 @@ const Admin = {
     } else if (cmd === 'grantItem') {
       if (!this._forgeItem) { Toast.show('No forged item — use 🔨 Forge tab first', '#ff5252', 2000); return; }
       payload.item = this._forgeItem;
+    } else if (cmd === 'sendMintedCard') {
+      if (!this._lastMintedCard) { Toast.show('Mint a card first in the Forge tab', '#ff5252', 2000); return; }
+      payload.card = this._lastMintedCard;
     } else if (cmd === 'setCreditScore') {
       const score = parseInt(document.getElementById('admin-pe-credit-' + safeUid)?.value);
       if (isNaN(score) || score < 300 || score > 850) { Toast.show('Score must be 300–850', '#ff5252', 2000); return; }
