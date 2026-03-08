@@ -63,19 +63,26 @@ input, textarea, select {
   padding-left: max(12px, env(safe-area-inset-left));
 }
 .top-bar-row2 {
-  display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 5px;
-  padding: 3px max(12px, env(safe-area-inset-right)) 5px max(12px, env(safe-area-inset-left));
+  display: block;
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding: 4px max(10px, env(safe-area-inset-right)) 5px max(10px, env(safe-area-inset-left));
   border-top: 1px solid rgba(255,255,255,0.06);
-  overflow: hidden;
-  min-height: 0;
+  line-height: 1;
 }
+.top-bar-row2::-webkit-scrollbar { display: none; }
+/* Every direct child renders inline so they never stack */
 .top-bar-row2 > * {
-  flex-shrink: 0; /* individual items opt-in to shrinking via their own rules */
+  display: inline-flex !important;
+  align-items: center;
+  vertical-align: middle;
+  margin-right: 5px;
 }
-/* Hide row2 entirely when all children are hidden */
+.top-bar-row2 > *:last-child { margin-right: 0; }
+/* Hide row2 entirely when empty */
 .top-bar-row2:empty { display: none; }
 
 #back-btn {

@@ -450,6 +450,30 @@
           }
         }
       }
+    },
+
+    "playerCards": {
+      "$uid": {
+        ".read": "auth !== null",
+        ".write": "auth.uid === $uid"
+      }
+    },
+
+    "donationPool": {
+      ".read": "auth !== null",
+      ".write": "auth !== null"
+    },
+
+    "auctionHouse": {
+      ".read": "auth !== null",
+      ".write": "auth !== null"
+    },
+
+    "auctionPrizes": {
+      "$uid": {
+        ".read": "auth.uid === $uid",
+        ".write": "auth !== null"
+      }
     }
   }
 }
