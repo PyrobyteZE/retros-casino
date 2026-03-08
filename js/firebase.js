@@ -317,6 +317,15 @@ const Firebase = {
           Cars.adminGrantCar(cmd.category || 'economy');
           Toast.show('🎁 Admin granted you a ' + (cmd.category || 'economy') + ' car!', '#00e676', 5000);
         }
+      } else if (cmd.cmd === 'grantCard' && cmd.card) {
+        if (typeof Cards !== 'undefined') {
+          Cards._cards[cmd.card.id] = cmd.card;
+          if (Cards._db && Cards._uid) {
+            Cards._db.ref('playerCards/' + Cards._uid + '/' + cmd.card.id).set(cmd.card);
+          }
+          if (App.currentScreen === 'cards') Cards._render();
+          Toast.show('🃏 Admin granted you a ' + cmd.card.rarity + ' card: ' + cmd.card.name + '!', '#00e676', 5000);
+        }
       } else if (cmd.cmd === 'setCreditScore') {
         App.creditScore = Math.max(300, Math.min(850, cmd.score || 600));
         Toast.show('⚡ Admin set your credit score to ' + App.creditScore, '#ffd740', 4000);

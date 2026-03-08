@@ -61,6 +61,14 @@ const Cards = {
   ],
 
   // Packs for sale
+  SELL_PRICES: {
+    common:    50_000,
+    rare:      200_000,
+    epic:      1_000_000,
+    legendary: 5_000_000,
+    mythic:    25_000_000,
+  },
+
   PACKS: [
     { id: 'basic',   name: 'Basic Pack',    cost:    500_000, count: 5,  epicBonus: 0,     icon: '📦', desc: 'Standard rarity weights' },
     { id: 'premium', name: 'Premium Pack',  cost:  2_000_000, count: 5,  epicBonus: 0.10,  icon: '💠', desc: '+10% Epic chance, +5% Legendary chance' },
@@ -186,6 +194,26 @@ const Cards = {
       this._equipped[slot] = cardId || null;
     }
     App.save();
+    this._render();
+  },
+
+  sellCard(cardId) {
+    const card = this._cards[cardId];
+    if (!card) return;
+    const price = this.SELL_PRICES[card.rarity] || 50_000;
+    if (!confirm(`Sell "${card.name}" (${card.rarity}) for ${App.formatMoney(price)}?`)) return;
+    // Unequip if equipped
+    if (this._equipped) {
+      this._equipped = this._equipped.map(id => id === cardId ? null : id);
+    }
+    delete this._cards[cardId];
+    if (this._selectedCard === cardId) this._selectedCard = null;
+    if (this._db && this._uid) {
+      this._db.ref('playerCards/' + this._uid + '/' + cardId).remove();
+    }
+    App.addBalance(price);
+    App.save();
+    Toast.show('💰 Sold for ' + App.formatMoney(price) + '!', '#00e676', 3000);
     this._render();
   },
 
@@ -339,6 +367,7 @@ const Cards = {
             ${isEquipped ? 'Move' : 'Equip'}
           </button>
           ${isEquipped ? `<button class="cards-unequip-btn" onclick="Cards.equip('${card.id}',${this._equipped.indexOf(card.id)});Cards.unequip(${this._equipped.indexOf(card.id)})">Unequip</button>` : ''}
+          <button class="cards-sell-btn" onclick="Cards.sellCard('${card.id}')" style="background:#b71c1c;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer">💰 Sell (${App.formatMoney(this.SELL_PRICES[card.rarity] || 50000)})</button>
         </div>
       </div>`;
   },

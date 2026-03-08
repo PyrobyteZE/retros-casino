@@ -652,6 +652,19 @@ const Admin = {
           <button class="admin-btn win-btn" onclick="Admin.adminGrantCarToSelf()" style="white-space:nowrap">Grant</button>
         </div>
       </div>
+      <div class="admin-section">
+        <h3>🃏 Grant Card to Self</h3>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select id="af-card-rarity" style="flex:1;padding:6px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px;font-size:13px">
+            <option value="common">Common</option>
+            <option value="rare">Rare</option>
+            <option value="epic">Epic</option>
+            <option value="legendary">Legendary</option>
+            <option value="mythic">Mythic</option>
+          </select>
+          <button class="admin-btn win-btn" onclick="Admin.adminGrantCardToSelf()" style="white-space:nowrap">Grant</button>
+        </div>
+      </div>
     `;
   },
 
@@ -713,6 +726,25 @@ const Admin = {
     const category = document.getElementById('af-car-cat')?.value || 'economy';
     Cars.adminGrantCar(category);
     Toast.show('Car granted to garage!', '#00e676', 2000);
+  },
+
+  adminGrantCardToSelf() {
+    if (typeof Cards === 'undefined') return;
+    const rarity = document.getElementById('af-card-rarity')?.value || 'common';
+    const fakePack = { id: 'admin_' + rarity };
+    // Override rarity roll by temporarily patching
+    const card = Cards._generateCard(null);
+    const [minV, maxV] = Cards.STAT_RANGES[rarity];
+    card.rarity = rarity;
+    card.statValue = Math.round((minV + Math.random() * (maxV - minV)) * 1000) / 1000;
+    card.id = 'admin_card_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+    Cards._cards[card.id] = card;
+    if (Cards._db && Cards._uid) {
+      Cards._db.ref('playerCards/' + Cards._uid + '/' + card.id).set(card);
+    }
+    App.save();
+    Cards._render();
+    Toast.show('🃏 Card granted: ' + card.name + ' (' + rarity + ')!', '#00e676', 3000);
   },
 
   _renderTrollTab() {
@@ -1021,6 +1053,18 @@ const Admin = {
             </select>
             <button class="rig-btn win" onclick="Admin.playerCmd('${safeUid}','grantCar')" style="font-size:11px;white-space:nowrap">Grant</button>
           </div>
+          <!-- Cards -->
+          <div class="admin-pe-section-label" style="margin-top:8px">🃏 Grant Card</div>
+          <div style="display:flex;gap:4px;margin-top:4px;align-items:center">
+            <select id="admin-pe-card-rarity-${safeUid}" style="flex:1;font-size:12px;padding:5px;background:var(--bg);color:var(--text);border:1px solid var(--bg3);border-radius:6px">
+              <option value="common">Common</option>
+              <option value="rare">Rare</option>
+              <option value="epic">Epic</option>
+              <option value="legendary">Legendary</option>
+              <option value="mythic">Mythic</option>
+            </select>
+            <button class="rig-btn win" onclick="Admin.playerCmd('${safeUid}','grantCard')" style="font-size:11px;white-space:nowrap">Grant</button>
+          </div>
           <!-- Credit Score -->
           <div class="admin-pe-section-label" style="margin-top:8px">📊 Credit Score</div>
           <div style="display:flex;gap:4px;margin-top:4px;align-items:center">
@@ -1097,6 +1141,15 @@ const Admin = {
     } else if (cmd === 'grantCar') {
       const cat = document.getElementById('admin-pe-car-cat-' + safeUid)?.value || 'economy';
       payload.category = cat;
+    } else if (cmd === 'grantCard') {
+      const rarity = document.getElementById('admin-pe-card-rarity-' + safeUid)?.value || 'common';
+      if (typeof Cards === 'undefined') { Toast.show('Cards module not loaded', '#ff5252', 2000); return; }
+      const card = Cards._generateCard(null);
+      const [minV, maxV] = Cards.STAT_RANGES[rarity];
+      card.rarity = rarity;
+      card.statValue = Math.round((minV + Math.random() * (maxV - minV)) * 1000) / 1000;
+      card.id = 'admin_card_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+      payload.card = card;
     } else if (cmd === 'grantItem') {
       if (!this._forgeItem) { Toast.show('No forged item — use 🔨 Forge tab first', '#ff5252', 2000); return; }
       payload.item = this._forgeItem;
