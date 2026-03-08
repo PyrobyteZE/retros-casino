@@ -15,6 +15,10 @@
   --text: #e0e0e0;
   --text-dim: #888;
   --radius: 12px;
+  /* Alias vars used by newer components */
+  --accent: #bb86fc;
+  --border: #252540;
+  --card: #1a1a2e;
 }
 
 body {
