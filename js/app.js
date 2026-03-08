@@ -151,7 +151,9 @@ const App = {
     if (amount > 0) {
       const boosts = this.getAllBoosts();
       const eventMult = typeof Events !== 'undefined' ? Events.getIncomeMultiplier() : 1;
-      amount = amount * (1 + (boosts.earningsMult || 0)) * eventMult;
+      // Hitman income reduction
+      const hitmanMult = typeof Social !== 'undefined' ? Social.getIncomeMultiplier() : 1;
+      amount = amount * (1 + (boosts.earningsMult || 0)) * eventMult * hitmanMult;
     }
     this.balance = this.safeAdd(this.balance, amount);
     if (amount > 0) {
@@ -220,6 +222,9 @@ const App = {
       settings: 'Settings',
       stores: 'Shops',
       achievements: 'Achievements',
+      wheel: 'Wheel of Fortune',
+      vanity: 'Vanity Shop',
+      social: 'Social',
     };
 
     if (this.currentScreen !== name) {
@@ -267,6 +272,9 @@ const App = {
       if (typeof Achievements !== 'undefined') { Achievements.checkAll(); Achievements.render(); }
       if (typeof Tournaments !== 'undefined') Tournaments.push();
     }
+    if (name === 'wheel' && typeof Wheel !== 'undefined') Wheel.init();
+    if (name === 'vanity' && typeof Vanity !== 'undefined') Vanity.init();
+    if (name === 'social' && typeof Social !== 'undefined') Social.init();
     // Refresh drawer nav highlight if drawer is open
     if (document.getElementById('side-drawer')?.classList.contains('open')) this._renderDrawerNav();
   },
@@ -337,6 +345,9 @@ const App = {
         { id: 'cards', icon: '🃏', label: 'Cards' },
         { id: 'stores', icon: '🏪', label: 'Shops' },
         { id: 'pets', icon: '🐾', label: 'Pets' },
+        { id: 'wheel', icon: '🎡', label: 'Wheel of Fortune' },
+        { id: 'vanity', icon: '🎭', label: 'Vanity Shop' },
+        { id: 'social', icon: '🎉', label: 'Social' },
         { id: 'leaderboard', icon: '🏆', label: 'Leaderboard' },
         { id: 'settings', icon: '⚙️', label: 'Settings' },
       ]},
@@ -372,7 +383,8 @@ const App = {
     { label: '💼 Business',      screens: ['properties','crime','companies','houses','cars'] },
     { label: '📈 Markets',       screens: ['stocks','crypto','auction'] },
     { label: '🎒 Inventory',     screens: ['inventory', 'stores', 'cards'] },
-    { label: '🐾 Social',        screens: ['pets','leaderboard'] },
+    { label: '🐾 Social',        screens: ['pets','leaderboard','social'] },
+    { label: '🎡 Specials',      screens: ['wheel','vanity'] },
     { label: '🏆 Progress',      screens: ['achievements'] },
     { label: '⚙️ System',        screens: ['settings'] },
   ],
@@ -402,6 +414,9 @@ const App = {
     leaderboard:  { icon: '🏆', label: 'Leaderboard' },
     achievements: { icon: '🏅', label: 'Achievements' },
     settings:     { icon: '⚙️', label: 'Settings' },
+    wheel:        { icon: '🎡', label: 'Wheel of Fortune' },
+    vanity:       { icon: '🎭', label: 'Vanity Shop' },
+    social:       { icon: '🎉', label: 'Social' },
   },
 
   renderCasinoGrid() {
@@ -490,6 +505,9 @@ const App = {
       achievements: typeof Achievements !== 'undefined' ? Achievements.getSaveData() : null,
       tournament: typeof Tournaments !== 'undefined' ? Tournaments.getSaveData() : null,
       cards: typeof Cards !== 'undefined' ? Cards.getSaveData() : null,
+      wheel: typeof Wheel !== 'undefined' ? Wheel.getSaveData() : null,
+      vanity: typeof Vanity !== 'undefined' ? Vanity.getSaveData() : null,
+      social: typeof Social !== 'undefined' ? Social.getSaveData() : null,
       settings: typeof Settings !== 'undefined' ? {
         theme: Settings.currentTheme,
         customThemeColor: Settings.customThemeColor,
@@ -567,6 +585,9 @@ const App = {
       if (typeof Cards !== 'undefined' && data.cards) {
         Cards.loadSaveData(data.cards);
       }
+      if (typeof Wheel !== 'undefined' && data.wheel) Wheel.loadSaveData(data.wheel);
+      if (typeof Vanity !== 'undefined' && data.vanity) Vanity.loadSaveData(data.vanity);
+      if (typeof Social !== 'undefined' && data.social) Social.loadSaveData(data.social);
       // Restore settings (profile name, avatar, theme) — also mirror to settings localStorage
       // so Settings.load() stays consistent on next page load.
       if (typeof Settings !== 'undefined' && data.settings) {

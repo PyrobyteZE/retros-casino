@@ -19,6 +19,78 @@ const Loans = {
   _reckoningActive: false,
   _reckoningRebirthThreshold: 0,         // App.rebirth must reach this to borrow again
 
+  // Shark Debts (multiple loan sharks)
+  _sharkDebts: {}, // { [sharkId]: { amount, takenAt, lastInterestAt } }
+  _activeShark: 'don',
+
+  SHARKS: [
+    {
+      id: 'don',
+      name: 'Don Pescara',
+      emoji: '\u{1F988}',
+      desc: 'Friendly. Predatory.',
+      unlockRebirth: 0,
+      ratePerCycle: 0.10,
+      cycleSec: 60,
+      maxLoan: 100_000_000_000,
+      upside: 'Sometimes gives bonus cash on repayment',
+      downside: 'Adds random fees',
+      color: '#1565c0',
+    },
+    {
+      id: 'shadow_bank',
+      name: 'Bank of Shadows',
+      emoji: '\u{1F3E6}',
+      desc: 'Corporate. Sneaky.',
+      unlockRebirth: 1,
+      ratePerCycle: 0.05,
+      cycleSec: 60,
+      maxLoan: 500_000_000_000,
+      upside: 'Low rates, large loans',
+      downside: 'Occasionally doubles your interest for one cycle',
+      color: '#37474f',
+    },
+    {
+      id: 'mama_chen',
+      name: 'Mama Chen',
+      emoji: '\u{1F475}',
+      desc: 'Brutal. Generous.',
+      unlockRebirth: 3,
+      ratePerCycle: 0.15,
+      cycleSec: 60,
+      maxLoan: 1_000_000_000_000,
+      upside: 'Pays for your food (keeps hunger at 80+ while in debt)',
+      downside: 'High rates',
+      color: '#e65100',
+    },
+    {
+      id: 'syndicate',
+      name: 'The Syndicate',
+      emoji: '\u{1F575}\uFE0F',
+      desc: 'Best rates. Hidden agenda.',
+      unlockRebirth: 10,
+      ratePerCycle: 0.03,
+      cycleSec: 60,
+      maxLoan: 10_000_000_000_000,
+      upside: 'Very low rates, occasionally sabotages one of your competitors for free',
+      downside: 'Randomly leaks your balance to chat',
+      color: '#311b92',
+    },
+    {
+      id: 'devil',
+      name: 'The Devil',
+      emoji: '\u{1F608}',
+      desc: 'Incredible rates. Terrible collateral.',
+      unlockRebirth: 25,
+      ratePerCycle: 0.01,
+      cycleSec: 60,
+      maxLoan: Infinity,
+      upside: 'Lowest rates in existence',
+      downside: 'On repayment, 10% chance to lose a random car or house as "collateral"',
+      color: '#b71c1c',
+    },
+  ],
+
   // Bargain system
   _bargainState: null,
   _bargainDiscount: 0, // accumulated interest discount from bargaining
@@ -1297,6 +1369,167 @@ const Loans = {
       </div>`;
   },
 
+  // ============ LOAN SHARKS (MULTIPLE) ============
+
+  _setSubTab(tab) {
+    const npcBody = document.getElementById('loans-subtab-npc-body');
+    const sharksBody = document.getElementById('loans-subtab-sharks-body');
+    const npcBtn = document.getElementById('loans-subtab-npc');
+    const sharksBtn = document.getElementById('loans-subtab-sharks');
+    if (!npcBody || !sharksBody) return;
+    if (tab === 'sharks') {
+      npcBody.style.display = 'none';
+      sharksBody.style.display = 'block';
+      if (npcBtn) { npcBtn.style.background = 'var(--bg3,#16213e)'; npcBtn.style.color = 'var(--text-dim,#aaa)'; npcBtn.style.fontWeight = ''; }
+      if (sharksBtn) { sharksBtn.style.background = 'var(--green,#00e676)'; sharksBtn.style.color = '#000'; sharksBtn.style.fontWeight = '700'; }
+      this._renderSharks();
+    } else {
+      npcBody.style.display = 'block';
+      sharksBody.style.display = 'none';
+      if (npcBtn) { npcBtn.style.background = 'var(--green,#00e676)'; npcBtn.style.color = '#000'; npcBtn.style.fontWeight = '700'; }
+      if (sharksBtn) { sharksBtn.style.background = 'var(--bg3,#16213e)'; sharksBtn.style.color = 'var(--text-dim,#aaa)'; sharksBtn.style.fontWeight = ''; }
+    }
+  },
+
+  borrowFromShark(sharkId, amountStr) {
+    const shark = this.SHARKS.find(s => s.id === sharkId);
+    if (!shark) return;
+    const rebirth = App.rebirth || 0;
+    if (rebirth < shark.unlockRebirth) {
+      Toast.show('\u{1F512} Requires Rebirth ' + shark.unlockRebirth + ' to unlock ' + shark.name + '!', '#e74c3c', 3000);
+      return;
+    }
+    const amount = App.parseAmount ? App.parseAmount(amountStr) : parseFloat(amountStr);
+    if (!amount || amount <= 0) {
+      Toast.show('Enter a valid amount!', '#e74c3c', 2000);
+      return;
+    }
+    const existing = (this._sharkDebts[sharkId] && this._sharkDebts[sharkId].amount) || 0;
+    const maxLoan = this.getSharkMaxLoan(shark);
+    if (maxLoan !== Infinity && existing + amount > maxLoan) {
+      Toast.show('Exceeds ' + shark.name + "'s max loan of " + App.formatMoney(maxLoan) + '!', '#e74c3c', 3000);
+      return;
+    }
+
+    const now = Date.now();
+    if (!this._sharkDebts[sharkId]) {
+      this._sharkDebts[sharkId] = { amount: 0, takenAt: now, lastInterestAt: now };
+    }
+    this._sharkDebts[sharkId].amount += amount;
+
+    App.addBalance(amount);
+    Toast.show(shark.emoji + ' Borrowed ' + App.formatMoney(amount) + ' from ' + shark.name + '!', shark.color, 3000);
+
+    // Don: random fee
+    if (sharkId === 'don' && Math.random() < 0.3) {
+      const fee = amount * 0.05;
+      this._sharkDebts[sharkId].amount += fee;
+      Toast.show('\u{1F988} Don adds a 5% "processing fee"! +' + App.formatMoney(fee) + ' debt', '#f39c12', 3000);
+    }
+
+    App.save();
+    if (App.currentScreen === 'home') this._renderSharks();
+  },
+
+  repayShark(sharkId) {
+    const shark = this.SHARKS.find(s => s.id === sharkId);
+    const debt = this._sharkDebts[sharkId];
+    if (!shark || !debt || debt.amount <= 0) return;
+
+    if (App.balance < debt.amount) {
+      Toast.show('Not enough money to repay ' + shark.name + '!', '#e74c3c', 3000);
+      return;
+    }
+
+    App.addBalance(-debt.amount);
+    const paid = debt.amount;
+
+    // Devil collateral: 10% chance to lose a car or house
+    if (sharkId === 'devil' && Math.random() < 0.10) {
+      let took = false;
+      if (typeof Cars !== 'undefined' && Cars._garage && Cars._garage.length > 0) {
+        const removed = Cars._garage.splice(Math.floor(Math.random() * Cars._garage.length), 1)[0];
+        Toast.show('\u{1F608} The Devil takes your ' + (removed.model || 'car') + ' as collateral!', '#b71c1c', 5000);
+        took = true;
+      } else if (typeof Houses !== 'undefined' && Houses._owned && Houses._owned.length > 0) {
+        const removed = Houses._owned.splice(Math.floor(Math.random() * Houses._owned.length), 1)[0];
+        Toast.show('\u{1F608} The Devil takes your ' + (removed.name || 'house') + ' as collateral!', '#b71c1c', 5000);
+        took = true;
+      }
+      if (!took) {
+        Toast.show('\u{1F608} The Devil was going to take something, but you have nothing left...', '#b71c1c', 4000);
+      }
+    }
+
+    // Don upside: 5% chance of 10% bonus back
+    if (sharkId === 'don' && Math.random() < 0.05) {
+      const bonus = paid * 0.10;
+      App.addBalance(bonus);
+      Toast.show('\u{1F988} Don slips you a bonus! +' + App.formatMoney(bonus), '#2ecc71', 4000);
+    }
+
+    delete this._sharkDebts[sharkId];
+    Toast.show('\u2714 Repaid ' + App.formatMoney(paid) + ' to ' + shark.name + '!', '#4caf50', 3000);
+    App.save();
+    if (App.currentScreen === 'home') this._renderSharks();
+  },
+
+  getSharkTotal() {
+    return Object.values(this._sharkDebts).reduce((s, d) => s + (d ? d.amount || 0 : 0), 0);
+  },
+
+  // Rebirth scales each shark's max loan: base * (1 + rebirth)
+  // e.g. rebirth 10 → 11× the base max; rebirth 50 → 51×
+  getSharkMaxLoan(shark) {
+    if (shark.maxLoan === Infinity) return Infinity;
+    const rebirth = App.rebirth || 0;
+    return shark.maxLoan * (1 + rebirth);
+  },
+
+  _renderSharks() {
+    const container = document.getElementById('loan-sharks-body');
+    if (!container) return;
+    const rebirth = App.rebirth || 0;
+    let html = '';
+
+    this.SHARKS.forEach(shark => {
+      const locked = rebirth < shark.unlockRebirth;
+      const debt = this._sharkDebts[shark.id];
+      const debtAmt = debt ? debt.amount : 0;
+      const lockStyle = locked ? 'opacity:0.5;pointer-events:none' : '';
+
+      html += `<div style="background:var(--bg,#0f0f1a);border-radius:10px;padding:12px;margin-bottom:10px;border:1px solid ${shark.color};${lockStyle}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <span style="font-size:22px">${shark.emoji}</span>
+          <div>
+            <div style="font-weight:700;font-size:14px">${shark.name} ${locked ? '<span style="color:#f39c12;font-size:11px">\u{1F512} R'+shark.unlockRebirth+'</span>' : ''}</div>
+            <div style="font-size:11px;color:var(--text-dim,#aaa)">${shark.desc}</div>
+          </div>
+        </div>
+        <div style="font-size:11px;margin-bottom:6px;">
+          <span style="color:#4caf50">\u2191 ${shark.upside}</span><br>
+          <span style="color:#e57373">\u2193 ${shark.downside}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-dim,#aaa);margin-bottom:6px;">
+          Rate: ${(shark.ratePerCycle * 100).toFixed(0)}%/min &bull; Max: ${shark.maxLoan === Infinity ? '\u221E' : App.formatMoney(this.getSharkMaxLoan(shark))}${rebirth > 0 && shark.maxLoan !== Infinity ? ' <span style="color:#4caf50;font-size:10px">(R'+rebirth+'×'+(1+rebirth)+')</span>' : ''}
+        </div>
+        ${debtAmt > 0 ? `<div style="color:#e74c3c;font-size:13px;font-weight:700;margin-bottom:6px;">Owed: ${App.formatMoney(debtAmt)}</div>` : ''}
+        ${!locked ? `<div style="display:flex;gap:6px;">
+          <input id="shark-borrow-${shark.id}" class="sh-input" placeholder="Amount" style="flex:1;padding:7px;border-radius:6px;border:1px solid #333;background:var(--bg,#0f0f1a);color:var(--text,#eee);font-size:12px">
+          <button onclick="Loans.borrowFromShark('${shark.id}',document.getElementById('shark-borrow-${shark.id}').value)" style="padding:7px 12px;border:none;border-radius:6px;background:${shark.color};color:#fff;font-weight:700;font-size:12px;cursor:pointer">Borrow</button>
+          ${debtAmt > 0 ? `<button onclick="Loans.repayShark('${shark.id}')" style="padding:7px 12px;border:none;border-radius:6px;background:#e53935;color:#fff;font-weight:700;font-size:12px;cursor:pointer">Repay</button>` : ''}
+        </div>` : `<div style="color:#f39c12;font-size:12px">\u{1F512} Unlock at Rebirth ${shark.unlockRebirth}</div>`}
+      </div>`;
+    });
+
+    const total = this.getSharkTotal();
+    if (total > 0) {
+      html = `<div style="background:#b71c1c;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:13px;color:#fff">Total Shark Debt: ${App.formatMoney(total)}</div>` + html;
+    }
+
+    container.innerHTML = html;
+  },
+
   // ============ SAVE / LOAD ============
 
   getSaveData() {
@@ -1312,6 +1545,7 @@ const Loans = {
       interestReduction: this._interestReduction,
       riggedDecks: this._riggedDecks,
       totalDebtPaid: this._totalPaid || 0,
+      sharkDebts: this._sharkDebts,
     };
   },
 
@@ -1335,5 +1569,6 @@ const Loans = {
     if (data.interestReduction) this._interestReduction = data.interestReduction;
     if (data.riggedDecks) this._riggedDecks = Object.assign(this._riggedDecks, data.riggedDecks);
     if (data.totalDebtPaid) this._totalPaid = data.totalDebtPaid;
+    if (data.sharkDebts) this._sharkDebts = data.sharkDebts;
   },
 };

@@ -152,6 +152,8 @@ const Firebase = {
       this._assignPlayerId();
       // Cloud save: restore if localStorage is empty, then push current save
       this._initCloudSave();
+      // Social listeners
+      if (typeof Social !== 'undefined') Social._initFirebaseListeners?.();
     }).catch(err => {
       this.online = false;
       this.connectionState = 'disconnected';
@@ -524,11 +526,15 @@ const Firebase = {
 
     const name = typeof Settings !== 'undefined' ? Settings.profile.name : 'Player';
     const avatar = typeof Settings !== 'undefined' ? Settings.avatars[Settings.profile.avatar] : '';
+    const chatColor = (typeof Vanity !== 'undefined' && Vanity._activeChatColor && Vanity._activeChatColor.expiresAt > Date.now())
+      ? Vanity._activeChatColor.hex
+      : null;
     const msg = {
       uid: this.uid,
       name,
       avatar,
       text,
+      chatColor,
       timestamp: firebase.database.ServerValue.TIMESTAMP,
     };
     this.db.ref('chat').push(msg).then(() => {
@@ -881,10 +887,20 @@ const Firebase = {
       const clickName = (!isMe && m.uid)
         ? `onclick="Firebase.showProfile('${m.uid}')" style="cursor:pointer"`
         : '';
+      let chatTextHtml;
+      if (m.chatColor) {
+        if (m.chatColor === 'rainbow') {
+          chatTextHtml = `<span style="background:linear-gradient(90deg,#ff0,#f0f,#0ff,#0f0,#f80);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${this._escapeHtml(m.text || '')}</span>`;
+        } else {
+          chatTextHtml = `<span style="color:${m.chatColor}">${this._escapeHtml(m.text || '')}</span>`;
+        }
+      } else {
+        chatTextHtml = this._escapeHtml(m.text || '');
+      }
       return `<div class="chat-msg ${isMe ? 'chat-me' : ''}">
         <span class="chat-avatar">${m.avatar || ''}</span>
         <span class="chat-name" ${clickName}>${namePrefix}${this._escapeHtml(m.name || 'Player')}</span>
-        <span class="chat-text">${this._escapeHtml(m.text || '')}</span>
+        <span class="chat-text">${chatTextHtml}</span>
       </div>`;
     }).join('');
     list.scrollTop = list.scrollHeight;
@@ -1552,6 +1568,49 @@ const Firebase = {
       const data = snap.val();
       if (data) { cb(data); snap.ref.remove(); }
     }, err => console.warn('Firebase saleReceipts listen denied:', err.code));
+  },
+
+  // === PARTY SYSTEM ===
+  listenParties(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('parties').limitToLast(20).on('child_added', snap => cb(snap.val()));
+  },
+
+  postParty(data) {
+    if (!this.isOnline()) return;
+    this.db.ref('parties').push(data);
+  },
+
+  // === HITMAN SYSTEM ===
+  listenHitmanContracts(uid, cb) {
+    if (!this.isOnline() || !uid) return;
+    this.db.ref('hitmanContracts/' + uid).on('value', snap => cb(snap.val()));
+  },
+
+  postHitmanContract(targetUid, data) {
+    if (!this.isOnline()) return;
+    this.db.ref('hitmanContracts/' + targetUid + '/' + Date.now()).set(data);
+  },
+
+  // === NEWS MARKET ===
+  listenNewsMarket(cb) {
+    if (!this.isOnline()) return;
+    this.db.ref('newsMarket').on('value', snap => cb(snap.val() || {}));
+  },
+
+  postNewsStory(data) {
+    if (!this.isOnline()) return Promise.resolve(null);
+    return this.db.ref('newsMarket').push(data);
+  },
+
+  removeNewsStory(id) {
+    if (!this.isOnline()) return;
+    this.db.ref('newsMarket/' + id).remove();
+  },
+
+  newsMarketReceipt(uid, amount, desc) {
+    if (!this.isOnline() || !uid) return;
+    this.db.ref('newsMarket_receipts/' + uid).push({ amount, desc, at: Date.now() });
   },
 
   // === NAME REGISTRY ===
